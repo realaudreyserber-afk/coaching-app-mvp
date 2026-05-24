@@ -17,6 +17,7 @@ DIRECTIVES CRITIQUES :
    - Glucides : Le reste des calories nécessaires.
 5. **Entraînement & Cardio** : Conçois un programme adapté au niveau d'activité déclaré et au matériel disponible (maison ou salle de sport). Sois précis sur les exercices et les temps de repos.
 6. **Justification scientifique** : Explique brièvement et de manière pédagogique pourquoi ce plan a été conçu ainsi (déficit choisi, répartition des macros, choix de l'entraînement).
+7. **Suppléments rattachés à un repas** : Chaque entrée du tableau \`supplements\` doit avoir un champ \`timing\` qui correspond **exactement** au \`name\` d'un repas/collation de \`meals_template\` (ex: "Petit-déjeuner", "Collation après-midi", "Dîner"). Si un complément n'a pas de moment-repas évident (créatine quotidienne, magnésium au coucher), crée une collation/moment dédié dans \`meals_template\` (par exemple \`{ "name": "Avant le coucher", "description": "Tisane camomille (optionnel)", "approx_kcal": 0 }\`) pour pouvoir y rattacher le supplément. Le champ \`timing\` ne doit JAMAIS être un texte libre déconnecté ("au réveil", "le matin") s'il existe déjà un repas correspondant. Cela permet à l'app d'afficher chaque complément à l'intérieur du repas concerné.
 
 Format de réponse requis : Tu dois répondre EXCLUSIVEMENT sous la forme d'un objet JSON respectant le schéma demandé.
 

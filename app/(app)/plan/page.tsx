@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PlanDoc } from "@/types/plan";
-import { Flame, Dumbbell, ShieldCheck, Apple, Calendar, Scale, ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { Flame, Dumbbell, ShieldCheck, Apple, Calendar, Scale, ChevronDown, ChevronUp, Plus, Trash2, Pill } from "lucide-react";
+import { groupSupplementsByMeal } from "@/lib/features/plans/group-supplements";
 
 export default function PlanPage() {
   const { user, loading } = useAuth();
@@ -143,43 +144,74 @@ export default function PlanPage() {
           <div className="space-y-3">
             <h3 className="text-lg font-serif font-semibold text-foreground px-1">Exemple de journée type</h3>
             <div className="space-y-3">
-              {plan.meals_template.map((meal, idx) => (
-                <Card key={idx} className="border border-border/80 bg-card/65">
-                  <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-sm font-serif font-bold text-secondary">{meal.name}</CardTitle>
-                    <span className="text-xs font-semibold px-2 py-0.5 bg-muted rounded-full text-muted-foreground">
-                      ~{meal.approx_kcal} kcal
-                    </span>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-0">
-                    <p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p>
-                  </CardContent>
-                </Card>
-              ))}
+              {(() => {
+                const grouped = groupSupplementsByMeal(plan.meals_template, plan.supplements);
+                return (
+                  <>
+                    {grouped.meals.map((meal, idx) => (
+                      <Card key={idx} className="border border-border/80 bg-card/65">
+                        <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
+                          <CardTitle className="text-sm font-serif font-bold text-secondary">{meal.name}</CardTitle>
+                          <span className="text-xs font-semibold px-2 py-0.5 bg-muted rounded-full text-muted-foreground">
+                            ~{meal.approx_kcal} kcal
+                          </span>
+                        </CardHeader>
+                        <CardContent className="p-3 pt-0 space-y-2">
+                          <p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p>
+
+                          {meal.supplements.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-border/60 space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                <Pill className="h-3 w-3" />
+                                <span>Complément{meal.supplements.length > 1 ? 's' : ''} avec ce repas</span>
+                              </div>
+                              <ul className="space-y-1 pl-1">
+                                {meal.supplements.map((sup, sIdx) => (
+                                  <li key={sIdx} className="flex justify-between items-center text-xs">
+                                    <span className="text-foreground">
+                                      <strong>{sup.name}</strong>
+                                    </span>
+                                    <span className="font-semibold text-primary">{sup.dosage}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+
+                    {grouped.orphans.length > 0 && (
+                      <Card className="border border-border/60 bg-muted/30">
+                        <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
+                          <CardTitle className="text-sm font-serif font-bold text-secondary flex items-center gap-1.5">
+                            <Pill className="h-4 w-4" />
+                            Hors repas
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 pt-0">
+                          <ul className="space-y-1.5 text-xs">
+                            {grouped.orphans.map((sup, idx) => (
+                              <li
+                                key={idx}
+                                className="flex justify-between items-start py-1 border-b border-border/40 last:border-0"
+                              >
+                                <div>
+                                  <strong className="text-foreground">{sup.name}</strong>
+                                  <span className="text-muted-foreground block text-[10px]">{sup.timing}</span>
+                                </div>
+                                <span className="font-semibold text-primary">{sup.dosage}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
-
-          {/* Supplements List */}
-          {plan.supplements && plan.supplements.length > 0 && (
-            <Card className="border border-border bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base font-serif font-semibold">Compléments suggérés</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <ul className="space-y-2 text-xs">
-                  {plan.supplements.map((sup, idx) => (
-                    <li key={idx} className="flex justify-between items-center py-1.5 border-b border-border last:border-0">
-                      <div>
-                        <strong className="text-foreground">{sup.name}</strong>
-                        <span className="text-muted-foreground block text-[10px]">{sup.timing}</span>
-                      </div>
-                      <span className="font-semibold text-primary">{sup.dosage}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 
