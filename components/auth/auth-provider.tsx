@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
   signOut,
 } from "firebase/auth";
@@ -152,14 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    
+
     try {
-      if (isNativePlatform()) {
-        // Fallback for native wrapper or embedded webviews where popups are blocked
-        await signInWithRedirect(auth, provider);
-      } else {
-        await signInWithPopup(auth, provider);
-      }
+      await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error("Google login failed:", error);
       setLoading(false);

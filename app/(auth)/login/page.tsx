@@ -50,10 +50,10 @@ export default function LoginPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Editorial Brand Name */}
         <h1 className="text-center text-4xl font-extrabold tracking-tight font-serif text-primary">
-          {"L'Insociable"}
+          NoDream
         </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground font-serif italic">
-          Ton coach de recomposition corporelle IA
+          Pas de rêve. Des résultats.
         </p>
       </div>
 

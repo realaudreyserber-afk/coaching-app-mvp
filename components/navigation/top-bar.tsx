@@ -27,11 +27,11 @@ export default function TopBar() {
       <div className="flex h-14 items-center justify-between px-4 sm:px-6">
         {/* Brand Title */}
         <div className="flex items-center gap-2">
-          <span 
+          <span
             onClick={() => router.push("/dashboard")}
             className="text-xl font-extrabold tracking-tight font-serif text-primary cursor-pointer select-none"
           >
-            {"L'Insociable"}
+            NoDream
           </span>
         </div>
 

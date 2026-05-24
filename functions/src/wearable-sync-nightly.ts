@@ -18,7 +18,7 @@ async function fetchGoogleFitDataset(accessToken: string, datasourceId: string, 
   try {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) return null;
-    return await res.json();
+    return (await res.json()) as FitDataPoint;
   } catch (err) {
     logger.warn(`Google Fit fetch failed for ${datasourceId}:`, err);
     return null;

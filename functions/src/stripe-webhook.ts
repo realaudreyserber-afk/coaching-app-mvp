@@ -88,7 +88,7 @@ export const stripeWebhook = onRequest(
             await userRef.update({
               'subscription.tier': tier,
               'subscription.status': sub.status,
-              'subscription.current_period_end': new Date(sub.items.data[0].current_period_end * 1000).toISOString(),
+              'subscription.current_period_end': new Date(((sub.items.data[0] as unknown) as { current_period_end: number }).current_period_end * 1000).toISOString(),
             });
           }
           break;

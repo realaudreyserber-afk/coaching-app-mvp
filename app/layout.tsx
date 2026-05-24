@@ -23,27 +23,28 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "L'Insociable — Coaching IA Recomposition & Perte de poids",
-  description: "Un coaching nutritionnel et sportif personnalisé, sain et durable, mené par l'IA.",
+  title: "NoDream — Coaching IA sans illusion",
+  description: "Coaching IA sans illusion. Méthode, données, résultats. Hébergé en Europe.",
   manifest: "/manifest.json",
-  applicationName: "L'Insociable",
+  applicationName: "NoDream",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "L'Insociable",
+    title: "NoDream",
   },
   icons: {
     icon: [
-      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1a1a1a",
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

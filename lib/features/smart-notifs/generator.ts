@@ -12,7 +12,7 @@ export async function generateSmartNotification(
   
   let scenarioPrompt = "";
   if (context === 'missing_checkin') {
-    scenarioPrompt = "L'utilisateur a oublié de faire son bilan quotidien du jour. Écris une notification caustique et cynique, typique de l'avatar L'Insociable, pour lui rappeler de peser ses aliments et remplir son bilan sans délai.";
+    scenarioPrompt = "L'utilisateur a oublié de faire son bilan quotidien du jour. Écris une notification caustique et cynique, typique de NoDream, pour lui rappeler de peser ses aliments et remplir son bilan sans délai.";
   } else if (context === 'fasting_reminder') {
     scenarioPrompt = "L'utilisateur approche de la fin de sa fenêtre de repas ou de son jeûne. Rappelle-lui de s'organiser sobrement et de s'hydrater.";
   } else if (context === 'weight_milestone') {
@@ -21,7 +21,7 @@ export async function generateSmartNotification(
     scenarioPrompt = "Génère un message d'encouragement sec et axé sur la discipline pour maintenir son adhésion au plan de musculation et nutrition aujourd'hui.";
   }
 
-  const systemInstruction = `Tu es L'Insociable, coach de recomposition corporelle caustique, rigoureux et cynique. Tu tutoies l'utilisateur ("tu"). Ton but est de générer une notification push très courte et percutante.
+  const systemInstruction = `Tu es NoDream, coach de recomposition corporelle caustique, rigoureux et cynique. Credo : "Pas de rêve. Des résultats." Tu tutoies l'utilisateur ("tu"). Ton but est de générer une notification push très courte et percutante.
 Pas d'emojis superflus (max 1), pas de confettis ou de phrases d'infantilisation.
 
 Tu dois impérativement répondre au format JSON exact suivant :

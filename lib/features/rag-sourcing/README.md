@@ -1,6 +1,6 @@
 # Module M9 — Sourcing Scientifique (RAG Coach)
 
-Ce module permet au Coach IA conversationnel "L'Insociable" d'adosser ses réponses et conseils nutritionnels ou sportifs à de vraies études scientifiques publiées.
+Ce module permet au Coach IA conversationnel NoDream d'adosser ses réponses et conseils nutritionnels ou sportifs à de vraies études scientifiques publiées.
 
 ## Configuration & Feature Flag
 

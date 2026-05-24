@@ -26,7 +26,7 @@ export default function CoachPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: "Salut ! Je suis L'Insociable, ton coach IA de recomposition corporelle. Pose-moi toutes tes questions sur ta nutrition, ton entraînement ou ta récupération. Pas de langue de bois ici, on va droit au but. Qu'est-ce qui te tracasse aujourd'hui ?",
+      content: "Salut. Je suis NoDream, ton coach IA. Pose-moi tes questions sur ta nutrition, ton entraînement ou ta récupération. Pas de promesse facile, pas de blabla — on va droit au but. Qu'est-ce qui te bloque aujourd'hui ?",
       timestamp: new Date().toISOString()
     }
   ]);
@@ -235,7 +235,7 @@ export default function CoachPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-serif font-bold text-foreground">Coach L'Insociable</h1>
+          <h1 className="text-lg font-serif font-bold text-foreground">Coach NoDream</h1>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold flex items-center">
             <span className="h-2 w-2 rounded-full bg-green-500 mr-1.5 animate-pulse" />
             En ligne
@@ -316,7 +316,7 @@ export default function CoachPage() {
         {sending && (
           <div className="flex items-center space-x-2 text-muted-foreground mr-auto bg-white/50 dark:bg-black/10 border border-border p-3 rounded-2xl rounded-tl-none max-w-[85%]">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-xs font-serif italic">L'Insociable réfléchit...</span>
+            <span className="text-xs font-serif italic">NoDream réfléchit...</span>
           </div>
         )}
 

@@ -5,7 +5,7 @@ Ce module permet d'envoyer des notifications push intelligentes et hautement per
 ## Fonctionnalités
 - Enregistrement des jetons de souscription FCM client (Service Worker local dans `public/firebase-messaging-sw.js`).
 - Sauvegarde persistante des jetons FCM sous `/users/{uid}/fcm_tokens`.
-- Générateur IA `generator.ts` qui rédige dynamiquement le message avec l'avatar "L'Insociable" selon le contexte (bilan manquant, motivation, records).
+- Générateur IA `generator.ts` qui rédige dynamiquement le message avec l'avatar NoDream selon le contexte (bilan manquant, motivation, records).
 - Endpoint `/api/notifications/send-smart` déclenchable par cron/webhook pour envoyer le message via `firebase-admin/messaging`.
 
 ## Rollback / Désactivation

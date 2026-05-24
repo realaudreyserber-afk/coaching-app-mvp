@@ -40,7 +40,7 @@ export default function SetupPage() {
       <div className="mx-auto max-w-3xl">
         <header className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-serif font-bold text-primary">
-            Configuration L&apos;Insociable
+            Configuration NoDream
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Cette page apparaît parce que les variables d&apos;environnement Firebase ne sont pas configurées.
