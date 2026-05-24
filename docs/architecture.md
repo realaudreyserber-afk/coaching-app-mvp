@@ -57,6 +57,31 @@ La protection des routes `(app)/*` était purement client-side (`app/(app)/layou
 - Double mécanisme (cookie SSR + Bearer API) → maintenir les deux synchronisés
 - Mock auth gated derrière `ENABLE_MOCK_AUTH=1` + `NODE_ENV != production`
 
+## ADR-006 — Conventions Firestore : snake_case + maps imbriquées vs sous-collections
+
+**Statut** : Accepté — 2026-05-24 (issu de l'audit live MVP)
+
+### Contexte
+L'audit live du MVP en prod a révélé que **toutes** les collections et tous les champs Firestore existants utilisent **snake_case** : `checkins_daily`, `adherence_nutrition`, `plan_current_id`, `training_done`, `lifestyle_notes`. Plusieurs PRs d'extensions avaient introduit du camelCase (`fastingProtocol`, `streakCurrent`) ou kebab-case (`food-logs`).
+
+Par ailleurs, le schéma `users/{uid}` est **fortement structuré en maps imbriquées** : `profile`, `baseline`, `fitness`, `goals`, `medical`, `nutrition`, `settings`, `subscription`. Le brief V1 §M4 (GLP-1) prévoyait pourtant une sous-collection `users/{uid}/medications/glp1` séparée.
+
+### Décision
+**Convention obligatoire** :
+- Snake_case partout (collections, sous-collections, champs)
+- Données médicales / profil → **étendre les maps existantes** (`medical.glp1`, `profile.tdee_adaptive`, etc.)
+- Données temporelles ou listables → **sous-collections** (`food_logs/{logId}`, `checkins_daily/{date}`, `coach_messages/{msgId}`)
+- Compteurs single-instance → **sous-collection d'un seul doc** (`streak/current`) ou map sur user (`analytics.weight_avg_7d`)
+
+### Migration des extensions actuelles
+- GLP-1 : `users/{uid}/medications/glp1` → `users/{uid}.medical.glp1` (M4 refactor backlog)
+- Schemas V1 modules : aligner sur snake_case (déjà fait dans `lib/features/food-logs/schema.ts`)
+
+### Conséquences
+- Cohérence requêtes Firestore (un seul style à indexer)
+- Réduction des lectures (1 `getDoc(users/{uid})` charge déjà tout le profil métier)
+- Sous-collections réservées aux données append-only ou time-series
+
 ## ADR-005 — Middleware Edge runtime : guard cookie en présence, pas en validité crypto
 
 **Statut** : Accepté avec limitation connue — 2026-05-24

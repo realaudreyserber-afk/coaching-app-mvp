@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" fill="#1a1a1a"/>
+  <circle cx="256" cy="256" r="160" fill="#1a1a1a"/>
+  <path d="M256 156c-33 0-60 27-60 60v24c-17 0-30 13-30 30v108c0 10 8 18 18 18h144c10 0 18-8 18-18V270c0-17-13-30-30-30v-24c0-33-27-60-60-60zm-36 60c0-20 16-36 36-36s36 16 36 36v24h-72v-24z" fill="#f7f3eb"/>
+  <text x="256" y="380" font-family="Georgia, serif" font-size="45" font-weight="700" fill="#d97757" text-anchor="middle">L'I</text>
+</svg>

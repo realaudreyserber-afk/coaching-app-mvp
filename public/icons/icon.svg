@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#1a1a1a"/>
+  <path d="M256 96c-44 0-80 36-80 80v32c-22 0-40 18-40 40v144c0 13 11 24 24 24h192c13 0 24-11 24-24V248c0-22-18-40-40-40v-32c0-44-36-80-80-80zm-48 80c0-26 22-48 48-48s48 22 48 48v32h-96v-32z" fill="#f7f3eb"/>
+  <text x="256" y="450" font-family="Georgia, serif" font-size="60" font-weight="700" fill="#d97757" text-anchor="middle">L'I</text>
+</svg>
