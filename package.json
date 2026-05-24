@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rules": "vitest run --config vitest.rules.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:env": "node scripts/verify-env.mjs"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.12.0",

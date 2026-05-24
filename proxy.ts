@@ -4,10 +4,12 @@ const PUBLIC_PATHS = [
   '/',
   '/login',
   '/callback',
+  '/setup',
   '/manifest.json',
   '/sw.js',
   '/firebase-messaging-sw.js',
   '/robots.txt',
+  '/api/health',
 ];
 
 const PUBLIC_PREFIXES = [
