@@ -41,7 +41,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "date", "order": "DESCENDING" },
-        { "fieldPath": "loggedAt", "order": "DESCENDING" }
+        { "fieldPath": "logged_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "food_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
       ]
     },
     {
@@ -80,6 +88,22 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "week", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "form_checks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "month_key", "order": "ASCENDING" },
+        { "fieldPath": "analyzed_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notification_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "sent_at", "order": "DESCENDING" }
       ]
     }
   ],
