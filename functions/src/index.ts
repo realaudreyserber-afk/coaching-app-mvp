@@ -11,3 +11,4 @@ export { tdeeRecalcWeekly } from './tdee-recalc-weekly';
 export { wearableSyncNightly } from './wearable-sync-nightly';
 export { stripeWebhook } from './stripe-webhook';
 export { stripeEventsCleanup } from './stripe-events-cleanup';
+export { offBaseIngestion } from './off-base-ingestion';

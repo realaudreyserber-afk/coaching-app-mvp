@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { logFood } from '@/lib/features/food-logs/client';
 import { flags } from '@/lib/features/flags';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -223,23 +224,26 @@ export default function RecipeOcrPage() {
     const portionF = Math.round((recipe.totalF / recipe.servings) * 10) / 10;
 
     try {
-      // Log food item in food_logs
-      await addDoc(collection(db, 'users', user.uid, 'food_logs'), {
-        name: `${recipe.name} (1 portion)`,
-        brand: 'Recette Importée',
-        kcal: portionKcal,
-        p: portionP,
-        c: portionC,
-        f: portionF,
-        qty_g: 100, // standard value for reference
-        date: todayStr,
-        loggedAt: new Date().toISOString()
+      await logFood(user, {
+        source: 'recipe_ocr',
+        notes: `Recette : ${recipe.name}`,
+        items: [
+          {
+            name: `${recipe.name} (1 portion)`,
+            brand: 'Recette importée',
+            qty_g: 100,
+            kcal: portionKcal,
+            p: portionP,
+            c: portionC,
+            f: portionF,
+          },
+        ],
       });
 
       setSuccessMsg(`Une portion (${portionKcal} kcal) a été ajoutée à ton journal de nutrition.`);
     } catch (err: any) {
       console.error('Log recipe portion error:', err);
-      setErrorMsg('Impossible de consigner la portion dans ton journal.');
+      setErrorMsg(err?.message || 'Impossible de consigner la portion dans ton journal.');
     } finally {
       setSaving(false);
     }

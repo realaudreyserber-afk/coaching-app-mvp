@@ -4,10 +4,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
+import { logFood } from '@/lib/features/food-logs/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Scan, Keyboard, Loader2, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
@@ -149,30 +148,30 @@ export default function BarcodePage() {
     setSuccessMsg(null);
 
     const scale = quantity / 100;
-    const todayStr = new Date().toISOString().split('T')[0];
 
     try {
-      const payload = {
-        name: product.name,
-        brand: product.brand || 'Marque inconnue',
-        kcal: Math.round(product.kcal_100g * scale),
-        p: Math.round(product.p_100g * scale * 10) / 10,
-        c: Math.round(product.c_100g * scale * 10) / 10,
-        f: Math.round(product.f_100g * scale * 10) / 10,
-        qty_g: quantity,
-        barcode: product.barcode || '',
-        date: todayStr,
-        loggedAt: new Date().toISOString()
-      };
-
-      await addDoc(collection(db, 'users', user.uid, 'food_logs'), payload);
+      await logFood(user, {
+        source: 'barcode',
+        items: [
+          {
+            name: product.name,
+            brand: product.brand || 'Marque inconnue',
+            barcode: product.barcode || undefined,
+            qty_g: quantity,
+            kcal: Math.round(product.kcal_100g * scale),
+            p: Math.round(product.p_100g * scale * 10) / 10,
+            c: Math.round(product.c_100g * scale * 10) / 10,
+            f: Math.round(product.f_100g * scale * 10) / 10,
+          },
+        ],
+      });
       setSuccessMsg(`"${product.name}" (${quantity}g) enregistré avec succès !`);
       setProduct(null);
       setScannedCode(null);
       setManualCode('');
     } catch (err: any) {
       console.error('Log food error:', err);
-      setErrorMsg('Impossible d\'enregistrer cet aliment dans ton journal.');
+      setErrorMsg(err?.message || 'Impossible d\'enregistrer cet aliment dans ton journal.');
     } finally {
       setLoggingFood(false);
     }

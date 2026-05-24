@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
+import { logFood } from '@/lib/features/food-logs/client';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { Button } from '@/components/ui/button';
@@ -139,34 +139,29 @@ export default function VoiceRecordModal({ isOpen, onClose }: VoiceRecordModalPr
     if (!user || detectedItems.length === 0) return;
     setSavingLogs(true);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     try {
-      const promises = detectedItems.map((item, idx) => {
-        const finalQty = quantityOverrides[idx] !== undefined ? quantityOverrides[idx] : item.qty_estimated_g;
-        const scale = finalQty / item.qty_estimated_g;
-
-        const payload = {
-          name: item.name,
-          brand: 'Commande Vocale IA',
-          kcal: Math.round(item.kcal * scale),
-          p: Math.round(item.p * scale * 10) / 10,
-          c: Math.round(item.c * scale * 10) / 10,
-          f: Math.round(item.f * scale * 10) / 10,
-          qty_g: finalQty,
-          date: todayStr,
-          loggedAt: new Date().toISOString()
-        };
-
-        return addDoc(collection(db, 'users', user.uid, 'food_logs'), payload);
+      await logFood(user, {
+        source: 'voice',
+        items: detectedItems.map((item, idx) => {
+          const finalQty =
+            quantityOverrides[idx] !== undefined ? quantityOverrides[idx] : item.qty_estimated_g;
+          const scale = finalQty / item.qty_estimated_g;
+          return {
+            name: item.name,
+            brand: 'Commande vocale IA',
+            qty_g: finalQty,
+            kcal: Math.round(item.kcal * scale),
+            p: Math.round(item.p * scale * 10) / 10,
+            c: Math.round(item.c * scale * 10) / 10,
+            f: Math.round(item.f * scale * 10) / 10,
+          };
+        }),
       });
-
-      await Promise.all(promises);
       onClose();
     } catch (err) {
       console.error('Save logs error:', err);
       setStatus('error');
-      setErrorMsg('Impossible d\'enregistrer les aliments.');
+      setErrorMsg(err instanceof Error ? err.message : "Impossible d'enregistrer les aliments.");
     } finally {
       setSavingLogs(false);
     }

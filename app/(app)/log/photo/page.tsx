@@ -3,10 +3,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
+import { logFood } from '@/lib/features/food-logs/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Camera, Loader2, CheckCircle, AlertTriangle, Trash2, Plus, Scale } from 'lucide-react';
@@ -152,32 +151,29 @@ export default function PhotoMealPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     try {
-      const promises = detectedItems.map(item => {
-        const payload = {
+      // One food_log doc per meal capture, with all detected items inside.
+      // Matches canonical schema better (a "meal" is one logical entry).
+      await logFood(user, {
+        source: 'photo_meal',
+        items: detectedItems.map((item) => ({
           name: item.name,
           brand: 'Photo-to-Meal IA',
+          qty_g: item.qty_estimated_g,
           kcal: item.kcal,
           p: item.p,
           c: item.c,
           f: item.f,
-          qty_g: item.qty_estimated_g,
-          date: todayStr,
-          loggedAt: new Date().toISOString()
-        };
-        return addDoc(collection(db, 'users', user.uid, 'food_logs'), payload);
+        })),
       });
 
-      await Promise.all(promises);
-      setSuccessMsg(`${detectedItems.length} aliment(s) enregistré(s) dans ton journal quotidien !`);
+      setSuccessMsg(`Repas (${detectedItems.length} aliment(s)) enregistré dans ton journal !`);
       setDetectedItems([]);
       setImageFile(null);
       setImagePreview(null);
     } catch (err: any) {
       console.error('Log photo meal error:', err);
-      setErrorMsg('Impossible d\'enregistrer les aliments.');
+      setErrorMsg(err?.message || 'Impossible d\'enregistrer les aliments.');
     } finally {
       setSavingLogs(false);
     }
