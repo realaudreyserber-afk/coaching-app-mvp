@@ -60,10 +60,32 @@ export const tdeeRecalcWeekly = onSchedule(
         const estimatedTdee = Math.round(meanKcalIngested - energyImbalanceKcalPerDay);
 
         if (estimatedTdee > 1200 && estimatedTdee < 5000) {
+          const nowIso = new Date().toISOString();
+          const weekKey = (() => {
+            const d = new Date();
+            const onejan = new Date(d.getFullYear(), 0, 1);
+            const week = Math.ceil(((d.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
+            return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
+          })();
+
           await db.collection('users').doc(uid).update({
             'profile.tdee_adaptive': estimatedTdee,
-            'profile.tdee_adaptive_updated_at': new Date().toISOString(),
+            'profile.tdee_adaptive_updated_at': nowIso,
           });
+
+          // Append to history sub-collection (ADR-006: time-series → sub-collection)
+          await db
+            .collection('users').doc(uid)
+            .collection('tdee_history').doc(weekKey)
+            .set({
+              week: weekKey,
+              tdee_adaptive: estimatedTdee,
+              weight_slope_kg_per_day: Math.round(weightSlopeKgPerDay * 10000) / 10000,
+              mean_kcal_ingested: Math.round(meanKcalIngested),
+              datapoints_used: data.length,
+              computed_at: nowIso,
+            });
+
           return true;
         }
         return false;

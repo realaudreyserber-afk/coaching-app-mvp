@@ -74,6 +74,13 @@
         { "fieldPath": "uid", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "tdee_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "week", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

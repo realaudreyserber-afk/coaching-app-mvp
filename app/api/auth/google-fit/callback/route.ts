@@ -24,23 +24,18 @@ export async function GET(req: NextRequest) {
     const redirectUri = `${origin}/api/auth/google-fit/callback`;
     const tokens = await exchangeGoogleFitCode(code, redirectUri);
 
-    // Save tokens in Firestore securely via admin SDK
-    await adminDb
-      .collection('users')
-      .doc(uid)
-      .collection('tokens')
-      .doc('google-fit')
-      .set({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: tokens.expiresAt,
-        updatedAt: new Date().toISOString(),
-      });
-
-    // Update user profile status
+    // ADR-006: tokens stored in nested map users/{uid}.wearable.google_fit
+    // (one-shot config, not append-only → map, not sub-collection)
     await adminDb.collection('users').doc(uid).update({
+      'wearable.google_fit': {
+        connected: true,
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: tokens.expiresAt,
+        updated_at: new Date().toISOString(),
+      },
       'profile.wearables_connected': true,
-      'profile.wearables_source': 'google-fit',
+      'profile.wearables_source': 'google_fit',
     });
 
     return NextResponse.redirect(`${origin}/settings/connections?success=true`);
