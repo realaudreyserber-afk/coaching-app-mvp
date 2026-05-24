@@ -1,10 +1,13 @@
 /**
- * Feature flag resolution order:
- *   1. Firebase Remote Config (server: Admin SDK / client: client SDK)
- *   2. Environment variables (FEATURE_* / NEXT_PUBLIC_FEATURE_*)
+ * Client-side feature flag resolution.
+ *
+ * Order:
+ *   1. Firebase Remote Config (client SDK, cached 5min)
+ *   2. Environment variables (NEXT_PUBLIC_FEATURE_*)
  *   3. localStorage override (development only)
  *   4. Default value (false)
  *
+ * Server-side flags live in flags-server.ts (uses firebase-admin).
  * Premium-gated features should ALSO check tier server-side — flags alone are
  * not a security boundary.
  */
@@ -22,6 +25,7 @@ let remoteCachedAt = 0;
 const REMOTE_TTL_MS = 5 * 60 * 1000;
 
 async function fetchRemoteConfigClient(): Promise<Record<string, boolean>> {
+  if (typeof window === 'undefined') return {};
   if (remoteCache && Date.now() - remoteCachedAt < REMOTE_TTL_MS) return remoteCache;
   try {
     const { getRemoteConfig, fetchAndActivate, getAll } = await import('firebase/remote-config');
@@ -105,44 +109,3 @@ export const flags = {
   healthConnect: () => resolveSync('health_connect'),
   healthkit: () => resolveSync('healthkit'),
 };
-
-let serverTemplateCache: Record<string, boolean> | null = null;
-let serverTemplateFetchedAt = 0;
-const SERVER_TEMPLATE_TTL_MS = 5 * 60 * 1000;
-let inflightServerFetch: Promise<Record<string, boolean>> | null = null;
-
-async function fetchServerTemplate(): Promise<Record<string, boolean>> {
-  if (serverTemplateCache && Date.now() - serverTemplateFetchedAt < SERVER_TEMPLATE_TTL_MS) {
-    return serverTemplateCache;
-  }
-  if (inflightServerFetch) return inflightServerFetch;
-  inflightServerFetch = (async () => {
-    try {
-      const { getRemoteConfig } = await import('firebase-admin/remote-config');
-      const template = await getRemoteConfig().getTemplate();
-      const parsed: Record<string, boolean> = {};
-      for (const [k, param] of Object.entries(template.parameters)) {
-        if (param?.defaultValue && 'value' in param.defaultValue) {
-          parsed[k] = String(param.defaultValue.value) === 'true';
-        }
-      }
-      serverTemplateCache = parsed;
-      serverTemplateFetchedAt = Date.now();
-      return parsed;
-    } catch (err) {
-      console.warn('Server Remote Config template fetch failed:', err);
-      return {};
-    } finally {
-      inflightServerFetch = null;
-    }
-  })();
-  return inflightServerFetch;
-}
-
-export async function getServerFlag(key: FlagKey, defaultValue = false): Promise<boolean> {
-  const template = await fetchServerTemplate();
-  const v = template[`feature_${key}`];
-  if (typeof v === 'boolean') return v;
-  const fromEnv = getFromEnv(key);
-  return fromEnv ?? defaultValue;
-}
