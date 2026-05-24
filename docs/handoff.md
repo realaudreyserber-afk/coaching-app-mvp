@@ -136,6 +136,18 @@ GitHub push to main
 - [ ] Tester end-to-end le flow Stripe en mode test
 - [ ] Lancer un test E2E full onboarding → check-in → coach → plan
 
+### V1 extensions livrés (Phase A.0 → A.7)
+- [x] A.0 Fondations : `lib/vertex/context-builder.ts`, `lib/features/notifications/templates.ts`, `lib/features/health/aggregator.ts`, `scripts/check-snake-case.mjs`, ADR-006 + ADR-007
+- [x] A.1 Food : M1/M2/M3/M14 alignés sur `lib/features/food-logs/client.ts` (canonical schema), M6 OFF base (`functions/src/off-base-ingestion.ts` daily cron), M15 micronutrients aggregator
+- [x] A.2 Santé : M5 fasting (map `fasting_protocol`), M8 TDEE map + `tdee_history` sub-collection, M7 wearables Google Fit OAuth refactored to map, M11 body scanner, M16 bloodwork persistence
+- [x] A.3 Coaching : M10 profile paths (auto-detect onboarding), M13 micro-tasks `/api/micro-tasks/today`, M19 smart-notifs 7-template engine + audit log
+- [x] A.4 Ops : M17 referral snake_case refactor, M18 streak gap/longest/at_risk, M22 admin `/api/admin/experiments`
+- [x] A.5 Admin : `/api/admin/metrics` real cohort retention + DAU/WAU/MAU + profile breakdown
+- [x] A.7 Vidéo : M12 form check Premium quota + Premium+ unlimited, persistence form_checks
+
+### Plan d'activation
+Voir [docs/extensions-rollout.md](./extensions-rollout.md) — 11 vagues, 5 hypothèses A/B testables, gates de promotion explicites.
+
 ### Non-bloquantes
 - [x] ~~Configurer Sentry~~ — instrumentation prête ([sentry.*.config.ts](sentry.server.config.ts), [instrumentation.ts](instrumentation.ts)). Activer en posant `SENTRY_DSN`. NB : peer dep sur Next 16 nécessite `--legacy-peer-deps` jusqu'à mise à jour Sentry.
 - [x] ~~Ajouter Sourcing FR au RAG~~ — domaines ANSES/EFSA/HAS/INSERM/OMS/EFSA via Google CSE ([lib/features/rag-sourcing/fr-sources.ts](lib/features/rag-sourcing/fr-sources.ts)). Activer en posant `CSE_API_KEY` + `CSE_FR_ENGINE_ID`.
