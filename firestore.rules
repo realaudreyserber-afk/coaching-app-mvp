@@ -3,15 +3,35 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      match /{collection}/{docId} {
+
+      match /{path=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    match /content/{collection}/{docId} {
+    match /content/{path=**} {
       allow read: if request.auth != null;
-      allow write: if false; // admin only via backend
+      allow write: if false;
+    }
+
+    match /experiments/{experimentId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /experiment_exposures/{exposureId} {
+      allow read: if false;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /rgpd_audit_log/{logId} {
+      allow read, write: if false;
+    }
+
+    match /_stripe_events/{eventId} {
+      allow read, write: if false;
     }
   }
 }

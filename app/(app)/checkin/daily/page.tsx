@@ -4,11 +4,13 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, collection, getDocs, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { flags } from "@/lib/features/flags";
+import { calculateStreak } from "@/lib/features/streak/streak-service";
 
 export default function DailyCheckinPage() {
   const { user, getFreshToken } = useAuth();
@@ -68,6 +70,33 @@ export default function DailyCheckinPage() {
 
       // 1. Save check-in details to Firestore
       await setDoc(checkinRef, payload);
+
+      // 1.5 Calculate and save streak if feature_streak is active
+      if (flags.streak()) {
+        try {
+          const checkinsRef = collection(db, "users", user.uid, "checkins_daily");
+          const checkinsSnap = await getDocs(checkinsRef);
+          const dates = [todayStr];
+          checkinsSnap.forEach((doc) => {
+            if (doc.id !== todayStr) {
+              dates.push(doc.id);
+            }
+          });
+
+          const { currentStreak, longestStreak } = calculateStreak(dates, todayStr);
+          
+          const userRef = doc(db, "users", user.uid);
+          await updateDoc(userRef, {
+            streak: {
+              current: currentStreak,
+              longest: longestStreak,
+              lastCheckinDate: todayStr,
+            }
+          });
+        } catch (streakErr) {
+          console.error("Failed to update check-in streak:", streakErr);
+        }
+      }
 
       // 2. Fetch daily insight from API
       const token = await getFreshToken();

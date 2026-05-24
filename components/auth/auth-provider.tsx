@@ -11,6 +11,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { isNativePlatform } from "@/lib/platform";
+import { refreshFlags } from "@/lib/features/flags";
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
+  const lastSessionUidRef = React.useRef<string | null>(null);
 
   // Check if profile exists in Firestore users/{uid}
   const checkProfileExistence = async (uid: string): Promise<boolean> => {
@@ -52,11 +54,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    void refreshFlags().catch(() => {
+      // best-effort, sync resolution falls back to env/localStorage
+    });
+  }, []);
+
+  useEffect(() => {
+    const mockAuthEnabled =
+      process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH === '1' &&
+      process.env.NODE_ENV !== 'production';
+
+    if (typeof window !== 'undefined' && mockAuthEnabled) {
+      try {
+        const mockUserVal = window.localStorage.getItem('mock_user');
+        if (mockUserVal === 'true' || mockUserVal === 'non-admin' || mockUserVal === 'no-profile') {
+          const isNonAdmin = mockUserVal === 'non-admin';
+          const isNoProfile = mockUserVal === 'no-profile';
+          const mockToken = isNoProfile
+            ? 'mock-token-no-profile'
+            : isNonAdmin
+              ? 'mock-token-non-admin'
+              : 'mock-token';
+          const mockUser = {
+            uid: isNonAdmin ? 'non-admin-user-id' : isNoProfile ? 'no-profile-user-id' : 'dev-user-id',
+            email: isNonAdmin ? 'non-admin@coaching.local' : isNoProfile ? 'no-profile@coaching.local' : 'dev@coaching.local',
+            displayName: isNonAdmin ? 'Non-Admin User' : isNoProfile ? 'No-Profile User' : 'Mock User',
+            emailVerified: true,
+            isAnonymous: false,
+            metadata: {},
+            providerData: [],
+            providerId: 'google.com',
+            refreshToken: 'mock-refresh-token',
+            tenantId: null,
+            delete: async () => {},
+            getIdToken: async () => mockToken,
+            getIdTokenResult: async () => ({ token: mockToken, signInProvider: 'google.com', claims: {}, authTime: '', expirationTime: '', issuedAtTime: '' }),
+            toJSON: () => ({}),
+            phoneNumber: null,
+            photoURL: null,
+          } as unknown as User;
+          setTimeout(async () => {
+            try {
+              await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: mockToken }),
+              });
+            } catch {
+              // best-effort
+            }
+            setUser(mockUser);
+            setHasProfile(!isNoProfile);
+            setLoading(false);
+          }, 0);
+          return;
+        }
+      } catch (e) {
+        console.error("Error configuring mock user:", e);
+      }
+    }
+
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        if (lastSessionUidRef.current !== currentUser.uid) {
+          try {
+            const idToken = await currentUser.getIdToken();
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken }),
+            });
+            lastSessionUidRef.current = currentUser.uid;
+          } catch (err) {
+            console.error('Failed to mint server session cookie:', err);
+          }
+        }
         await checkProfileExistence(currentUser.uid);
       } else {
+        if (lastSessionUidRef.current !== null) {
+          try {
+            await fetch('/api/auth/session', { method: 'DELETE' });
+          } catch {
+            // best-effort
+          }
+          lastSessionUidRef.current = null;
+        }
         setHasProfile(false);
       }
       setLoading(false);

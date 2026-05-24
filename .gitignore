@@ -12,6 +12,13 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
+/.playwright
+
+# Cloud Functions build output
+/functions/lib
+/functions/node_modules
 
 # next.js
 /.next/

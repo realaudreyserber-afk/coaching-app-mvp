@@ -1,4 +1,80 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "active", "order": "ASCENDING" },
+        { "fieldPath": "date_start", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "coach_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "checkins_daily",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "checkins_weekly",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "week", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bloodwork",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "food_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "DESCENDING" },
+        { "fieldPath": "loggedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "alerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "resolved", "order": "ASCENDING" },
+        { "fieldPath": "triggered_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "experiment_exposures",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "experimentId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "_stripe_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "received_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rgpd_audit_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

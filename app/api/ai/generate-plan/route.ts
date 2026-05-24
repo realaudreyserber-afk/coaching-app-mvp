@@ -1,16 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase/admin';
 import { withAuth } from '@/lib/firebase/auth-middleware';
-import { vertexAI } from '@/lib/vertex/client';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
+import { generateText, parseLLMJson } from '@/lib/vertex/client';
 import { PLAN_GENERATOR_SYSTEM_PROMPT } from '@/lib/vertex/prompts/plan-generator';
 import { PlanSchema } from '@/lib/vertex/schemas';
+import { PLAN_RESPONSE_SCHEMA } from '@/lib/vertex/response-schemas';
+import { checkUserBaseline } from '@/lib/vertex/safety';
+import { flags } from '@/lib/features/flags';
+import { detectProfilePath } from '@/lib/features/profile-paths/detector';
+import { PROFILE_PATH_PLAN_INSTRUCTIONS } from '@/lib/features/profile-paths/prompts';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (authenticatedReq, user) => {
     try {
       const uid = user.uid;
-      
-      // 1. Fetch user data from Firestore
+
+      const rl = await checkRateLimit(uid, {
+        scope: 'ai_generate_plan',
+        perHour: 5,
+      });
+      if (!rl.ok) {
+        return NextResponse.json(
+          { error: 'Trop de générations de plan récentes. Patiente avant de réessayer.', retryAfterSec: rl.retryAfterSec },
+          { status: 429 }
+        );
+      }
+
       const userRef = adminDb.collection('users').doc(uid);
       const userSnap = await userRef.get();
       
@@ -39,37 +55,75 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // 3. Call Vertex AI using Gemini Pro with JSON constraint
-      const model = vertexAI.getGenerativeModel({
-        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.3,
-        },
-        systemInstruction: {
-          role: 'system',
-          parts: [{ text: PLAN_GENERATOR_SYSTEM_PROMPT }],
-        },
+      const safety = await checkUserBaseline({
+        weightKg: userContext.baseline?.weight ?? userContext.profile?.weight,
+        heightCm: userContext.profile?.height,
       });
+      if (safety.flagged) {
+        return NextResponse.json({
+          error: safety.message,
+          safety: { flagged: true, reason: safety.reason },
+        }, { status: 403 });
+      }
 
+      // 2.5 Detect profile path
+      let glp1Active = false;
+      try {
+        const glp1Snap = await userRef.collection('medications').doc('glp1').get();
+        if (glp1Snap.exists) {
+          glp1Active = glp1Snap.data()?.active === true;
+        }
+      } catch (e) {
+        console.error("Error fetching GLP-1 active state:", e);
+      }
+
+      const profilePath = detectProfilePath({ ...userContext, glp1Active });
+
+      // Save detected profile path to Firestore if enabled
+      if (flags.profilePaths()) {
+        await userRef.update({ profile_path: profilePath });
+      }
+
+      // Customize system instructions based on profile paths and fasting
+      let systemInstruction = PLAN_GENERATOR_SYSTEM_PROMPT;
+      if (flags.profilePaths()) {
+        const pathInstructions = PROFILE_PATH_PLAN_INSTRUCTIONS[profilePath];
+        if (pathInstructions) {
+          systemInstruction += `\n${pathInstructions}`;
+        }
+      }
+
+      if (flags.fasting() && userData?.fasting_protocol?.active) {
+        const fp = userData.fasting_protocol;
+        systemInstruction += `
+\nCONSIGNES SPÉCIFIQUES POUR LE JEÛNE INTERMITTENT :
+L'utilisateur suit un protocole de jeûne intermittent de type ${fp.type}.
+Sa fenêtre d'alimentation (repas) est de ${fp.eating_window_start} à ${fp.eating_window_end}.
+Jours de jeûne actifs : ${fp.days_active?.join(', ')}.
+Adapte le plan pour que les repas soient concentrés dans cette fenêtre. Suggère de consommer l'essentiel de l'énergie et des protéines au cours de cette période. Hydratation importante en dehors de la fenêtre.
+`;
+      }
+
+      // 3. Call unified text generator (Gemini Pro or Vertex AI) with JSON constraint
       const promptText = `
 Génère un plan personnalisé complet basé sur les données de l'utilisateur suivantes :
 ${JSON.stringify(userContext, null, 2)}
       `;
 
-      const response = await model.generateContent({
+      const responseText = await generateText({
+        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
         contents: [{ role: 'user', parts: [{ text: promptText }] }],
+        systemInstruction,
+        temperature: 0.3,
+        responseMimeType: 'application/json',
+        responseSchema: PLAN_RESPONSE_SCHEMA,
       });
-
-      const responseResult = response.response;
-      const responseText = responseResult.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (!responseText) {
         throw new Error("L'IA n'a retourné aucune réponse.");
       }
 
-      // 4. Parse & validate the JSON with Zod
-      const parsedPlan = PlanSchema.parse(JSON.parse(responseText));
+      const parsedPlan = PlanSchema.parse(parseLLMJson(responseText));
 
       // 5. Save the generated plan in subcollection plans/
       const planData = {

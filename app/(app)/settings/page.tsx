@@ -4,13 +4,14 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserSettings, UserProfile } from "@/types/user";
-import { User, Settings as SettingsIcon, ShieldAlert, Download, LogOut, Save, Check } from "lucide-react";
+import { User, Settings as SettingsIcon, ShieldAlert, Download, LogOut, Save, Check, ShieldCheck } from "lucide-react";
+import { flags } from "@/lib/features/flags";
 
 export default function SettingsPage() {
   const { user, logout, getFreshToken } = useAuth();
@@ -37,11 +38,31 @@ export default function SettingsPage() {
   const [deleteInput, setDeleteInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // GLP-1 Tracking state
+  const [featureGlp1, setFeatureGlp1] = useState(false);
+  const [glp1Active, setGlp1Active] = useState(false);
+  const [glp1Molecule, setGlp1Molecule] = useState<"semaglutide" | "tirzepatide" | "liraglutide" | "other">("semaglutide");
+  const [glp1Dose, setGlp1Dose] = useState("");
+  const [glp1Frequency, setGlp1Frequency] = useState<"weekly" | "daily" | "other">("weekly");
+  const [glp1StartDate, setGlp1StartDate] = useState("");
+  const [glp1SideEffects, setGlp1SideEffects] = useState<string[]>([]);
+
+  // Fasting Tracking state
+  const [featureFasting, setFeatureFasting] = useState(false);
+  const [fastingActive, setFastingActive] = useState(false);
+  const [fastingType, setFastingType] = useState<"none" | "16:8" | "18:6" | "20:4" | "OMAD" | "custom">("16:8");
+  const [fastingStart, setFastingStart] = useState("12:00");
+  const [fastingEnd, setFastingEnd] = useState("20:00");
+  const [fastingDays, setFastingDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+
   useEffect(() => {
     if (!user) return;
 
     const fetchUserSettings = async () => {
       try {
+        setFeatureGlp1(flags.glp1());
+        setFeatureFasting(flags.fasting());
+
         const userRef = doc(db, "users", user.uid);
         const snap = await getDoc(userRef);
         if (snap.exists()) {
@@ -56,7 +77,30 @@ export default function SettingsPage() {
             setUnits(uData.settings.units || "metric");
             setLanguage(uData.settings.language || "fr");
           }
+          if (uData.fasting_protocol) {
+            setFastingActive(uData.fasting_protocol.active || false);
+            setFastingType(uData.fasting_protocol.type || "16:8");
+            setFastingStart(uData.fasting_protocol.eating_window_start || "12:00");
+            setFastingEnd(uData.fasting_protocol.eating_window_end || "20:00");
+            setFastingDays(uData.fasting_protocol.days_active || [0, 1, 2, 3, 4, 5, 6]);
+          }
         }
+
+        // Fetch GLP-1 if flag is active
+        if (flags.glp1()) {
+          const glp1Ref = doc(db, "users", user.uid, "medications", "glp1");
+          const glp1Snap = await getDoc(glp1Ref);
+          if (glp1Snap.exists()) {
+            const gData = glp1Snap.data();
+            setGlp1Active(gData.active || false);
+            setGlp1Molecule(gData.molecule || "semaglutide");
+            setGlp1Dose(gData.dose || "");
+            setGlp1Frequency(gData.frequency || "weekly");
+            setGlp1StartDate(gData.startDate || "");
+            setGlp1SideEffects(gData.sideEffects || []);
+          }
+        }
+
         setLoadingProfile(false);
       } catch (err) {
         console.error("Error fetching settings:", err);
@@ -101,7 +145,30 @@ export default function SettingsPage() {
         await updateDoc(userRef, {
           profile: updatedProfile,
           settings: updatedSettings,
+          ...(featureFasting && {
+            fasting_protocol: {
+              active: fastingActive,
+              type: fastingType,
+              eating_window_start: fastingStart,
+              eating_window_end: fastingEnd,
+              days_active: fastingDays,
+            }
+          })
         });
+
+        // Save GLP-1 settings if flag is active
+        if (featureGlp1) {
+          const glp1Ref = doc(db, "users", user.uid, "medications", "glp1");
+          await setDoc(glp1Ref, {
+            active: glp1Active,
+            molecule: glp1Molecule,
+            dose: glp1Dose,
+            frequency: glp1Frequency,
+            startDate: glp1StartDate,
+            sideEffects: glp1SideEffects,
+            updatedAt: new Date().toISOString()
+          });
+        }
 
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
@@ -264,6 +331,238 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* GLP-1 Medication Card */}
+        {featureGlp1 && (
+          <Card className="border border-border bg-card shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" /> Traitement GLP-1
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Renseigne ton traitement (Semaglutide, Tirzepatide) pour adapter ton plan
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-4 text-xs">
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Traitement Actif</span>
+                  <span className="text-muted-foreground text-[10px]">Indique si tu es sous traitement actuellement</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={glp1Active}
+                    onChange={(e) => setGlp1Active(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-muted peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                </label>
+              </div>
+
+              {glp1Active && (
+                <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Molécule</label>
+                      <select
+                        value={glp1Molecule}
+                        onChange={(e: any) => setGlp1Molecule(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                      >
+                        <option value="semaglutide">Sémaglutide (Ozempic/Wegovy)</option>
+                        <option value="tirzepatide">Tirzépatide (Mounjaro/Zepbound)</option>
+                        <option value="liraglutide">Liraglutide (Saxenda)</option>
+                        <option value="other">Autre / Générique</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fréquence</label>
+                      <select
+                        value={glp1Frequency}
+                        onChange={(e: any) => setGlp1Frequency(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                      >
+                        <option value="weekly">Hebdomadaire</option>
+                        <option value="daily">Quotidien</option>
+                        <option value="other">Autre</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Dose (ex: 0.5mg)</label>
+                      <input
+                        type="text"
+                        placeholder="ex: 0.5mg"
+                        value={glp1Dose}
+                        onChange={(e) => setGlp1Dose(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Date de début</label>
+                      <input
+                        type="date"
+                        value={glp1StartDate}
+                        onChange={(e) => setGlp1StartDate(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Effets Secondaires ressentis</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['nausée', 'fatigue', 'constipation', 'diarrhée', 'hypoglycémie', 'maux de tête'].map((effect) => {
+                        const isChecked = glp1SideEffects.includes(effect);
+                        return (
+                          <label key={effect} className="flex items-center space-x-2 cursor-pointer p-1">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGlp1SideEffects(prev => [...prev, effect]);
+                                } else {
+                                  setGlp1SideEffects(prev => prev.filter(x => x !== effect));
+                                }
+                              }}
+                              className="accent-primary"
+                            />
+                            <span className="capitalize">{effect}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-muted-foreground leading-relaxed bg-primary/5 p-2.5 rounded border border-primary/10">
+                    <span className="font-bold text-primary">Clause médicale : </span>
+                    Cette option adapte ton plan nutritionnel en augmentant l'apport en protéines pour minimiser la perte musculaire, mais ne constitue en aucun cas une ordonnance ou un avis médical. Consulte ton médecin pour adapter tes doses.
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Fasting Protocol Card */}
+        {featureFasting && (
+          <Card className="border border-border bg-card shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
+                <SettingsIcon className="h-4 w-4 text-primary" /> Jeûne Intermittent
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Configure tes fenêtres de jeûne pour adapter le coaching et le dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-4 text-xs">
+              <div className="flex items-center justify-between py-1">
+                <div>
+                  <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jeûne Actif</span>
+                  <span className="text-muted-foreground text-[10px]">Active le suivi des fenêtres de jeûne</span>
+                </div>
+                <label className="relative inline-flex inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fastingActive}
+                    onChange={(e) => setFastingActive(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-muted peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                </label>
+              </div>
+
+              {fastingActive && (
+                <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Protocole</label>
+                    <select
+                      value={fastingType}
+                      onChange={(e: any) => {
+                        const val = e.target.value;
+                        setFastingType(val);
+                        if (val === '16:8') {
+                          setFastingStart("12:00");
+                          setFastingEnd("20:00");
+                        } else if (val === '18:6') {
+                          setFastingStart("12:00");
+                          setFastingEnd("18:00");
+                        } else if (val === '20:4') {
+                          setFastingStart("14:00");
+                          setFastingEnd("18:00");
+                        } else if (val === 'OMAD') {
+                          setFastingStart("17:00");
+                          setFastingEnd("18:00");
+                        }
+                      }}
+                      className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                    >
+                      <option value="16:8">16:8 (16h Jeûne / 8h Repas)</option>
+                      <option value="18:6">18:6 (18h Jeûne / 6h Repas)</option>
+                      <option value="20:4">20:4 (20h Jeûne / 4h Repas)</option>
+                      <option value="OMAD">OMAD (One Meal A Day - 23:1)</option>
+                      <option value="custom">Personnalisé</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Début Repas (Fenêtre)</label>
+                      <input
+                        type="time"
+                        value={fastingStart}
+                        onChange={(e) => setFastingStart(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fin Repas (Fenêtre)</label>
+                      <input
+                        type="time"
+                        value={fastingEnd}
+                        onChange={(e) => setFastingEnd(e.target.value)}
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jours d'activation</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((dayName, idx) => {
+                        const isChecked = fastingDays.includes(idx);
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              if (isChecked) {
+                                setFastingDays(prev => prev.filter(x => x !== idx));
+                              } else {
+                                setFastingDays(prev => [...prev, idx].sort());
+                              }
+                            }}
+                            className={`px-3 py-1.5 rounded-md text-[10px] font-bold border transition-colors ${
+                              isChecked
+                                ? "bg-primary border-primary text-white"
+                                : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                            }`}
+                          >
+                            {dayName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Preferences Card */}
         <Card className="border border-border bg-card shadow-xs">

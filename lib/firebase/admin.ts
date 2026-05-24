@@ -34,7 +34,16 @@ export const adminAuth = new Proxy({} as admin.auth.Auth, {
   get(target, prop) {
     getAdminApp();
     if (!admin.apps.length) {
-      return () => {};
+      const allowNoop =
+        process.env.NEXT_PHASE === 'phase-production-build' ||
+        process.env.NODE_ENV !== 'production' ||
+        process.env.ENABLE_MOCK_AUTH === '1';
+      if (allowNoop) {
+        return () => {};
+      }
+      throw new Error(
+        'Firebase Admin SDK non initialisé. Vérifie FIREBASE_ADMIN_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY.'
+      );
     }
     const service = admin.auth();
     const value = (service as any)[prop];
@@ -46,7 +55,16 @@ export const adminDb = new Proxy({} as admin.firestore.Firestore, {
   get(target, prop) {
     getAdminApp();
     if (!admin.apps.length) {
-      return () => {};
+      const allowNoop =
+        process.env.NEXT_PHASE === 'phase-production-build' ||
+        process.env.NODE_ENV !== 'production' ||
+        process.env.ENABLE_MOCK_AUTH === '1';
+      if (allowNoop) {
+        return () => {};
+      }
+      throw new Error(
+        'Firebase Admin SDK non initialisé. Vérifie FIREBASE_ADMIN_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY.'
+      );
     }
     const service = admin.firestore();
     const value = (service as any)[prop];
@@ -58,9 +76,57 @@ export const adminStorage = new Proxy({} as admin.storage.Storage, {
   get(target, prop) {
     getAdminApp();
     if (!admin.apps.length) {
-      return () => {};
+      const allowNoop =
+        process.env.NEXT_PHASE === 'phase-production-build' ||
+        process.env.NODE_ENV !== 'production' ||
+        process.env.ENABLE_MOCK_AUTH === '1';
+      if (allowNoop) {
+        return () => {};
+      }
+      throw new Error(
+        'Firebase Admin SDK non initialisé. Vérifie FIREBASE_ADMIN_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY.'
+      );
     }
     const service = admin.storage();
+    const value = (service as any)[prop];
+    return typeof value === 'function' ? value.bind(service) : value;
+  }
+});
+
+export const adminFieldValue = {
+  arrayUnion: (...args: any[]) => {
+    getAdminApp();
+    if (!admin.apps.length) return []; // mock fallback
+    return admin.firestore.FieldValue.arrayUnion(...args);
+  },
+  arrayRemove: (...args: any[]) => {
+    getAdminApp();
+    if (!admin.apps.length) return [];
+    return admin.firestore.FieldValue.arrayRemove(...args);
+  },
+  serverTimestamp: () => {
+    getAdminApp();
+    if (!admin.apps.length) return new Date();
+    return admin.firestore.FieldValue.serverTimestamp();
+  }
+};
+
+export const adminMessaging = new Proxy({} as admin.messaging.Messaging, {
+  get(target, prop) {
+    getAdminApp();
+    if (!admin.apps.length) {
+      const allowNoop =
+        process.env.NEXT_PHASE === 'phase-production-build' ||
+        process.env.NODE_ENV !== 'production' ||
+        process.env.ENABLE_MOCK_AUTH === '1';
+      if (allowNoop) {
+        return () => {};
+      }
+      throw new Error(
+        'Firebase Admin SDK non initialisé. Vérifie FIREBASE_ADMIN_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY.'
+      );
+    }
+    const service = admin.messaging();
     const value = (service as any)[prop];
     return typeof value === 'function' ? value.bind(service) : value;
   }

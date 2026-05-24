@@ -4,13 +4,16 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
-import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus } from "lucide-react";
+import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy } from "lucide-react";
+import { flags } from "@/lib/features/flags";
+import { getFastingState } from "@/lib/features/fasting/fasting-util";
+import { getDailyTaskForUser } from "@/lib/features/micro-tasks/selector";
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -23,12 +26,87 @@ export default function DashboardPage() {
   const [fetching, setFetching] = useState(true);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
+  // Phase C state variables
+  const [featureFastingActive, setFeatureFastingActive] = useState(false);
+  const [featureMicroTasksActive, setFeatureMicroTasksActive] = useState(false);
+  const [featureStreakActive, setFeatureStreakActive] = useState(false);
+  
+  const [fastingState, setFastingState] = useState<any>(null);
+  const [dailyTask, setDailyTask] = useState<any>(null);
+  const [taskCompleted, setTaskCompleted] = useState(false);
+  const [streak, setStreak] = useState<any>(null);
+
+  const handleCompleteTask = async () => {
+    if (!user || !dailyTask) return;
+    const todayStr = new Date().toISOString().split("T")[0];
+    try {
+      const taskDocRef = doc(db, "users", user.uid, "daily_tasks", todayStr);
+      await setDoc(taskDocRef, {
+        taskId: dailyTask.id,
+        completed: true,
+        completedAt: new Date().toISOString(),
+      });
+      setTaskCompleted(true);
+    } catch (e) {
+      console.error("Failed to complete daily task:", e);
+    }
+  };
+
   useEffect(() => {
     if (loading || !user) return;
 
     const loadDashboardData = async () => {
       try {
         const todayStr = new Date().toISOString().split("T")[0];
+
+        // Enable feature flags
+        const fastingEnabled = flags.fasting();
+        const microTasksEnabled = flags.microTasks();
+        const streakEnabled = flags.streak();
+
+        setFeatureFastingActive(fastingEnabled);
+        setFeatureMicroTasksActive(microTasksEnabled);
+        setFeatureStreakActive(streakEnabled);
+
+        // Check for mock user bypass (E2E testing)
+        const isMockMode = typeof window !== 'undefined' && window.localStorage.getItem('mock_user') === 'true';
+
+        if (isMockMode) {
+          setProfile({ name: "Athlète Test", height: 180, weight: 80, activity_level: "lightly_active" });
+          setGoals({ target_weight: 75 });
+          setTodayCheckin({ weight: 80, steps: 10000 });
+          setChartData([
+            { date: "05-20", weight: 82, average: 82 },
+            { date: "05-21", weight: 81.5, average: 81.75 },
+            { date: "05-22", weight: 81, average: 81.5 },
+            { date: "05-23", weight: 80.5, average: 81.25 },
+            { date: "05-24", weight: 80, average: 81.0 },
+          ]);
+
+          if (fastingEnabled) {
+            setFastingState({
+              isEatingWindow: false,
+              timeRemainingMs: 4 * 60 * 60 * 1000,
+              label: "Période de jeûne active. Fin dans 4h 0m."
+            });
+          }
+
+          if (streakEnabled) {
+            setStreak({ current: 5, longest: 10, lastCheckinDate: todayStr });
+          }
+
+          if (microTasksEnabled) {
+            setDailyTask({
+              id: "mock_task",
+              text: "Boit un grand verre d'eau plate dès le réveil.",
+              category: "nutrition"
+            });
+            setTaskCompleted(false);
+          }
+
+          setFetching(false);
+          return;
+        }
 
         // 1. Load User Profile
         const userRef = doc(db, "users", user.uid);
@@ -37,6 +115,27 @@ export default function DashboardPage() {
           const uData = userSnap.data();
           setProfile(uData.profile);
           setGoals(uData.goals);
+
+          // Fasting state calculation
+          if (fastingEnabled && uData.fasting_protocol) {
+            const fState = getFastingState(uData.fasting_protocol);
+            setFastingState(fState);
+          }
+
+          // Streak data
+          if (streakEnabled && uData.streak) {
+            setStreak(uData.streak);
+          }
+
+          // Daily Micro-task selection & status
+          if (microTasksEnabled) {
+            const task = getDailyTaskForUser(uData.profile_path, todayStr);
+            setDailyTask(task);
+
+            const taskDocRef = doc(db, "users", user.uid, "daily_tasks", todayStr);
+            const taskDocSnap = await getDoc(taskDocRef);
+            setTaskCompleted(taskDocSnap.exists() && taskDocSnap.data()?.completed === true);
+          }
         }
 
         // 2. Check if Today's Checkin exists
@@ -141,9 +240,16 @@ export default function DashboardPage() {
     <div className="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
       {/* Greetings Header */}
       <div>
-        <h2 className="text-3xl font-bold font-serif text-foreground">
-          Salut {profile?.name || "athlète"} !
-        </h2>
+        <div className="flex justify-between items-baseline">
+          <h2 className="text-3xl font-bold font-serif text-foreground">
+            Salut {profile?.name || "athlète"} !
+          </h2>
+          {featureStreakActive && streak && streak.current > 0 && (
+            <div className="flex items-center gap-1 text-xs font-semibold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-full" title="Régularité active">
+              <span>🔥 {streak.current} {streak.current === 1 ? 'jour' : 'jours'}</span>
+            </div>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">
           Voici l'état de ta transformation aujourd'hui.
         </p>
@@ -180,6 +286,66 @@ export default function DashboardPage() {
             <p className="text-sm italic font-serif leading-relaxed text-foreground/90">
               {aiInsight ? `"${aiInsight}"` : "Ton insight quotidien est en cours de recalibrage..."}
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Fasting Protocol Status Card */}
+      {featureFastingActive && fastingState && (
+        <Card className="border border-border bg-card shadow-xs">
+          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0 pb-2">
+            <Clock className="h-5 w-5 text-primary animate-pulse" />
+            <div>
+              <CardTitle className="text-base font-serif font-semibold">Jeûne Intermittent</CardTitle>
+              <CardDescription className="text-[10px]">Statut en temps réel</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <div className="flex items-center justify-between">
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                fastingState.isEatingWindow 
+                  ? "bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400" 
+                  : "bg-orange-100 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400"
+              }`}>
+                {fastingState.isEatingWindow ? "Fenêtre Repas active" : "Période de Jeûne active"}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {fastingState.label}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Daily Micro-task Card */}
+      {featureMicroTasksActive && dailyTask && (
+        <Card className="border border-border bg-card shadow-xs">
+          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0 pb-2">
+            <CheckSquare className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle className="text-base font-serif font-semibold">Micro-tâche du jour</CardTitle>
+              <CardDescription className="text-[10px]">Un défi simple et comportemental pour aujourd'hui</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <p className="text-sm text-foreground/90 font-serif leading-relaxed">
+              {dailyTask.text}
+            </p>
+            
+            {taskCompleted ? (
+              <div className="flex items-center gap-2 text-xs font-semibold text-green-600 dark:text-green-400 bg-green-500/10 p-2 rounded-md border border-green-500/20">
+                <CheckSquare className="h-4 w-4 text-green-600 dark:text-green-400" /> Tâche complétée avec succès !
+              </div>
+            ) : (
+              <Button 
+                onClick={handleCompleteTask} 
+                variant="outline" 
+                size="sm"
+                className="w-full text-xs h-9 border-primary/20 text-primary hover:bg-primary/5"
+              >
+                Marquer comme résolue
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

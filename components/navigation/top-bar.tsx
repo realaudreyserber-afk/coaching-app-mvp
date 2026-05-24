@@ -1,13 +1,21 @@
 "use client";
 
-import React from "react";
-import { LogOut, User } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { LogOut, User, Mic } from "lucide-react";
 import { useAuth } from "@/lib/firebase/hooks";
 import { useRouter } from "next/navigation";
+import { flags } from "@/lib/features/flags";
+import VoiceRecordModal from "@/components/features/voice-log/VoiceRecordModal";
 
 export default function TopBar() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
+
+  useEffect(() => {
+    setIsVoiceEnabled(flags.voiceLog());
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -30,6 +38,15 @@ export default function TopBar() {
         {/* User Actions */}
         {user && (
           <div className="flex items-center gap-4">
+            {isVoiceEnabled && (
+              <button
+                onClick={() => setIsVoiceModalOpen(true)}
+                className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-primary hover:bg-muted transition-all"
+                title="Dictée Vocale"
+              >
+                <Mic className="h-4 w-4" />
+              </button>
+            )}
             <button
               onClick={() => router.push("/settings")}
               className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
@@ -47,6 +64,10 @@ export default function TopBar() {
           </div>
         )}
       </div>
+      <VoiceRecordModal 
+        isOpen={isVoiceModalOpen} 
+        onClose={() => setIsVoiceModalOpen(false)} 
+      />
     </header>
   );
 }
