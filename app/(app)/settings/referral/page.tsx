@@ -119,7 +119,7 @@ export default function ReferralPage() {
       const res = await applyReferralCode(user.uid, inputCode.trim());
       setReferredBy('applied');
       setCredits(prev => prev + 1);
-      setSuccessMsg(`Félicitations ! Code validé, tu es parrainé par ${res.referrerName}.`);
+      setSuccessMsg(`Félicitations ! Code validé, tu es parrainé par ${res.referrer_name}.`);
     } catch (err: any) {
       setErrorMsg(err.message || "Impossible de valider ce code de parrainage.");
     } finally {

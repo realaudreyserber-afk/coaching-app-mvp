@@ -12,3 +12,4 @@ export { wearableSyncNightly } from './wearable-sync-nightly';
 export { stripeWebhook } from './stripe-webhook';
 export { stripeEventsCleanup } from './stripe-events-cleanup';
 export { offBaseIngestion } from './off-base-ingestion';
+export { streakRiskMarker } from './streak-risk-marker';
