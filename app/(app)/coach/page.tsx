@@ -279,17 +279,28 @@ export default function CoachPage() {
                     </div>
                     <div className="grid gap-1.5 pt-1">
                       {m.sources.map((src: any, sIdx: number) => (
-                        <a 
+                        <a
                           key={sIdx}
                           href={src.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between p-2 rounded bg-cream/50 dark:bg-anthracite/50 border border-border hover:border-primary/30 transition-all text-xs text-foreground/95"
                         >
-                          <div className="truncate pr-2">
+                          <div className="truncate pr-2 flex items-center gap-1.5">
+                            {src.language && (
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wider px-1 rounded ${
+                                  src.language === 'fr'
+                                    ? 'bg-primary/15 text-primary'
+                                    : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                {src.language === 'fr' ? 'FR' : 'EN'}
+                              </span>
+                            )}
                             <span className="font-semibold text-primary">{src.authors} ({src.year})</span>
-                            <span className="mx-1.5 text-muted-foreground">•</span>
-                            <span className="italic">{src.title}</span>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="italic truncate">{src.title}</span>
                           </div>
                           <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                         </a>
