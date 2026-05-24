@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  experimental: {
-    serverActions: { bodySizeLimit: "10mb" },
-  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
@@ -14,8 +11,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },
     ],
   },
-  // For deployment portability (Vercel + Cloud Run + Docker)
-  output: process.env.NEXT_OUTPUT_STANDALONE === "1" ? "standalone" : undefined,
+  ...(process.env.NEXT_OUTPUT_STANDALONE === "1" ? { output: "standalone" as const } : {}),
 };
 
 export default nextConfig;

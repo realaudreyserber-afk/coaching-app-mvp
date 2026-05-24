@@ -5,78 +5,21 @@
   "buildCommand": "next build",
   "installCommand": "npm install --legacy-peer-deps",
   "functions": {
-    "app/api/ai/coach/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/ai/generate-plan/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/ai/weekly-review/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/ai/daily-insight/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 30,
-      "memory": 512
-    },
-    "app/api/ai/analyze-photo/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/bloodwork/analyze/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/exercise/form-check/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/scanner/analyze/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/nutrition/photo-recognize/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/nutrition/recipe-ocr/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 1024
-    },
-    "app/api/nutrition/voice-recognize/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 512
-    },
-    "app/api/user/export/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 60,
-      "memory": 512
-    },
-    "app/api/auth/session/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 10
-    },
-    "app/api/stripe/checkout/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 10
-    },
-    "app/api/stripe/portal/route.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 10
-    }
+    "app/api/ai/coach/route.ts":              { "maxDuration": 60, "memory": 1024 },
+    "app/api/ai/generate-plan/route.ts":      { "maxDuration": 60, "memory": 1024 },
+    "app/api/ai/weekly-review/route.ts":      { "maxDuration": 60, "memory": 1024 },
+    "app/api/ai/daily-insight/route.ts":      { "maxDuration": 30, "memory": 512 },
+    "app/api/ai/analyze-photo/route.ts":      { "maxDuration": 60, "memory": 1024 },
+    "app/api/bloodwork/analyze/route.ts":     { "maxDuration": 60, "memory": 1024 },
+    "app/api/exercise/form-check/route.ts":   { "maxDuration": 60, "memory": 1024 },
+    "app/api/scanner/analyze/route.ts":       { "maxDuration": 60, "memory": 1024 },
+    "app/api/nutrition/photo-recognize/route.ts": { "maxDuration": 60, "memory": 1024 },
+    "app/api/nutrition/recipe-ocr/route.ts":  { "maxDuration": 60, "memory": 1024 },
+    "app/api/nutrition/voice-recognize/route.ts": { "maxDuration": 60, "memory": 512 },
+    "app/api/user/export/route.ts":           { "maxDuration": 60, "memory": 512 },
+    "app/api/auth/session/route.ts":          { "maxDuration": 10 },
+    "app/api/stripe/checkout/route.ts":       { "maxDuration": 10 },
+    "app/api/stripe/portal/route.ts":         { "maxDuration": 10 }
   },
   "headers": [
     {
