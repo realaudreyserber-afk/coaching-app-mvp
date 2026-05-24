@@ -144,9 +144,10 @@ export const smartNotificationsCron = onSchedule(
     const results = await processInChunks(usersSnap.docs, 25, async (userDoc) => {
       try {
         const data = userDoc.data();
-        if (!data.settings?.notifications) return false;
+        if (data.settings?.notifications === false) return false;
         const fcm_token = data.fcm_token;
         if (!fcm_token) return false;
+        const optOutCategories: string[] = data.settings?.notification_opt_out ?? [];
 
         // Build context from user state
         const checkinSnap = await db
@@ -195,6 +196,12 @@ export const smartNotificationsCron = onSchedule(
         });
 
         if (!pick) return false;
+
+        // Granular opt-out per category (M19 UI)
+        if (optOutCategories.includes(pick.template.category)) {
+          logger.info(`Skipped ${pick.template.id} for ${userDoc.id}: category opted-out`);
+          return false;
+        }
 
         await messaging.send({
           token: fcm_token,

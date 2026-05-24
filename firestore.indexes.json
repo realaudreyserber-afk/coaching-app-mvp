@@ -105,6 +105,13 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "sent_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "body_scans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
