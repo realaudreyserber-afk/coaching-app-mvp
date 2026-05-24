@@ -119,29 +119,22 @@ PROFIL DE L'UTILISATEUR ACTUEL :
 - ${activePlanStr}
 `;
 
-      // Fetch GLP-1 medication details if flag is active
+      // GLP-1 now stored in medical.glp1 map per ADR-006 (no extra fetch needed)
       let glp1Instruction = "";
       if (flags.glp1()) {
-        try {
-          const glp1Snap = await userRef.collection('medications').doc('glp1').get();
-          if (glp1Snap.exists) {
-            const glp1Data = glp1Snap.data();
-            if (glp1Data && glp1Data.active) {
-              glp1Instruction = `
+        const glp1Data = userData?.medical?.glp1;
+        if (glp1Data && glp1Data.active) {
+          glp1Instruction = `
 [TRAITEMENT GLP-1 ACTIF : ${glp1Data.molecule?.toUpperCase()}]
 L'utilisateur prend actuellement du ${glp1Data.molecule} (Dose: ${glp1Data.dose || "N/A"}, Fréquence: ${glp1Data.frequency || "hebdo"}).
-Date de début : ${glp1Data.startDate || "N/A"}.
-Effets secondaires ressentis : ${glp1Data.sideEffects?.join(', ') || "aucun"}.
+Date de début : ${glp1Data.start_date || glp1Data.startDate || "N/A"}.
+Effets secondaires ressentis : ${(glp1Data.side_effects || glp1Data.sideEffects)?.join(', ') || "aucun"}.
 
 CONSIGNES DE SÉCURITÉ ET NUTRITION POUR GLP-1 :
 1. Risque de fonte musculaire : Augmente la cible protéique de l'utilisateur de +20% (viser 2.0g à 2.2g de protéines/kg de poids de corps). Rappelle l'importance vitale des protéines et de la musculation.
 2. Gestion des nausées : En cas de nausées, propose de consommer de plus petites portions fractionnées, d'éviter les aliments trop gras ou très sucrés, et de bien s'hydrater par petites gorgées.
 3. Disclaimer médical : Ajoute impérativement un rappel bienveillant indiquant que tes conseils de coach IA ne remplacent en aucun cas un suivi médical régulier par le médecin prescripteur.
 `;
-            }
-          }
-        } catch (glp1Error) {
-          console.warn("Failed to load GLP-1 data in coach prompt:", glp1Error);
         }
       }
 

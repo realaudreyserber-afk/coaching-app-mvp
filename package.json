@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:rules": "vitest run --config vitest.rules.config.ts",
     "test:e2e": "playwright test",
-    "verify:env": "node scripts/verify-env.mjs"
+    "verify:env": "node scripts/verify-env.mjs",
+    "lint:snake-case": "node scripts/check-snake-case.mjs"
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.12.0",

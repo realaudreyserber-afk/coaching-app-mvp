@@ -66,17 +66,8 @@ export async function POST(req: NextRequest) {
         }, { status: 403 });
       }
 
-      // 2.5 Detect profile path
-      let glp1Active = false;
-      try {
-        const glp1Snap = await userRef.collection('medications').doc('glp1').get();
-        if (glp1Snap.exists) {
-          glp1Active = glp1Snap.data()?.active === true;
-        }
-      } catch (e) {
-        console.error("Error fetching GLP-1 active state:", e);
-      }
-
+      // 2.5 Detect profile path (GLP-1 now stored in medical.glp1 map per ADR-006)
+      const glp1Active = userData?.medical?.glp1?.active === true;
       const profilePath = detectProfilePath({ ...userContext, glp1Active });
 
       // Save detected profile path to Firestore if enabled

@@ -57,6 +57,37 @@ La protection des routes `(app)/*` était purement client-side (`app/(app)/layou
 - Double mécanisme (cookie SSR + Bearer API) → maintenir les deux synchronisés
 - Mock auth gated derrière `ENABLE_MOCK_AUTH=1` + `NODE_ENV != production`
 
+## ADR-007 — Context-extension pattern pour les routes AI conversationnelles
+
+**Statut** : Accepté — 2026-05-24
+
+### Contexte
+Le MVP a déjà un moteur de contextualisation Vertex AI (`plans/{planId}.lifestyle_notes` est généré avec accès au profil complet). Plusieurs modules V1 (M9 RAG sourcing, M16 bloodwork, M19 smart notifs) auraient dupliqué ce pipeline si laissés indépendants.
+
+### Décision
+Toute route AI doit utiliser **`lib/vertex/context-builder.ts`** :
+
+```ts
+import { buildEnrichedSystemPrompt, buildUserContext } from '@/lib/vertex/context-builder';
+
+const ctx = buildUserContext({ userData, activePlan, bloodwork, ragSources });
+const systemPrompt = buildEnrichedSystemPrompt(BASE, ctx, {
+  includeBloodwork: flags.bloodworkUpload(),
+  includeRag: flags.ragSourcing(),
+});
+```
+
+Le builder applique en cascade : profile → active_plan → profile_path → glp1 → fasting → bloodwork → rag → notification_context. Chaque bloc est opt-in.
+
+### Conséquences
+- M9, M16, M19 enrichissent `UserContext` via leur loader, pas leur propre pipeline
+- Le ton (tutoiement, pas de "régime", citations strictes) reste uniforme
+- Ajouter un bloc = 1 fn + registre + 1 test
+- Lint `npm run lint:snake-case` enforced (ADR-006)
+
+### Migration
+Routes existantes (`coach`, `generate-plan`) à refactorer progressivement pour utiliser le builder. Migration M4 GLP-1 vers `medical.glp1` map déjà faite (cf. ADR-006).
+
 ## ADR-006 — Conventions Firestore : snake_case + maps imbriquées vs sous-collections
 
 **Statut** : Accepté — 2026-05-24 (issu de l'audit live MVP)
