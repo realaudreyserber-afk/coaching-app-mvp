@@ -21,6 +21,20 @@ Cette V2 intègre les conclusions de **`docs/baseline-audit.md`** (audit live du
 | C5 | **Remote Config déjà initialisé** côté client (base IndexedDB `firebase_remote_config` observée) | Audit live | `lib/features/flags.ts` se branche sur l'instance existante (déjà fait) |
 | C6 | **Phase A.0 fondations** explicite avant les 25 modules | Brief V1 implicite | `lib/features/food-logs/schema.ts` (déjà fait), `lib/features/notifications/templates.ts`, conventions partagées |
 | C7 | **Estimation 280-320 fichiers** (vs 350-400 V1) | Audit + déduplication | Réduction par réutilisation et factorisation |
+| C8 | **4 modules à embryon prod** : M1 photo-meal, M6 EU food DB, M11 body scanner, M19 smart-notifs | Audit live 2026-05-24bis | Voir §0.bis — scope réduit −40 à −60% par module |
+
+## 0.bis — Audit live 2026-05-24 (post-déploiement Phase A.x)
+
+Un second audit runtime a révélé que **4 des 25 modules ont déjà des fondations live en production** (pas seulement en code, mais visibles à l'utilisateur). Ajustement scope correspondant :
+
+| Module brief V1 original | Observation runtime | % déjà en prod | Scope V2 réduit |
+|---|---|---|---|
+| **M11 Body Scanner** | UI photos (Face/Profil/Dos) + 8 mensurations livrées sur `/checkin/weekly` | ~60% | Reste : analyse Vision multi-photos + diff inter-dates + score morpho |
+| **M6 EU food DB** | DB hardcodée 13 aliments (Cru vs Cuit) déjà dans `/plan` | ~30% | Reste : migration vers `content/foods/items` (cron OFF déjà fait Phase A.1) + retrait DB hardcodée |
+| **M1 Photo-to-meal** | Pipeline upload photo bilan hebdo en place | ~40% | Reste : brancher Vertex Vision + Zod parse sur le pipeline existant |
+| **M19 Smart FCM** | Toggle Notifications dans Settings + permission browser | ~50% | Reste : UI Settings → catégories opt-out granulaire (cron + templates déjà fait Phase A.3) |
+
+**Conséquence sur l'estimation finale** : **~250 fichiers** (vs 290 V2, vs 350-400 V1 original).
 
 ---
 
@@ -96,33 +110,35 @@ Cette V2 intègre les conclusions de **`docs/baseline-audit.md`** (audit live du
 - **Reuse** : composants/services MVP réutilisés (au lieu de dupliquer)
 - **Effort** : S (1-3 fichiers), M (4-8), L (9-15), XL (16+)
 
-| Tier | # | Module | Schema target | Reuse | Effort | Premium gate |
+**Légende état runtime** : 🟢 fait (Phase A.x), 🟡 embryon prod (audit live), 🔴 à faire from scratch, ⚙️ refactor migration.
+
+| Tier | # | Module | État | Schema target | Reste à faire | Effort |
 |---|---|---|---|---|---|---|
-| 1 | M1 | Photo-to-meal IA | `food_logs/{id}` (source=photo_meal) | food-logs schema, rate-limit, Vertex Vision | M | non |
-| 1 | M2 | Barcode scanner | `food_logs/{id}` (source=barcode) + `content/foods/items/{barcode}` cache | food-logs, OFF API client | M | non |
-| 1 | M3 | Voice logging | `food_logs/{id}` (source=voice) | food-logs, Cloud STT, Flash parser | M | premium |
-| 1 | M4 | GLP-1 tracking | **`users/{uid}.medical.glp1` map** ⚠️ migration | safety, plan-generator extension | M | non |
-| 1 | M5 | Jeûne intermittent | **`users/{uid}.fasting_protocol` map** | fasting-util existant, dashboard fasting card | S | non |
-| 1 | M6 | Base alimentaire EU (OFF) | `content/foods/items/{barcode}` (admin-only write via Cloud Function) | rules content read-only, cron ingestion | L | non |
-| 1 | M7 | Wearables hub (Google Fit) | `users/{uid}/wearable_sync/{date}` + **`users/{uid}.wearable.google_fit` config map** | wearableSyncNightly Cloud Function | L | premium |
-| 1 | M8 | TDEE adaptatif | **`users/{uid}.profile.tdee_adaptive`** + history sub `users/{uid}/tdee_history/{week}` | tdeeRecalcWeekly Cloud Function, regression.ts | M | premium |
-| 2 | M9 | Sourcing scientifique | **Extension de `lifestyle_notes` pattern** | fr-sources.ts (CSE FR), buildRAGPrompt déjà fait | M | premium |
-| 2 | M10 | Parcours profil-spécifique | **`users/{uid}.profile_path`** + bifurcation onboarding | profile-paths/detector déjà fait | L | non |
-| 2 | M11 | Body Scanner photo IA | `users/{uid}/photos/{id}` (existant, ajout type=scan) | analyze-photo route + Vision multi-image | M | premium |
-| 2 | M12 | Form check vidéo | `users/{uid}/form_checks/{id}` (append-only) | exercise/form-check route + Vision frame extraction | M | premium+ |
-| 2 | M13 | Micro-tâches comportementales | `content/micro_tasks/{id}` (banque) + `users/{uid}/daily_tasks/{date}` validation | micro-tasks selector + tasks-bank déjà fait | S | non |
-| 2 | M14 | Import recette + OCR | `food_logs/{id}` (source=recipe_ocr) + `users/{uid}/recipes/{id}` | food-logs, Vision OCR | M | premium |
-| 2 | M15 | Micronutriments | **Extension de `food_logs.items[].micronutrients` map** + dashboard agrégat | OFF dataset (fiber, sodium, etc.), micronutrient-calc | M | premium |
-| 2 | M16 | Upload bilan sanguin | `users/{uid}/bloodwork/{date}` + **extension `lifestyle_notes`** | bloodwork/analyze route + Vision PDF parse | M | premium |
-| 3 | M17 | Parrainage | **`users/{uid}.referral` map** + `users/{uid}/referrals_used/{code}` log | Dynamic Links remplaçant, Stripe coupon | M | non |
-| 3 | M18 | Streak factuel | `users/{uid}/streak/current` (singleton sub) | streak-service + onCheckinWrite déjà fait | S | non |
-| 3 | M19 | Notifications smart FCM | **Extension contexte généré nightly via `users/{uid}.notification_context` map** + smartNotificationsCron déjà fait | FCM Web Push, lifestyle_notes pattern, Flash generator | M | non |
-| 3 | M20 | Stripe Portal avancé | **Enrichment `users/{uid}.subscription` existant** + UI pages | Stripe portal route déjà fait, useSubscription hook | M | premium |
-| 3 | M21 | Cohort analytics admin | BigQuery export Firestore + dashboard `/admin` | admin/metrics route + requireAdmin déjà fait | L | admin |
-| 3 | M22 | A/B testing framework | `experiment_exposures/{id}` (append-only) + `experiments/{id}` config | useExperiment hook + framework déjà fait | S | non |
-| 3 | M23 | RGPD self-service | **Enrichment `/api/user/export` + dataExportPurge** déjà fait + UI Settings | rgpd_audit_log + Cloud Function purge déjà faits | S | non |
-| 3 | M24 | Health Connect Android | `lib/platform/health.ts` wrapper natif (post Capacitor wrap) | health.ts stub web déjà fait | S | non |
-| 3 | M25 | HealthKit iOS | Idem M24 | health.ts | S | non |
+| 1 | M1 | Photo-to-meal IA | 🟡 40% | `food_logs/{id}` (source=photo_meal) | Brancher Vertex Vision sur upload existant + Zod parse | S |
+| 1 | M2 | Barcode scanner | 🟢 | `food_logs/{id}` (source=barcode) + `content/foods/items/{barcode}` cache | aligné canonical schema | — |
+| 1 | M3 | Voice logging | 🟢 | `food_logs/{id}` (source=voice) | aligné canonical schema | — |
+| 1 | M4 | GLP-1 tracking | ⚙️ | **`users/{uid}.medical.glp1` map** | migration faite Phase A.0 | — |
+| 1 | M5 | Jeûne intermittent | 🟢 | **`users/{uid}.fasting_protocol` map** | déjà en map | — |
+| 1 | M6 | Base alimentaire EU (OFF) | 🟡 30% | `content/foods/items/{barcode}` (cron OFF déjà OK) | Retirer DB hardcodée 13 aliments de `/plan` + remplacer par query Firestore | S |
+| 1 | M7 | Wearables hub (Google Fit) | 🟢 | `users/{uid}/wearable_sync/{date}` + **`users/{uid}.wearable.google_fit` map** | OAuth flow refactored Phase A.2 | — |
+| 1 | M8 | TDEE adaptatif | 🟢 | **`users/{uid}.profile.tdee_adaptive`** + history sub `users/{uid}/tdee_history/{week}` | history sub ajouté Phase A.2 | — |
+| 2 | M9 | Sourcing scientifique | 🟡 60% | **Extension de `lifestyle_notes` pattern** via `context-builder` | Brancher RAG sources dans coach via builder + UI citations cliquables | M |
+| 2 | M10 | Parcours profil-spécifique | 🟢 | **`users/{uid}.profile_path`** + bifurcation onboarding | déjà en plan-generator Phase A.3 | — |
+| 2 | M11 | Body Scanner photo IA | 🟡 60% | `users/{uid}/body_scans/{date}` (déjà sub-coll) | Analyse Vision 4-photos + diff inter-dates (UI photos + mensurations déjà sur `/checkin/weekly`) | M |
+| 2 | M12 | Form check vidéo | 🟢 | `users/{uid}/form_checks/{id}` | Premium quota + persistence faits Phase A.7 | — |
+| 2 | M13 | Micro-tâches comportementales | 🟢 | `content/micro_tasks/{id}` + `users/{uid}/daily_tasks/{date}` | route `/api/micro-tasks/today` Phase A.3 | — |
+| 2 | M14 | Import recette + OCR | 🟢 | `food_logs/{id}` (source=recipe_ocr) | aligné canonical schema Phase A.1 | — |
+| 2 | M15 | Micronutriments | 🟢 | aggregator + RDI coverage | Dashboard UI `/progress/micronutrients` (route existe, à finir) | S |
+| 2 | M16 | Upload bilan sanguin | 🟢 | `users/{uid}/bloodwork/{date}` | persistence + tier gating Phase A.2 | — |
+| 3 | M17 | Parrainage | 🟢 | **`users/{uid}.referral` map** | snake_case + `ensureReferralCode` Phase A.4 | — |
+| 3 | M18 | Streak factuel | 🟢 | `users/{uid}/streak/current` | gap detection + at_risk + cron marker Phase A.4 | — |
+| 3 | M19 | Notifications smart FCM | 🟡 50% | **`users/{uid}.notification_context` map** | UI Settings → opt-out granulaire par catégorie (toggle global + permission déjà en prod, moteur règles + cron + audit déjà Phase A.3) | S |
+| 3 | M20 | Stripe Portal avancé | 🟡 | **Enrichment `users/{uid}.subscription` existant** | UI Settings → pause/upgrade/annulation rétention (route portal + hook déjà MVP) | M |
+| 3 | M21 | Cohort analytics admin | 🟢 | `/api/admin/metrics` réel | BigQuery export pour analyses ad-hoc (vrai dashboard UI optionnel) | M |
+| 3 | M22 | A/B testing framework | 🟢 | `experiment_exposures/{id}` + `experiments/{id}` | route admin/experiments Phase A.4 | — |
+| 3 | M23 | RGPD self-service | 🟢 | `dataExportPurge` Cloud Function + audit log | UI Settings → bouton Export + Delete avec confirm (route export OK, callable function OK) | S |
+| 3 | M24 | Health Connect Android | 🟢 stub | `lib/platform/health.ts` wrapper | post-wrap Capacitor (Phase 2) | — |
+| 3 | M25 | HealthKit iOS | 🟢 stub | idem M24 | post-wrap (Phase 2) | — |
 
 ---
 
@@ -222,20 +238,35 @@ export function buildEnrichedSystemPrompt(
 
 ---
 
-## 9. Files to Add / Modify (estimation révisée)
+## 9. Files to Add / Modify (estimation révisée 2026-05-24bis)
 
-| Catégorie | Estimation |
-|---|---|
-| `lib/features/<module>/` × 25 modules × ~4 fichiers (vs ~6 V1) | ~100 fichiers |
-| `components/features/<module>/` × 25 × ~3 composants (vs ~4 V1) | ~75 fichiers |
-| Routes pages (certains modules sans UI dédiée : M22, M19, M8) | ~20 fichiers |
-| Routes API (certains via Cloud Functions, certains extension MVP) | ~18 fichiers |
-| Cloud Functions nouvelles | ~10 fichiers (5 déjà créées : `smart-notifications`, `tdee-recalc`, `wearable-sync`, `stripe-events-cleanup`, `data-export-purge`) |
-| Tests unitaires | ~40 fichiers (1.5x les modules avec logique) |
-| Tests E2E Playwright | ~12 fichiers (1 par parcours critique) |
-| Docs (modules + ADR + rollout) | ~10 fichiers |
-| Configuration (flags ajouts, indexes, rules) | ~5 fichiers |
-| **Total estimé** | **~290 fichiers** |
+État réel après Phase A.0 → A.7 + audit live bis :
+
+| Catégorie | Estimation V2 originale | **État réel post-Phase A** | Reste à faire |
+|---|---|---|---|
+| `lib/features/<module>/` | ~100 | **~80 livrés** | 0 (libs prêtes) |
+| `components/features/<module>/` | ~75 | **~30 livrés** | ~15 (UI Settings opt-out M19, dashboard M15, body scanner M11 Vision UI) |
+| Routes pages | ~20 | **~25 livrées** | 0 |
+| Routes API | ~18 | **~22 livrées** | 0 (M1 Vision branchement = enrichissement route existante) |
+| Cloud Functions | ~10 | **15 déployées** | 0 |
+| Tests unitaires | ~40 | **136 tests passing** | ~10 (M9 RAG flow, M19 UI flows) |
+| Tests E2E Playwright | ~12 | **4 livrés** | ~8 (parcours critiques par module) |
+| Docs (modules + ADR + rollout) | ~10 | **5 livrés** (architecture, baseline-audit, handoff, GO-LIVE, extensions-rollout) | ~5 (README par module restant) |
+| Configuration | ~5 | **5 livrés** (rules, 13 indexes, vercel.json, .env, .npmrc) | 0 |
+| **Total estimé** | **~290** | **~177 fichiers déjà commits** | **~38 fichiers restants** |
+
+### Travail restant concentré sur 4 modules à embryon prod
+
+1. **M1 Photo-to-meal** (~5 fichiers) — brancher Vertex Vision sur le pipeline upload bilan hebdo qui existe déjà
+2. **M6 EU food DB UI migration** (~3 fichiers) — retirer DB hardcodée `/plan` + query `content/foods/items`
+3. **M9 RAG sourcing UI** (~6 fichiers) — extension `context-builder` + UI citations cliquables dans coach
+4. **M11 Body Scanner Vision** (~8 fichiers) — analyse 4-photos + diff inter-dates
+5. **M19 Notifs opt-out UI granulaire** (~4 fichiers) — Settings → catégories par cron template
+6. **M20 Stripe Portal UI avancé** (~5 fichiers) — pages pause/upgrade/annulation rétention
+7. **M15 Micronutrients dashboard** (~4 fichiers) — UI `/progress/micronutrients`
+8. **M23 RGPD UI Settings** (~3 fichiers) — bouton Export + Delete avec confirm
+
+**Estimation effort restant** : ~38 fichiers, 1-2 sprints solo (vs estimé initial 290 sur 10 sprints).
 
 ### 9.2 Modifications additives uniquement
 - `lib/features/flags.ts` (ajouts incrémentaux des nouveaux flags)
