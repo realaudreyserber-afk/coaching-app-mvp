@@ -1,5 +1,20 @@
 # BRIEF — Coaching App V1 Extensions (additive, non-régressif)
 
+> ⚠️ **SUPERSEDED** par [`coaching-app-v1-extensions-v2.md`](./coaching-app-v1-extensions-v2.md) le 2026-05-24
+>
+> La V2 intègre les conclusions de `docs/baseline-audit.md` (audit live du MVP en runtime) :
+> - Snake_case obligatoire (ADR-006)
+> - Maps imbriquées privilégiées vs sous-collections (`medical.glp1`, `fasting_protocol`, `profile.tdee_adaptive`)
+> - Réutilisation du moteur `lifestyle_notes` pour M9, M16, M19 (pattern context-extension)
+> - `subscription` map déjà présente → M20 = enrichment
+> - Remote Config déjà initialisé client-side
+> - Estimation révisée 350-400 → 280-320 fichiers
+> - Phase A.0 fondations explicite + ordre d'exécution en 7 phases sur 10 sprints
+>
+> Ce fichier est conservé pour traçabilité historique du brief original. **Ne pas s'y référer pour l'implémentation.**
+
+---
+
 **Filename** : `briefs/coaching-app-v1-extensions.md`
 **Orchestrator** : Antigravity + Gemini 3 Pro
 **Build target** : ajouter 25 modules différenciateurs sans casser le MVP existant
