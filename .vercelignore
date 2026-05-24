@@ -1,0 +1,16 @@
+# Firebase Cloud Functions are deployed separately via firebase CLI
+functions/
+
+# Test artifacts
+test-results/
+playwright-report/
+e2e/
+test/
+
+# Firebase configs not used by Vercel
+.firebaserc
+
+# Docs
+docs/
+briefs/
+README.md

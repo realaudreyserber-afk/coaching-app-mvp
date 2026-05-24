@@ -87,6 +87,33 @@ NEXT_PUBLIC_SENTRY_DSN                 # côté client
 SENTRY_ENV                             # production / staging / dev
 ```
 
+## Déploiement Vercel (front + API sync)
+
+L'app peut être déployée sur Vercel comme alternative à Firebase Hosting + Cloud Run. `vercel.json` force la **région `fra1` (Frankfurt)** pour conformité EU/RGPD.
+
+1. Connecter le repo GitHub à Vercel (déjà fait : projet `realaudreyserber-1346s-projects/coaching-app-mvp`)
+2. **Settings → Environment Variables** : copier toutes les variables listées plus haut (sauf `ENABLE_MOCK_AUTH*`)
+3. **Attention `FIREBASE_ADMIN_PRIVATE_KEY`** : Vercel n'échappe pas automatiquement les `\n`. Coller la clé entre triple-quotes ou utiliser le format JSON encodé.
+4. **Settings → Functions Region** : vérifier que `fra1` est bien sélectionné (forcé par `vercel.json`)
+5. Auto-deploy à chaque push sur `main`
+6. URL preview/prod générée automatiquement (`coaching-app-mvp-xxx.vercel.app`)
+
+### Limitation Vercel vs Firebase
+Les **Cloud Functions Gen 2 schedulées** (nightly, alerts, TDEE, etc.) **ne tournent PAS sur Vercel**. Architecture recommandée :
+- **Vercel** : front Next.js + API routes synchrones (auth, AI streaming, Stripe checkout)
+- **Firebase Functions** : crons schedulés + Firestore triggers + Stripe webhook (`firebase deploy --only functions`)
+
+### Architecture hybride à déployer
+```
+GitHub push to main
+        │
+        ├─► Vercel auto-deploy (fra1)
+        │       front + /api/* synchrones
+        │
+        └─► firebase deploy --only functions  (manuel ou via GitHub Action)
+                9 Cloud Functions Gen 2 europe-west1
+```
+
 ## Étapes de déploiement Firebase
 
 1. `firebase login`
