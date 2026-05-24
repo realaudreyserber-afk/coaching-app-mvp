@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as admin from 'firebase-admin';
 
 // Helper to initialize Firebase Admin on demand
