@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         if (data.profile_path === 'glp1') glp1Count++;
         if (data.profile_path === 'post-bariatric') bariatricCount++;
 
-        const startWeight = data.baseline?.weight_start;
+        const startWeight = data.baseline?.weight_start ?? data.baseline?.weight;
         const currentWeight = data.profile?.weight;
         if (typeof startWeight === 'number' && typeof currentWeight === 'number') {
           totalWeightStart += startWeight;

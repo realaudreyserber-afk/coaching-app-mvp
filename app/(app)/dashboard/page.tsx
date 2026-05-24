@@ -21,6 +21,7 @@ export default function DashboardPage() {
 
   const [profile, setProfile] = useState<any>(null);
   const [goals, setGoals] = useState<any>(null);
+  const [baseline, setBaseline] = useState<any>(null);
   const [todayCheckin, setTodayCheckin] = useState<any>(null);
   const [chartData, setChartData] = useState<WeightDataPoint[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -74,6 +75,7 @@ export default function DashboardPage() {
         if (isMockMode) {
           setProfile({ name: "Athlète Test", height: 180, weight: 80, activity_level: "lightly_active" });
           setGoals({ target_weight: 75 });
+          setBaseline({ weight: 82, bf_pct: 22 });
           setTodayCheckin({ weight: 80, steps: 10000 });
           setChartData([
             { date: "05-20", weight: 82, average: 82 },
@@ -115,6 +117,7 @@ export default function DashboardPage() {
           const uData = userSnap.data();
           setProfile(uData.profile);
           setGoals(uData.goals);
+          setBaseline(uData.baseline);
 
           // Fasting state calculation
           if (fastingEnabled && uData.fasting_protocol) {
@@ -224,8 +227,12 @@ export default function DashboardPage() {
   }
 
   // Calculate progress stats
-  const currentWeight = chartData[chartData.length - 1]?.weight || profile?.weight || 0;
-  const startWeight = profile?.weight || currentWeight;
+  const startWeight = baseline?.weight ?? profile?.weight ?? 0;
+  const currentWeight =
+    todayCheckin?.weight ??
+    chartData[chartData.length - 1]?.weight ??
+    profile?.weight ??
+    startWeight;
   const targetWeight = goals?.target_weight || 0;
   const deltaPoids = currentWeight - startWeight;
   const targetDelta = targetWeight - startWeight;
