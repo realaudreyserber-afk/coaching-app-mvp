@@ -23,7 +23,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title || "L'Insociable Coach";
   const notificationOptions = {
     body: payload.notification.body || "Nouveau message du coach.",
-    icon: payload.notification.icon || '/logo.png',
+    icon: payload.notification.icon || '/icons/icon.svg',
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);

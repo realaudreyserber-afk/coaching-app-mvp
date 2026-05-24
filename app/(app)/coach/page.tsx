@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/firebase/hooks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MessageSquare, Send, ArrowLeft, Loader2, BookOpen, ExternalLink } from 'lucide-react';
+import { MarkdownLight } from '@/components/coach/markdown-light';
 
 interface ChatMessage {
   id?: string;
@@ -258,12 +259,16 @@ export default function CoachPage() {
                     : 'bg-white dark:bg-black/20 text-foreground border border-border rounded-tl-none font-serif'
                 }`}
               >
-                {/* Message text with basic paragraph formatting */}
-                {m.content.split('\n').map((para, i) => (
-                  <p key={i} className={i > 0 ? 'mt-2' : ''}>
-                    {para}
-                  </p>
-                ))}
+                {/* Markdown-light renderer: **bold**, *italic*, `code`, paragraphs, lists */}
+                {isUser ? (
+                  m.content.split('\n').map((para, i) => (
+                    <p key={i} className={i > 0 ? 'mt-2' : ''}>
+                      {para}
+                    </p>
+                  ))
+                ) : (
+                  <MarkdownLight text={m.content} />
+                )}
 
                 {/* Render Scientific Sources/Citations inside message card if present */}
                 {!isUser && m.sources && m.sources.length > 0 && (

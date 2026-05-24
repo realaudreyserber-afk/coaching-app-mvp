@@ -153,18 +153,20 @@ export default function DashboardPage() {
           // For now, if today's checkin exists, fetch the insight from API or checkin data
           // We also fetch it dynamically if it exists on the checkin doc
           try {
-            // Check if checkin document contains a cached insight from api response
+            const idToken = await user.getIdToken();
             const response = await fetch(`/api/ai/daily-insight`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                // Set a mock header for safety or get token, since we are client-side we can pass token if needed
+                "Authorization": `Bearer ${idToken}`,
               },
               body: JSON.stringify({ checkin: tcData }),
             });
             if (response.ok) {
               const resData = await response.json();
               setAiInsight(resData?.insight);
+            } else if (response.status !== 401 && response.status !== 404) {
+              console.warn(`daily-insight returned ${response.status}`);
             }
           } catch (e) {
             console.error("Failed to load insight on dashboard:", e);

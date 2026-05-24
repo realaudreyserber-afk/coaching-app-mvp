@@ -58,5 +58,12 @@
   ],
   "redirects": [
     { "source": "/home", "destination": "/dashboard", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/icons/icon-192.png", "destination": "/icons/icon.svg" },
+    { "source": "/icons/icon-512.png", "destination": "/icons/icon.svg" },
+    { "source": "/icons/icon-maskable-192.png", "destination": "/icons/icon-maskable.svg" },
+    { "source": "/icons/icon-maskable-512.png", "destination": "/icons/icon-maskable.svg" },
+    { "source": "/logo.png", "destination": "/icons/icon.svg" }
   ]
 }

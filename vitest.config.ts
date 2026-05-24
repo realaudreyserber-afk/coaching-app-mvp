@@ -6,6 +6,11 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**', '**/build/**', '**/test/rules/**'],
+    server: {
+      deps: {
+        inline: ['react-dom/server'],
+      },
+    },
   },
   resolve: {
     alias: {

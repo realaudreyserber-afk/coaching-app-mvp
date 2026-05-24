@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'linsociable-v1';
+const CACHE_VERSION = 'linsociable-v2';
 const PRECACHE_URLS = ['/', '/login', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
