@@ -19,6 +19,68 @@ interface ChatMessage {
   timestamp?: string;
 }
 
+/**
+ * Strips the <COACH_SAVE>...</COACH_SAVE> structured-data tag from the
+ * coach's reply before it's shown to the user. The tag is only meant
+ * for the persistence pipeline (see persistCoachSaveBlock).
+ *
+ * Tolerant to a partially-streamed tag (when we've received the opening
+ * but not yet the closing): hides everything from the opening tag onward
+ * so the user never sees the raw JSON appear mid-stream.
+ */
+function stripCoachSaveTag(content: string): string {
+  // Closed tag → remove the whole block, including the markers.
+  let out = content.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
+  // Unclosed opening tag still streaming → hide from there to end.
+  const openIdx = out.indexOf('<COACH_SAVE>');
+  if (openIdx !== -1) out = out.slice(0, openIdx);
+  return out.trimEnd();
+}
+
+/**
+ * Parses any <COACH_SAVE>{...}</COACH_SAVE> block from a completed
+ * coach reply and POSTs the JSON payload to /api/profile/update-fields.
+ * Silently no-ops if there's no tag or the JSON is malformed.
+ */
+async function persistCoachSaveBlock(
+  fullContent: string,
+  getFreshToken: () => Promise<string | null>,
+): Promise<void> {
+  const match = fullContent.match(/<COACH_SAVE>([\s\S]*?)<\/COACH_SAVE>/);
+  if (!match) return;
+  let updates: Record<string, unknown>;
+  try {
+    updates = JSON.parse(match[1].trim());
+  } catch (err) {
+    console.warn('[coach-save] invalid JSON in tag:', err);
+    return;
+  }
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return;
+  if (Object.keys(updates).length === 0) return;
+
+  const token = await getFreshToken();
+  if (!token) {
+    console.warn('[coach-save] no token, skipping persist');
+    return;
+  }
+
+  const res = await fetch('/api/profile/update-fields', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ updates }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.warn('[coach-save] API rejected:', res.status, body);
+  } else {
+    const data = await res.json().catch(() => ({}));
+    console.log('[coach-save] persisted:', data);
+  }
+}
+
 export default function CoachPage() {
   const router = useRouter();
   const { user, getFreshToken, loading } = useAuth();
@@ -190,7 +252,10 @@ export default function CoachPage() {
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
                 if (last && last.role === 'assistant') {
-                  copy[copy.length - 1] = { ...last, content: accumulated };
+                  // Hide the <COACH_SAVE>...</COACH_SAVE> tag while streaming.
+                  // We still keep the full accumulated string for post-stream parsing.
+                  const visible = stripCoachSaveTag(accumulated);
+                  copy[copy.length - 1] = { ...last, content: visible };
                 }
                 return copy;
               });
@@ -203,6 +268,11 @@ export default function CoachPage() {
           }
         }
       }
+
+      // Stream complete: parse <COACH_SAVE>{...}</COACH_SAVE>, push to API.
+      await persistCoachSaveBlock(accumulated, getFreshToken).catch((err) =>
+        console.warn('[coach-save] persist failed:', err),
+      );
 
       // Backend now persists assistant message via streaming placeholder.
       // No client-side write needed.
