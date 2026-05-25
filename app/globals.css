@@ -6,25 +6,36 @@
   --font-sans: var(--font-geist-sans), sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
 
-  /* Custom Color Tokens */
-  --color-cream: #FDFBF7;
-  --color-cream-dark: #F6F2EB;
-  --color-cream-deep: #EDE7DC;
-  
-  --color-anthracite: #1A1A1A;
-  --color-anthracite-light: #262626;
-  --color-anthracite-card: #202020;
+  /* ========================================================== */
+  /* Palette tokens — pivoted to NoDream (black / white / gold)  */
+  /*                                                              */
+  /* The token NAMES (cream, anthracite, orange-burnt) are kept   */
+  /* so existing Tailwind classes don't break, but their VALUES   */
+  /* now reflect the NoDream editorial palette so the whole app   */
+  /* gets the dark theme uniformly.                                */
+  /* ========================================================== */
 
-  --color-orange-burnt: #D96B43;
-  --color-orange-light: #F6EBE6;
-  --color-orange-deep: #B8502B;
+  /* "cream" tokens → now black surfaces (deep, soft, mid) */
+  --color-cream: #0a0a0a;
+  --color-cream-dark: #141414;
+  --color-cream-deep: #1a1a1a;
 
-  --color-green-sap: #2E4F4F;
-  --color-green-light: #EBF0F0;
-  
-  --color-sand: #D4C5B9;
+  /* "anthracite" tokens → now light text/surface inversion */
+  --color-anthracite: #fafafa;
+  --color-anthracite-light: #cfcfcf;
+  --color-anthracite-card: #141414;
 
-  /* === NoDream editorial palette (blog, community, brand pages) === */
+  /* "orange" tokens → now gold accents */
+  --color-orange-burnt: #d4a017;
+  --color-orange-light: rgba(212, 160, 23, 0.12);
+  --color-orange-deep: #a07f10;
+
+  /* Sap green and sand kept (rarely used) but desaturated */
+  --color-green-sap: #4a5d5d;
+  --color-green-light: rgba(74, 93, 93, 0.12);
+  --color-sand: #5a5550;
+
+  /* === NoDream editorial palette (raw access via [--color-nd-*]) === */
   --color-nd-black: #0a0a0a;
   --color-nd-black-soft: #141414;
   --color-nd-charcoal: #1a1a1a;
@@ -50,28 +61,28 @@
 }
 
 :root {
-  --background: #FDFBF7;
-  --foreground: #1A1A1A;
-  --card: #FFFFFF;
-  --card-foreground: #1A1A1A;
-  --border: #EDE7DC;
-  --primary: #D96B43;
-  --secondary: #2E4F4F;
-  --muted: #F6F2EB;
-  --muted-foreground: #706E6B;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --border: #2a2a2a;
+  --primary: #d4a017;
+  --secondary: #4a5d5d;
+  --muted: #1a1a1a;
+  --muted-foreground: #8a8a8a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121212;
-    --foreground: #FDFBF7;
-    --card: #1A1A1A;
-    --card-foreground: #FDFBF7;
-    --border: #262626;
-    --primary: #D96B43;
-    --secondary: #2E4F4F;
-    --muted: #202020;
-    --muted-foreground: #A1A1A1;
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --card: #141414;
+    --card-foreground: #fafafa;
+    --border: #2a2a2a;
+    --primary: #d4a017;
+    --secondary: #4a5d5d;
+    --muted: #1a1a1a;
+    --muted-foreground: #8a8a8a;
   }
 }
 
@@ -94,9 +105,9 @@ body {
   transform: scale(0.98);
 }
 
-/* === NoDream editorial scope === */
-/* Wrap a section with .nd-scope to opt-in to the dark editorial palette
-   without affecting the rest of the app (which keeps cream/terracotta). */
+/* === NoDream editorial scope (used by /blog and /community) === */
+/* Now redundant with the global pivot but kept so the explicit
+   wrapper still works on those pages if we revert global palette. */
 .nd-scope {
   background-color: var(--color-nd-black);
   color: var(--color-nd-white);
@@ -114,6 +125,12 @@ body {
 
 .nd-scope a:hover {
   color: var(--color-nd-gold-glow);
+}
+
+/* Global selection (anywhere in app) — gold on black */
+::selection {
+  background-color: var(--color-nd-gold);
+  color: var(--color-nd-black);
 }
 
 /* Keyframes for editorial-section entrance animations.
