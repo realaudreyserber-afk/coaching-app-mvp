@@ -23,6 +23,16 @@ export default function OnboardingIndexPage() {
           return;
         }
 
+        // Force a fresh ID token so Firestore SDK has the latest credentials
+        // before our first read. Without this, a getDoc right after sign-up
+        // sometimes lands before the auth gateway has propagated the token,
+        // causing a spurious permission-denied.
+        try {
+          await user.getIdToken(true);
+        } catch (refreshErr) {
+          console.warn("[onboarding] token refresh warning:", refreshErr);
+        }
+
         const userDocRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userDocRef);
 

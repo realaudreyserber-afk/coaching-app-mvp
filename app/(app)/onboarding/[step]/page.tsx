@@ -33,6 +33,13 @@ export default function OnboardingStepPage() {
 
     const fetchUserData = async () => {
       try {
+        // Force a fresh ID token (see onboarding/page.tsx for context)
+        try {
+          await user.getIdToken(true);
+        } catch (refreshErr) {
+          console.warn("[onboarding/step] token refresh warning:", refreshErr);
+        }
+
         const userDocRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userDocRef);
 
