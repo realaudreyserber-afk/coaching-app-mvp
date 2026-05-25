@@ -304,7 +304,7 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite max-w-md mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
+    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
       
       {/* Header */}
       <div className="flex items-center space-x-3 p-4 border-b border-border bg-white/80 dark:bg-anthracite/80 backdrop-blur-md sticky top-0 z-30">
