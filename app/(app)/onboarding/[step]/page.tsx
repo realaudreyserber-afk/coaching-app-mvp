@@ -1,6 +1,8 @@
 "use client";
 
 import { Loader } from "@/components/ui/loader";
+import { OnboardingLayout } from "@/components/onboarding/onboarding-layout";
+import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -19,6 +21,41 @@ import {
   Step10Nutrition,
   Step11Generate,
 } from "@/components/onboarding/steps";
+
+const TOTAL_STEPS = 6;
+
+/**
+ * Mapping étape → photo éditoriale N&B (assets dans /public).
+ * Réutilise les hero images existantes du blog pour la phase 1
+ * (à remplacer par des photos dédiées onboarding générées avec Nano Banana 2
+ * ou une banque d'images premium plus tard).
+ */
+const STEP_PHOTOS: Record<number, { src: string; alt: string }> = {
+  1: {
+    src: "/garthe-rate.jpeg",
+    alt: "Athlète concentré en salle minimaliste, lumière à contre-jour",
+  },
+  2: {
+    src: "/fenetre-anabolique.jpeg",
+    alt: "Horloge analogique éditoriale, accents or",
+  },
+  3: {
+    src: "/imc-mort.jpeg",
+    alt: "Mètre ruban enroulé sur fond charcoal, lumière dorée latérale",
+  },
+  4: {
+    src: "/garthe-rate.jpeg",
+    alt: "Athlète en action, salle minimaliste",
+  },
+  5: {
+    src: "/garthe-rate.jpeg",
+    alt: "Athlète concentré sur son objectif, contre-jour",
+  },
+  6: {
+    src: "/fenetre-anabolique.jpeg",
+    alt: "Horloge éditoriale, calibration en cours",
+  },
+};
 
 export default function OnboardingStepPage() {
   const { user, loading } = useAuth();
@@ -138,26 +175,15 @@ export default function OnboardingStepPage() {
     }
   };
 
-  return (
-    <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-background">
-      {/* Step Indicator */}
-      <div className="mb-6 text-center">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Étape {stepNum} sur 6
-        </span>
-        <div className="flex gap-1 mt-2 w-48 justify-center">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full transition-all ${
-                i + 1 <= stepNum ? "bg-primary" : "bg-border"
-              }`}
-            />
-          ))}
-        </div>
-      </div>
+  const photo = STEP_PHOTOS[stepNum] ?? STEP_PHOTOS[1];
 
+  return (
+    <OnboardingLayout
+      photoSrc={photo.src}
+      photoAlt={photo.alt}
+      headerRight={<StepIndicator current={stepNum} total={TOTAL_STEPS} />}
+    >
       {renderStep()}
-    </div>
+    </OnboardingLayout>
   );
 }
