@@ -27,23 +27,48 @@ import type { ProfilePath } from '@/lib/features/profile-paths/schema';
 
 export interface UserProfile {
   name?: string;
+  age?: number; // optional; if absent, derived from dob
+  dob?: string; // ISO date — set by wizard Step2
   height?: number;
   weight?: number;
   sex?: 'male' | 'female' | 'other';
   activity_level?: string;
+  training_frequency?: string;
+  training_history?: string;
   tdee_theoretical?: number;
   tdee_adaptive?: number;
+  // Mesures complémentaires (collectées par le coach en chat)
+  waist_cm?: number;
+  neck_cm?: number;
+  hips_cm?: number;
+  bf_method?: string; // "dexa" | "inbody" | "caliper" | "navy" | "bia" | "photo" | "unknown"
+  hormonal_context?: string; // "natural" | "trt" | "cycle" | "post_menopause"
+  medical_notes?: string;
+}
+
+function ageFromDob(dob?: string): number | undefined {
+  if (!dob) return undefined;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return undefined;
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
 }
 
 export interface UserBaseline {
   weight?: number;
   bf_pct?: number;
+  bf_measured_at?: string;
 }
 
 export interface UserGoals {
   primary_goal?: string;
   target_weight?: number;
+  target_bf_pct?: number;
   type?: string;
+  deadline?: string;
 }
 
 export interface GLP1State {
@@ -111,13 +136,48 @@ function profileBlock(ctx: UserContext): string {
   const p = ctx.profile;
   const b = ctx.baseline;
   const g = ctx.goals;
+
+  // Derive age from dob if not provided directly
+  const computedAge = p?.age ?? ageFromDob(p?.dob);
+
+  // Compute what's still missing — the coach will be told to collect it.
+  const missing: string[] = [];
+  if (!p?.name) missing.push('prénom');
+  if (!computedAge) missing.push('âge');
+  if (!p?.sex) missing.push('sexe biologique');
+  if (!p?.height) missing.push('taille (cm)');
+  if (!(p?.weight ?? b?.weight)) missing.push('poids actuel (kg)');
+  if (!p?.activity_level) missing.push('NEAT / activité hors sport');
+  if (!p?.training_frequency) missing.push('fréquence et type d\'entraînement');
+  if (!g?.primary_goal && !g?.type) missing.push('objectif principal');
+  if (!b?.bf_pct && !p?.bf_method) missing.push('body fat % (ou méthode pour le mesurer)');
+
+  const missingBlock = missing.length
+    ? `\n⚠️ DONNÉES MANQUANTES À COLLECTER EN CONVERSATION (par ordre de priorité) :\n${missing.map((m) => `  - ${m}`).join('\n')}\n\nAccueille l'utilisateur, valide les données déjà connues, puis collecte celles-ci. Une question à la fois, en conversation naturelle. Ne génère AUCUN plan calorique tant que les données minimales (taille, poids, âge, sexe, NEAT, objectif) ne sont pas connues. Pour le body fat, déclenche le workflow §7 (Q1-Q5).`
+    : '\n✅ Toutes les données critiques sont collectées. Tu peux raisonner pleinement.';
+
   return `
 PROFIL DE L'UTILISATEUR :
-- Prénom : ${p?.name ?? 'Abonné'}
-- Objectif : ${g?.primary_goal ?? g?.type ?? 'Recomposition corporelle'}
-- Poids actuel : ${p?.weight ?? b?.weight ?? 'N/A'} kg, poids cible : ${g?.target_weight ?? 'N/A'} kg
-- TDEE théorique : ${p?.tdee_theoretical ?? 'N/A'} kcal
-- TDEE adaptatif : ${p?.tdee_adaptive ?? 'non calculé'} kcal (utilise cette valeur en priorité si disponible)
+- Prénom : ${p?.name ?? '(à demander)'}
+- Sexe biologique : ${p?.sex ?? '(à demander)'}
+- Âge : ${computedAge ? `${computedAge} ans` : '(à demander)'}
+- Taille : ${p?.height ? `${p.height} cm` : '(à demander)'}
+- Poids actuel : ${(p?.weight ?? b?.weight) ? `${p?.weight ?? b?.weight} kg` : '(à demander)'}
+- NEAT / activité hors sport : ${p?.activity_level ?? '(à demander)'}
+- Fréquence training : ${p?.training_frequency ?? '(à demander)'}
+- Historique training : ${p?.training_history ?? '(non précisé)'}
+- Objectif principal : ${g?.primary_goal ?? g?.type ?? '(à demander)'}
+- Poids cible : ${g?.target_weight ? `${g.target_weight} kg` : '(non précisé)'}
+- BF actuel : ${b?.bf_pct ? `${b.bf_pct}% (mesuré ${b.bf_measured_at ?? 'date inconnue'}, méthode ${p?.bf_method ?? 'non précisée'})` : '(non mesuré — voir §7 du prompt)'}
+- BF cible : ${g?.target_bf_pct ? `${g.target_bf_pct}%` : '(non précisé)'}
+- Tour de taille : ${p?.waist_cm ? `${p.waist_cm} cm` : '(non mesuré)'}
+- Tour de cou : ${p?.neck_cm ? `${p.neck_cm} cm` : '(non mesuré)'}
+${p?.hips_cm ? `- Tour de hanches : ${p.hips_cm} cm` : ''}
+- Contexte hormonal : ${p?.hormonal_context ?? 'naturel (à confirmer)'}
+- Notes médicales : ${p?.medical_notes ?? '(aucune signalée)'}
+- TDEE théorique : ${p?.tdee_theoretical ? `${p.tdee_theoretical} kcal` : '(à calculer)'}
+- TDEE adaptatif : ${p?.tdee_adaptive ? `${p.tdee_adaptive} kcal (PRIORITÉ sur le théorique)` : '(non calibré)'}
+${missingBlock}
 `;
 }
 

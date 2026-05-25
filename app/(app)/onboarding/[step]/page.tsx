@@ -57,8 +57,8 @@ export default function OnboardingStepPage() {
           return;
         }
 
-        // Validate step index bounds
-        if (isNaN(stepNum) || stepNum < 1 || stepNum > 11) {
+        // Validate step index bounds (reduced wizard: 5 essentiels + 1 generate = 6)
+        if (isNaN(stepNum) || stepNum < 1 || stepNum > 6) {
           router.push(`/onboarding/${currentFirestoreStep}`);
           return;
         }
@@ -120,6 +120,9 @@ export default function OnboardingStepPage() {
     );
   }
 
+  // Reduced wizard — 5 essentiels + 1 generate.
+  // Body fat, lifestyle, medical, fitness details, nutrition habits sont collectés
+  // par le coach en conversation post-wizard (cf. lib/vertex/prompts/coach.ts §6-§7).
   const renderStep = () => {
     switch (stepNum) {
       case 1:
@@ -129,20 +132,10 @@ export default function OnboardingStepPage() {
       case 3:
         return <Step3Measurements userData={userData} onPrev={handlePrev} onNext={handleNext} />;
       case 4:
-        return <Step4BodyFat userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 5:
         return <Step5Activity userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 6:
-        return <Step6Lifestyle userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 7:
+      case 5:
         return <Step7Goals userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 8:
-        return <Step8Medical userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 9:
-        return <Step9Fitness userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 10:
-        return <Step10Nutrition userData={userData} onPrev={handlePrev} onNext={handleNext} />;
-      case 11:
+      case 6:
         return <Step11Generate userData={userData} onPrev={handlePrev} />;
       default:
         return null;
@@ -154,10 +147,10 @@ export default function OnboardingStepPage() {
       {/* Step Indicator */}
       <div className="mb-6 text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Étape {stepNum} sur 11
+          Étape {stepNum} sur 6
         </span>
         <div className="flex gap-1 mt-2 w-48 justify-center">
-          {Array.from({ length: 11 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
               className={`h-1 flex-1 rounded-full transition-all ${
