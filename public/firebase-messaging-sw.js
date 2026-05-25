@@ -23,7 +23,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title || "NoDream Coach";
   const notificationOptions = {
     body: payload.notification.body || "Nouveau message du coach.",
-    icon: payload.notification.icon || '/icons/icon.svg',
+    icon: payload.notification.icon || '/icons/icon-192.png',
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
