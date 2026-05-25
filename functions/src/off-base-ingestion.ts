@@ -108,7 +108,7 @@ async function fetchOFFDelta(locale: string, sinceIso: string): Promise<OFFProdu
       logger.warn(`OFF fetch failed for locale ${locale}: ${res.status}`);
       return [];
     }
-    const data = (await res.json()) as { products?: OFFProduct[] };
+    const data = await res.json();
     return Array.isArray(data.products) ? data.products : [];
   } catch (err) {
     logger.error(`OFF fetch error locale ${locale}:`, err);

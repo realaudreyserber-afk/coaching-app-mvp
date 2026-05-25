@@ -1,9 +1,7 @@
-# Go-live checklist — NoDream
+# Go-live checklist — L'Insociable coaching
 
 > Chronologie minimale pour passer de "code pushed" à "app fonctionnelle en prod".
 > Tout ce qui suit nécessite ton action manuelle car protégé par des creds.
->
-> **Naming** : "NoDream" (ex-codename "L'Insociable"). Project Firebase ID infra conservé : `linsociable-coaching` — ne pas renommer.
 
 ## Étape 1 — Variables d'environnement Vercel (10 min)
 
@@ -61,15 +59,13 @@ Pour accéder à `/admin`, soit :
   "
   ```
 
-## Étape 7 — PWA icons ✅ DONE (2026-05-25)
+## Étape 7 — PWA icons (visuel)
 
-4 PNG livrés dans `public/icons/` :
-- `icon-192.png`, `icon-512.png` (purpose any)
-- `icon-maskable-192.png`, `icon-maskable-512.png` (safe zone 80%)
+Génère 4 PNG dans `public/icons/` (cf. [public/icons/README.md](../public/icons/README.md)) :
+- icon-192.png, icon-512.png (purpose: any)
+- icon-maskable-192.png, icon-maskable-512.png (safe zone 80%)
 
-Générés depuis `icon-source.png` (1024×1024, monogramme ND) via [scripts/generate-pwa-icons.mjs](../scripts/generate-pwa-icons.mjs). Pour re-générer après update du source : `node scripts/generate-pwa-icons.mjs`.
-
-Originaux source conservés : `icon-source.png` (Flow/Nano Banana export) + `icon-source.jpeg` + SVG legacy (`icon.svg`, `icon-maskable.svg`).
+[Maskable.app](https://maskable.app/editor) fait ça en 2 minutes.
 
 ## Validation finale
 
@@ -83,16 +79,6 @@ npm run test          # 81/81 ✓
 curl https://<ton-domaine>.vercel.app/api/health
 # attendu : {"status":"ok","checks":{...}}
 ```
-
-## Étape 8 — Domaines NoDream (à vérifier humainement)
-
-Vérifier dispo + acheter sur registrar (Gandi, OVH, Namecheap) :
-- `nodream.app` (premium TLD, ~14€/an, prio si app mobile)
-- `nodream.com` (référence universelle, ~12€/an)
-- `nodream.fr` (cible FR, ~7€/an)
-- `nodream.coach` (niche, optionnel)
-
-Vérifier conflits marque sur [data.inpi.fr/marques](https://data.inpi.fr/marques) classes 5 (compléments), 41 (coaching), 44 (services bien-être).
 
 ## Si quelque chose casse
 

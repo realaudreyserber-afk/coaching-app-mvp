@@ -1,21 +1,12 @@
-# Handoff — NoDream MVP (état au 2026-05-25)
-
-## Naming acté
-
-**NoDream** (anciennement codename "L'Insociable"). Pivot validé 2026-05-25.
-- Tagline : "Pas de rêve. Des résultats."
-- Palette pivotée : noir #0a0a0a / blanc #fafafa / accent or #d4a017 (pour l'icône). Le reste du CSS (cream/anthracite/orange) garde sa cohérence d'origine en attendant un rebrand visuel global.
-- Code project Firebase **conservé** : `linsociable-coaching` (ID infra, ne pas renommer sous peine de casser le déploiement).
-- Voir [memory: state_naming_nodream.md] et [public/manifest.json](../public/manifest.json) pour la source canonique.
+# Handoff — Coaching App MVP (état au 2026-05-24)
 
 ## État global
 
 - Phases MVP 1-8 : ✅ implémentées
 - Phase 9 (Cloud Functions Gen 2) : ✅ squelette complet, à déployer
 - Phase 10 (Stripe) : ✅ checkout + portail + webhook + tier gating prêts (placeholder price IDs)
-- Phase 11 (PWA) : ✅ manifest + service worker + meta tags + **4 icônes PNG livrées** (icon-{192,512}.png + icon-maskable-{192,512}.png générées via [scripts/generate-pwa-icons.mjs](../scripts/generate-pwa-icons.mjs))
+- Phase 11 (PWA) : ✅ manifest + service worker + meta tags (icons à fournir)
 - Phase 12 (E2E + déploiement) : 🟡 E2E partiel, déploiement Firebase à effectuer
-- Phase 13 (Rebranding NoDream) : ✅ ratissage code + UI + prompts LLM effectué 2026-05-25 (17 fichiers)
 
 V1 Extensions (25 modules) : 21 livrés en code, 4 restants (`gdpr-self-service` complet, `stripe_portal_advanced` granulaire, `health_connect`, `healthkit`).
 
@@ -175,7 +166,7 @@ Voir [docs/extensions-rollout.md](./extensions-rollout.md) — 11 vagues, 5 hypo
 
 Le code est prêt à recevoir le wrap :
 1. `npm install @capacitor/core @capacitor/cli @capacitor/android`
-2. `npx cap init "NoDream" "com.nodream.app" --web-dir=.next` (package id à confirmer après réservation Play Console)
+2. `npx cap init "L'Insociable" "com.linsociable.coaching" --web-dir=.next`
 3. Installer plugins : `@capacitor-community/firebase-authentication`, `@capacitor/camera`, `@capacitor/push-notifications`, `@capacitor-firebase/messaging`, `@kiwi-health/capacitor-health-connect`
 4. Remplacer les wrappers dans `lib/platform.ts` et `lib/platform/health.ts` par les implémentations natives
 5. Configurer Health Connect dans `AndroidManifest.xml`

@@ -11,7 +11,7 @@ Ce module permet aux utilisateurs sous traitement GLP-1 (Ozempic, Wegovy, Mounja
 
 1. **Saisie utilisateur** : L'utilisateur configure son traitement dans l'écran de Paramètres ([app/(app)/settings/page.tsx](file:///c:/Users/Utilisateur/.gemini/antigravity/scratch/coaching-app-mvp/app/(app)/settings/page.tsx)) : Molécule, dose, fréquence, date de début, et effets secondaires.
 2. **Persistance** : Les données sont enregistrées dans le document `/users/{uid}/medications/glp1`.
-3. **Adaptation Coach IA** : Si le traitement est actif, la route `/api/ai/coach` injecte automatiquement des règles d'adaptation métabolique et de sécurité au Coach NoDream :
+3. **Adaptation Coach IA** : Si le traitement est actif, la route `/api/ai/coach` injecte automatiquement des règles d'adaptation métabolique et de sécurité au Coach "L'Insociable" :
    - Risque majeur de perte musculaire : incitation à hausser l'apport protéique de +20%.
    - Focus sur l'entraînement de résistance musculaire.
    - Conseils de nutrition adaptés en cas d'effets secondaires comme des nausées.

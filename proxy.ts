@@ -14,7 +14,6 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = [
   '/_next',
-  '/__',
   '/api/auth',
   '/favicon',
   '/icons',

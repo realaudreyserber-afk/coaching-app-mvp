@@ -41,7 +41,7 @@ test.describe('V1 Extensions - Feature Flag Guards & UI', () => {
     await page.goto('/coach');
 
     // Coach Page should be accessible and show header & online status
-    const header = page.locator('text=Coach NoDream');
+    const header = page.locator('text=Coach L\'Insociable');
     await expect(header).toBeVisible();
 
     const onlineIndicator = page.locator('text=En ligne');

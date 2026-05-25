@@ -9,7 +9,7 @@ test.describe('Coach IA — SSE streaming', () => {
 
   test('affiche l\'interface coach et accepte une saisie', async ({ page }) => {
     await page.goto('/coach');
-    await expect(page.locator('text=Coach NoDream')).toBeVisible();
+    await expect(page.locator('text=Coach L\'Insociable')).toBeVisible();
     await expect(page.locator('text=En ligne')).toBeVisible();
     const input = page.getByPlaceholder("Pose ta question (ex: pates crues vs cuites ?)");
     await expect(input).toBeVisible();

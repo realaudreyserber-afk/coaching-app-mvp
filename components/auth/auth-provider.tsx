@@ -1,32 +1,22 @@
 "use client";
 
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
   GoogleAuthProvider,
+  signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
+import { isNativePlatform } from "@/lib/platform";
 import { refreshFlags } from "@/lib/features/flags";
 
-type AuthStatus = "loading" | "unauthenticated" | "authenticated";
-
 interface AuthContextType {
-  status: AuthStatus;
   user: User | null;
   loading: boolean;
   hasProfile: boolean;
-  error: string | null;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   getFreshToken: () => Promise<string | null>;
@@ -35,251 +25,177 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function log(...args: unknown[]) {
-  if (process.env.NODE_ENV !== "production") {
-    console.log("[auth]", ...args);
-  }
-}
-
-function buildMockUser(variant: "true" | "non-admin" | "no-profile"): {
-  user: User;
-  hasProfile: boolean;
-  token: string;
-} {
-  const isNonAdmin = variant === "non-admin";
-  const isNoProfile = variant === "no-profile";
-  const token = isNoProfile
-    ? "mock-token-no-profile"
-    : isNonAdmin
-      ? "mock-token-non-admin"
-      : "mock-token";
-  const user = {
-    uid: isNonAdmin
-      ? "non-admin-user-id"
-      : isNoProfile
-        ? "no-profile-user-id"
-        : "dev-user-id",
-    email: isNonAdmin
-      ? "non-admin@coaching.local"
-      : isNoProfile
-        ? "no-profile@coaching.local"
-        : "dev@coaching.local",
-    displayName: isNonAdmin
-      ? "Non-Admin User"
-      : isNoProfile
-        ? "No-Profile User"
-        : "Mock User",
-    emailVerified: true,
-    isAnonymous: false,
-    metadata: {},
-    providerData: [],
-    providerId: "google.com",
-    refreshToken: "mock-refresh-token",
-    tenantId: null,
-    delete: async () => {},
-    getIdToken: async () => token,
-    getIdTokenResult: async () => ({
-      token,
-      signInProvider: "google.com",
-      claims: {},
-      authTime: "",
-      expirationTime: "",
-      issuedAtTime: "",
-    }),
-    toJSON: () => ({}),
-    phoneNumber: null,
-    photoURL: null,
-  } as unknown as User;
-  return { user, hasProfile: !isNoProfile, token };
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const lastSessionUidRef = React.useRef<string | null>(null);
 
-  const lastSessionUidRef = useRef<string | null>(null);
+  // Check if profile exists in Firestore users/{uid}
+  const checkProfileExistence = async (uid: string): Promise<boolean> => {
+    try {
+      const userDocRef = doc(db, "users", uid);
+      const userSnap = await getDoc(userDocRef);
+      const exists = userSnap.exists() && userSnap.data()?.profile !== undefined;
+      setHasProfile(exists);
+      return exists;
+    } catch (error) {
+      console.error("Error checking user profile in Firestore:", error);
+      setHasProfile(false);
+      return false;
+    }
+  };
 
-  const checkProfileExistence = useCallback(
-    async (uid: string): Promise<boolean> => {
-      try {
-        const userDocRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userDocRef);
-        const exists =
-          userSnap.exists() && userSnap.data()?.profile !== undefined;
-        log("checkProfileExistence", uid, "→", exists);
-        setHasProfile(exists);
-        return exists;
-      } catch (err) {
-        console.error("[auth] Error checking user profile in Firestore:", err);
-        setHasProfile(false);
-        return false;
-      }
-    },
-    [],
-  );
-
-  const refreshProfileStatus = useCallback(async (): Promise<boolean> => {
-    if (user) return checkProfileExistence(user.uid);
+  const refreshProfileStatus = async (): Promise<boolean> => {
+    if (user) {
+      return await checkProfileExistence(user.uid);
+    }
     return false;
-  }, [user, checkProfileExistence]);
-
-  const mintServerSession = useCallback(async (idToken: string) => {
-    try {
-      const res = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        console.error(
-          "[auth] /api/auth/session POST failed",
-          res.status,
-          body,
-        );
-      } else {
-        log("server session minted");
-      }
-    } catch (err) {
-      console.error("[auth] Failed to mint server session cookie:", err);
-    }
-  }, []);
-
-  const clearServerSession = useCallback(async () => {
-    try {
-      await fetch("/api/auth/session", { method: "DELETE" });
-      log("server session cleared");
-    } catch {
-      // best-effort
-    }
-  }, []);
+  };
 
   useEffect(() => {
-    void refreshFlags().catch(() => {});
+    void refreshFlags().catch(() => {
+      // best-effort, sync resolution falls back to env/localStorage
+    });
   }, []);
 
   useEffect(() => {
     const mockAuthEnabled =
-      process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH === "1" &&
-      process.env.NODE_ENV !== "production";
+      process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH === '1' &&
+      process.env.NODE_ENV !== 'production';
 
-    if (typeof window !== "undefined" && mockAuthEnabled) {
+    if (typeof window !== 'undefined' && mockAuthEnabled) {
       try {
-        const mockUserVal = window.localStorage.getItem("mock_user");
-        if (
-          mockUserVal === "true" ||
-          mockUserVal === "non-admin" ||
-          mockUserVal === "no-profile"
-        ) {
-          const {
-            user: mockUser,
-            hasProfile: mockHasProfile,
-            token,
-          } = buildMockUser(mockUserVal);
+        const mockUserVal = window.localStorage.getItem('mock_user');
+        if (mockUserVal === 'true' || mockUserVal === 'non-admin' || mockUserVal === 'no-profile') {
+          const isNonAdmin = mockUserVal === 'non-admin';
+          const isNoProfile = mockUserVal === 'no-profile';
+          const mockToken = isNoProfile
+            ? 'mock-token-no-profile'
+            : isNonAdmin
+              ? 'mock-token-non-admin'
+              : 'mock-token';
+          const mockUser = {
+            uid: isNonAdmin ? 'non-admin-user-id' : isNoProfile ? 'no-profile-user-id' : 'dev-user-id',
+            email: isNonAdmin ? 'non-admin@coaching.local' : isNoProfile ? 'no-profile@coaching.local' : 'dev@coaching.local',
+            displayName: isNonAdmin ? 'Non-Admin User' : isNoProfile ? 'No-Profile User' : 'Mock User',
+            emailVerified: true,
+            isAnonymous: false,
+            metadata: {},
+            providerData: [],
+            providerId: 'google.com',
+            refreshToken: 'mock-refresh-token',
+            tenantId: null,
+            delete: async () => {},
+            getIdToken: async () => mockToken,
+            getIdTokenResult: async () => ({ token: mockToken, signInProvider: 'google.com', claims: {}, authTime: '', expirationTime: '', issuedAtTime: '' }),
+            toJSON: () => ({}),
+            phoneNumber: null,
+            photoURL: null,
+          } as unknown as User;
           setTimeout(async () => {
-            await mintServerSession(token);
+            try {
+              await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: mockToken }),
+              });
+            } catch {
+              // best-effort
+            }
             setUser(mockUser);
-            setHasProfile(mockHasProfile);
-            setStatus("authenticated");
+            setHasProfile(!isNoProfile);
+            setLoading(false);
           }, 0);
           return;
         }
-      } catch (err) {
-        console.error("[auth] mock user setup failed:", err);
+      } catch (e) {
+        console.error("Error configuring mock user:", e);
       }
     }
 
-    // Consume any pending signInWithRedirect result.
-    // No-op if user came in via popup. Safe to always call.
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) log("getRedirectResult consumed", result.user.uid);
-      })
-      .catch((err) => {
-        console.error("[auth] getRedirectResult failed:", err);
-      });
-
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      log("onAuthStateChanged", currentUser?.uid ?? "null");
-
+      setUser(currentUser);
       if (currentUser) {
-        setUser(currentUser);
         if (lastSessionUidRef.current !== currentUser.uid) {
           try {
             const idToken = await currentUser.getIdToken();
-            await mintServerSession(idToken);
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken }),
+            });
             lastSessionUidRef.current = currentUser.uid;
           } catch (err) {
-            console.error("[auth] getIdToken failed:", err);
+            console.error('Failed to mint server session cookie:', err);
           }
         }
         await checkProfileExistence(currentUser.uid);
-        setStatus("authenticated");
       } else {
-        setUser(null);
         if (lastSessionUidRef.current !== null) {
-          await clearServerSession();
+          try {
+            await fetch('/api/auth/session', { method: 'DELETE' });
+          } catch {
+            // best-effort
+          }
           lastSessionUidRef.current = null;
         }
         setHasProfile(false);
-        setStatus("unauthenticated");
       }
+      setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [checkProfileExistence, mintServerSession, clearServerSession]);
-
-  const loginWithGoogle = useCallback(async () => {
-    setError(null);
-    setStatus("loading");
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: "select_account" });
-
-    try {
-      log("attempting signInWithRedirect");
-      await signInWithRedirect(auth, provider);
-      // Browser navigates away to Google; nothing more to do here.
-      // On bounce-back, AuthProvider mounts and getRedirectResult()
-      // consumes the token, then onAuthStateChanged fires.
-    } catch (err) {
-      console.error("[auth] signInWithRedirect failed:", err);
-      setError("La connexion a échoué. Réessaie dans un instant.");
-      setStatus("unauthenticated");
-      throw err;
-    }
   }, []);
 
-  const logout = useCallback(async () => {
-    setStatus("loading");
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    
+    try {
+      if (isNativePlatform()) {
+        // Fallback for native wrapper or embedded webviews where popups are blocked
+        await signInWithRedirect(auth, provider);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
+    } catch (error) {
+      console.error("Google login failed:", error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
     try {
       await signOut(auth);
-      // onAuthStateChanged will fire with null and set status="unauthenticated"
-    } catch (err) {
-      console.error("[auth] signOut failed:", err);
-      setStatus("unauthenticated");
+      setUser(null);
+      setHasProfile(false);
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  const getFreshToken = useCallback(async (): Promise<string | null> => {
+  const getFreshToken = async (): Promise<string | null> => {
     if (!user) return null;
     try {
       return await user.getIdToken(true);
-    } catch (err) {
-      console.error("[auth] getFreshToken failed:", err);
+    } catch (error) {
+      console.error("Error retrieving fresh ID Token:", error);
       return null;
     }
-  }, [user]);
+  };
 
   return (
     <AuthContext.Provider
       value={{
-        status,
         user,
-        loading: status === "loading",
+        loading,
         hasProfile,
-        error,
         loginWithGoogle,
         logout,
         getFreshToken,
