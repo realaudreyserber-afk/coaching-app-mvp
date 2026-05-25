@@ -9,7 +9,8 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
-import { TrendingUp, Camera, Ruler, Calendar, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { WeightHistoryRow } from "@/components/progress/weight-history-row";
 
 interface WeeklyRecord {
   id: string; // ISO week, e.g. 2026-W21 or "baseline"
@@ -261,38 +262,20 @@ export default function ProgressPage() {
                   Aucun historique de pesée disponible. Fais ton premier bilan quotidien pour commencer.
                 </div>
               ) : (
-                <div className="max-h-60 overflow-y-auto divide-y divide-border">
-                  {dailyWeights.map((w, idx) => (
-                    <div key={w.date} className="flex justify-between items-center px-4 py-3 hover:bg-muted/10 transition-all text-xs">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-medium text-foreground">
-                          {new Date(w.created_at).toLocaleDateString("fr-FR", {
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                          })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-foreground text-sm">{w.weight.toFixed(1)} kg</span>
-                        {idx < dailyWeights.length - 1 ? (
-                          (() => {
-                            const diff = w.weight - dailyWeights[idx + 1].weight;
-                            if (diff === 0) return <span className="text-[10px] text-muted-foreground">0</span>;
-                            return (
-                              <span className={`text-[10px] font-bold ${diff < 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-500"}`}>
-                                {diff > 0 ? "+" : ""}{diff.toFixed(1)}
-                              </span>
-                            );
-                          })()
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">-</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ul className="max-h-60 overflow-y-auto divide-y divide-zinc-800">
+                  {dailyWeights.map((w, idx) => {
+                    const next = dailyWeights[idx + 1];
+                    const delta = next ? w.weight - next.weight : undefined;
+                    return (
+                      <WeightHistoryRow
+                        key={w.date}
+                        createdAt={w.created_at}
+                        weight={w.weight}
+                        delta={delta}
+                      />
+                    );
+                  })}
+                </ul>
               )}
             </CardContent>
           </Card>
