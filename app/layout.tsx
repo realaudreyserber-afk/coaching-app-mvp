@@ -23,14 +23,14 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "L'Insociable — Coaching IA Recomposition & Perte de poids",
-  description: "Un coaching nutritionnel et sportif personnalisé, sain et durable, mené par l'IA.",
+  title: "NoDream — Coaching IA sans illusion",
+  description: "Coaching IA sans illusion. Méthode, données, résultats. Hébergé en Europe.",
   manifest: "/manifest.json",
-  applicationName: "L'Insociable",
+  applicationName: "NoDream",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "L'Insociable",
+    title: "NoDream",
   },
   icons: {
     icon: [

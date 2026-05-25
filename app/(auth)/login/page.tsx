@@ -121,10 +121,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col justify-center bg-cream px-6 py-12 dark:bg-anthracite sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h1 className="text-center text-4xl font-extrabold tracking-tight font-serif text-primary">
-          {"L'Insociable"}
+          NoDream
         </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground font-serif italic">
-          Ton coach de recomposition corporelle IA
+          Pas de rêve. Des résultats.
         </p>
       </div>
 

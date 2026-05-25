@@ -1,7 +1,7 @@
 {
-  "name": "L'Insociable — Coaching IA",
-  "short_name": "L'Insociable",
-  "description": "Coaching IA personnalisé recomposition et perte de poids, hébergé en Europe.",
+  "name": "NoDream",
+  "short_name": "NoDream",
+  "description": "Coaching IA sans illusion. Méthode, données, résultats. Hébergé en Europe.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",

@@ -31,7 +31,7 @@ export default function TopBar() {
             onClick={() => router.push("/dashboard")}
             className="text-xl font-extrabold tracking-tight font-serif text-primary cursor-pointer select-none"
           >
-            {"L'Insociable"}
+            NoDream
           </span>
         </div>
 
