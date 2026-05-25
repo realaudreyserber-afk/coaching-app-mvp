@@ -271,14 +271,21 @@ export default function SettingsPage() {
       </div>
 
       {errorMsg && (
-        <div className="p-3 bg-red-100 text-red-700 text-xs rounded-lg border border-red-200 font-serif">
+        <div
+          role="alert"
+          className="p-3 bg-red-950/40 text-red-300 text-xs rounded-lg border border-red-900 font-serif"
+        >
           {errorMsg}
         </div>
       )}
 
       {saveSuccess && (
-        <div className="p-3 bg-green-100 text-green-700 text-xs rounded-lg border border-green-200 flex items-center gap-2 font-serif">
-          <Check className="h-4 w-4" /> Modifications enregistrées avec succès.
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-3 bg-emerald-950/40 text-emerald-300 text-xs rounded-lg border border-emerald-900 flex items-center gap-2 font-serif"
+        >
+          <Check className="h-4 w-4" aria-hidden="true" /> Modifications enregistrées avec succès.
         </div>
       )}
 
@@ -294,8 +301,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4 text-xs">
             <div className="space-y-1">
-              <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Prénom / Pseudo</label>
-              <input
+              <label htmlFor="settings-prenom-pseudo" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Prénom / Pseudo</label>
+              <input id="settings-prenom-pseudo"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -306,8 +313,8 @@ export default function SettingsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Taille (cm)</label>
-                <input
+                <label htmlFor="settings-taille-cm" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Taille (cm)</label>
+                <input id="settings-taille-cm"
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
@@ -316,8 +323,8 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="space-y-1">
-                <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Activité</label>
-                <select
+                <label htmlFor="settings-activite" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Activité</label>
+                <select id="settings-activite"
                   value={activityLevel}
                   onChange={(e: any) => setActivityLevel(e.target.value)}
                   className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
@@ -346,17 +353,21 @@ export default function SettingsPage() {
             <CardContent className="p-4 pt-0 space-y-4 text-xs">
               <div className="flex items-center justify-between py-1">
                 <div>
-                  <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Traitement Actif</span>
-                  <span className="text-muted-foreground text-[10px]">Indique si tu es sous traitement actuellement</span>
+                  <span id="settings-glp1-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Traitement Actif</span>
+                  <span id="settings-glp1-toggle-desc" className="text-muted-foreground text-[10px]">Indique si tu es sous traitement actuellement</span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
+                    role="switch"
+                    aria-checked={glp1Active}
+                    aria-labelledby="settings-glp1-toggle-label"
+                    aria-describedby="settings-glp1-toggle-desc"
                     checked={glp1Active}
                     onChange={(e) => setGlp1Active(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-muted peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                  <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
                 </label>
               </div>
 
@@ -364,8 +375,8 @@ export default function SettingsPage() {
                 <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Molécule</label>
-                      <select
+                      <label htmlFor="settings-molecule" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Molécule</label>
+                      <select id="settings-molecule"
                         value={glp1Molecule}
                         onChange={(e: any) => setGlp1Molecule(e.target.value)}
                         className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
@@ -377,8 +388,8 @@ export default function SettingsPage() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fréquence</label>
-                      <select
+                      <label htmlFor="settings-frequence" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fréquence</label>
+                      <select id="settings-frequence"
                         value={glp1Frequency}
                         onChange={(e: any) => setGlp1Frequency(e.target.value)}
                         className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
@@ -392,8 +403,8 @@ export default function SettingsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Dose (ex: 0.5mg)</label>
-                      <input
+                      <label htmlFor="settings-dose-ex-0-5mg" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Dose (ex: 0.5mg)</label>
+                      <input id="settings-dose-ex-0-5mg"
                         type="text"
                         placeholder="ex: 0.5mg"
                         value={glp1Dose}
@@ -402,8 +413,8 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Date de début</label>
-                      <input
+                      <label htmlFor="settings-date-de-debut" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Date de début</label>
+                      <input id="settings-date-de-debut"
                         type="date"
                         value={glp1StartDate}
                         onChange={(e) => setGlp1StartDate(e.target.value)}
@@ -462,25 +473,29 @@ export default function SettingsPage() {
             <CardContent className="p-4 pt-0 space-y-4 text-xs">
               <div className="flex items-center justify-between py-1">
                 <div>
-                  <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jeûne Actif</span>
-                  <span className="text-muted-foreground text-[10px]">Active le suivi des fenêtres de jeûne</span>
+                  <span id="settings-fasting-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jeûne Actif</span>
+                  <span id="settings-fasting-toggle-desc" className="text-muted-foreground text-[10px]">Active le suivi des fenêtres de jeûne</span>
                 </div>
-                <label className="relative inline-flex inline-flex items-center cursor-pointer">
+                <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
+                    role="switch"
+                    aria-checked={fastingActive}
+                    aria-labelledby="settings-fasting-toggle-label"
+                    aria-describedby="settings-fasting-toggle-desc"
                     checked={fastingActive}
                     onChange={(e) => setFastingActive(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-muted peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                  <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
                 </label>
               </div>
 
               {fastingActive && (
                 <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
                   <div className="space-y-1">
-                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Protocole</label>
-                    <select
+                    <label htmlFor="settings-protocole" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Protocole</label>
+                    <select id="settings-protocole"
                       value={fastingType}
                       onChange={(e: any) => {
                         const val = e.target.value;
@@ -511,8 +526,8 @@ export default function SettingsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Début Repas (Fenêtre)</label>
-                      <input
+                      <label htmlFor="settings-debut-repas-fenetre" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Début Repas (Fenêtre)</label>
+                      <input id="settings-debut-repas-fenetre"
                         type="time"
                         value={fastingStart}
                         onChange={(e) => setFastingStart(e.target.value)}
@@ -520,8 +535,8 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fin Repas (Fenêtre)</label>
-                      <input
+                      <label htmlFor="settings-fin-repas-fenetre" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fin Repas (Fenêtre)</label>
+                      <input id="settings-fin-repas-fenetre"
                         type="time"
                         value={fastingEnd}
                         onChange={(e) => setFastingEnd(e.target.value)}
@@ -575,17 +590,21 @@ export default function SettingsPage() {
           <CardContent className="p-4 pt-0 space-y-4 text-xs">
             <div className="flex items-center justify-between py-1">
               <div>
-                <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Notifications</span>
-                <span className="text-muted-foreground text-[10px]">Rappels quotidiens de bilans</span>
+                <span id="settings-notifications-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Notifications</span>
+                <span id="settings-notifications-toggle-desc" className="text-muted-foreground text-[10px]">Rappels quotidiens de bilans</span>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
+                  role="switch"
+                  aria-checked={notifications}
+                  aria-labelledby="settings-notifications-toggle-label"
+                  aria-describedby="settings-notifications-toggle-desc"
                   checked={notifications}
                   onChange={(e) => setNotifications(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-muted peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" />
+                <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
               </label>
             </div>
 
@@ -690,8 +709,8 @@ export default function SettingsPage() {
                 Toutes tes collections de bilans quotidiens, hebdomadaires, plans, et photos de progrès stockés seront supprimés de manière permanente.
               </p>
               <div className="space-y-2">
-                <label className="text-[9px] uppercase font-semibold text-muted-foreground block">Saisis "SUPPRIMER" pour confirmer :</label>
-                <input
+                <label htmlFor="settings-saisis-supprimer-pour-confirmer" className="text-[9px] uppercase font-semibold text-muted-foreground block">Saisis "SUPPRIMER" pour confirmer :</label>
+                <input id="settings-saisis-supprimer-pour-confirmer"
                   type="text"
                   value={deleteInput}
                   onChange={(e) => setDeleteInput(e.target.value)}

@@ -22,65 +22,72 @@ export default function TopBar() {
     router.push("/login");
   };
 
+  const iconBtn = "flex items-center justify-center h-11 w-11 rounded-full border border-border bg-card hover:bg-muted transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-      <div className="flex h-14 items-center justify-between px-4 sm:px-6">
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         {/* Brand Title */}
-        <div className="flex items-center gap-2">
-          <span 
-            onClick={() => router.push("/dashboard")}
-            className="text-xl font-extrabold tracking-tight font-serif text-primary cursor-pointer select-none"
-          >
-            NoDream
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard")}
+          aria-label="Aller au tableau de bord NoDream"
+          className="text-xl font-extrabold tracking-tight font-serif text-primary select-none rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          NoDream
+        </button>
 
         {/* User Actions */}
         {user && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
+              type="button"
               onClick={() => router.push("/blog")}
-              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
-              title="Journal"
+              aria-label="Ouvrir le journal"
+              className={`${iconBtn} text-foreground`}
             >
-              <BookOpen className="h-4 w-4" />
+              <BookOpen className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
+              type="button"
               onClick={() => router.push("/community")}
-              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
-              title="Communauté"
+              aria-label="Ouvrir la communauté"
+              className={`${iconBtn} text-foreground`}
             >
-              <Users className="h-4 w-4" />
+              <Users className="h-4 w-4" aria-hidden="true" />
             </button>
             {isVoiceEnabled && (
               <button
+                type="button"
                 onClick={() => setIsVoiceModalOpen(true)}
-                className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-primary hover:bg-muted transition-all"
-                title="Dictée Vocale"
+                aria-label="Démarrer la dictée vocale"
+                className={`${iconBtn} text-primary`}
               >
-                <Mic className="h-4 w-4" />
+                <Mic className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
             <button
+              type="button"
               onClick={() => router.push("/settings")}
-              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
-              title="Profil & Paramètres"
+              aria-label="Ouvrir les réglages du profil"
+              className={`${iconBtn} text-foreground`}
             >
-              <User className="h-4 w-4" />
+              <User className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
+              type="button"
               onClick={handleLogout}
-              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-muted-foreground hover:text-red-500 hover:bg-muted transition-all"
-              title="Déconnexion"
+              aria-label="Se déconnecter"
+              className={`${iconBtn} text-muted-foreground hover:text-red-500`}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         )}
       </div>
-      <VoiceRecordModal 
-        isOpen={isVoiceModalOpen} 
-        onClose={() => setIsVoiceModalOpen(false)} 
+      <VoiceRecordModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
       />
     </header>
   );

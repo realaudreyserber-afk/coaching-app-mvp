@@ -58,6 +58,7 @@
   --color-secondary: var(--secondary);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-ring: var(--ring);
 }
 
 :root {
@@ -70,6 +71,7 @@
   --secondary: #4a5d5d;
   --muted: #1a1a1a;
   --muted-foreground: #8a8a8a;
+  --ring: #f5c640;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,6 +85,7 @@
     --secondary: #4a5d5d;
     --muted: #1a1a1a;
     --muted-foreground: #8a8a8a;
+    --ring: #f5c640;
   }
 }
 

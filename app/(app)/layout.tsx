@@ -58,8 +58,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-zinc-950 focus:font-semibold focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+      >
+        Aller au contenu principal
+      </a>
       {!isOnboarding && <TopBar />}
-      <main className={`flex-1 flex flex-col ${!isOnboarding ? "pb-20" : ""}`}>{children}</main>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={`flex-1 flex flex-col ${!isOnboarding ? "pb-20" : ""}`}
+      >
+        {children}
+      </main>
       {!isOnboarding && <BottomNav />}
     </div>
   );

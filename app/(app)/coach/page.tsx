@@ -308,20 +308,31 @@ export default function CoachPage() {
 
       {/* Header */}
       <div className="flex items-center space-x-3 p-4 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-md sticky top-0 z-30">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="h-10 w-10 text-zinc-100 hover:bg-zinc-800">
-          <ArrowLeft className="h-5 w-5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push('/dashboard')}
+          aria-label="Retour au tableau de bord"
+          className="h-11 w-11 text-zinc-100 hover:bg-zinc-800"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <div className="flex-1">
           <h1 className="text-lg font-serif font-bold text-zinc-50">Coach NoDream</h1>
           <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
-            En ligne
+            <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" aria-hidden="true" />
+            <span><span className="sr-only">Statut : </span>En ligne</span>
           </p>
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
+      <div
+        className="flex-1 overflow-y-auto p-4 space-y-4 pb-24"
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation avec le coach"
+      >
         {messages.map((m, idx) => {
           const isUser = m.role === 'user';
           return (
@@ -391,14 +402,20 @@ export default function CoachPage() {
         })}
 
         {sending && (
-          <div className="flex items-center space-x-2 text-zinc-400 mr-auto bg-zinc-800 border border-zinc-700 p-3 rounded-2xl rounded-tl-none max-w-[85%]">
-            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+          <div
+            className="flex items-center space-x-2 text-zinc-400 mr-auto bg-zinc-800 border border-zinc-700 p-3 rounded-2xl rounded-tl-none max-w-[85%]"
+            role="status"
+          >
+            <Loader2 className="h-4 w-4 animate-spin text-amber-400" aria-hidden="true" />
             <span className="text-xs font-serif italic">NoDream réfléchit...</span>
           </div>
         )}
 
         {error && (
-          <div className="text-xs text-red-300 bg-red-950/40 border border-red-900 p-3 rounded-xl text-center max-w-[85%] mx-auto">
+          <div
+            className="text-xs text-red-300 bg-red-950/40 border border-red-900 p-3 rounded-xl text-center max-w-[85%] mx-auto"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -409,22 +426,28 @@ export default function CoachPage() {
       <form
         onSubmit={handleSendMessage}
         className="absolute bottom-0 left-0 right-0 p-4 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 flex items-center space-x-2 z-30"
+        aria-label="Envoyer un message au coach"
       >
+        <label htmlFor="coach-message-input" className="sr-only">
+          Message à envoyer au coach
+        </label>
         <input
+          id="coach-message-input"
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           placeholder="Pose ta question (ex: pates crues vs cuites ?)"
           disabled={sending}
-          className="flex-1 h-11 px-4 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-sm"
+          className="flex-1 h-11 px-4 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
         />
-        <Button 
-          type="submit" 
-          size="icon" 
-          disabled={sending || !inputMessage.trim()} 
+        <Button
+          type="submit"
+          size="icon"
+          disabled={sending || !inputMessage.trim()}
+          aria-label="Envoyer le message"
           className="h-11 w-11 rounded-full flex-shrink-0"
         >
-          <Send className="h-4.5 w-4.5" />
+          <Send className="h-4.5 w-4.5" aria-hidden="true" />
         </Button>
       </form>
     </div>
