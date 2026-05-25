@@ -54,6 +54,9 @@ export function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icons|images|manifest.json|sw.js|firebase-messaging-sw.js).*)',
+    // Skip Next.js internals, well-known paths AND any file with a common
+    // static-asset extension at any depth (so /garthe-rate.jpeg at the
+    // root of /public is served, not redirected to /login).
+    '/((?!_next/static|_next/image|favicon.ico|icons|images|manifest.json|sw.js|firebase-messaging-sw.js|.*\\.(?:jpg|jpeg|png|gif|webp|avif|svg|ico|woff|woff2|ttf)$).*)',
   ],
 };
