@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
     }
 
     const isMockEnabled =
-      process.env.ENABLE_MOCK_AUTH === '1' &&
-      (process.env.NODE_ENV as string) !== 'production';
+      (process.env.ENABLE_MOCK_AUTH === '1' ||
+        process.env.NODE_ENV !== 'production');
 
     if (
       isMockEnabled &&

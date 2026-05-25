@@ -4,6 +4,7 @@
  * + EN PubMed E-utilities fallback. Vertex AI Search if datastore configured.
  */
 import { searchFrCorpus } from './fr-sources';
+import { searchInternalCorpus } from './internal-corpus';
 
 export interface SearchResult {
   title: string;
@@ -33,7 +34,8 @@ export async function searchScientificCorpus(queryStr: string): Promise<SearchRe
     }
   }
 
-  const [frResults, pubmedResults] = await Promise.all([
+  const [internalResults, frResults, pubmedResults] = await Promise.all([
+    searchInternalCorpus(queryStr, 2).catch(() => [] as SearchResult[]),
     searchFrCorpus(queryStr, 2).catch(() => []),
     searchPubMed(queryStr).catch(() => []),
   ]);
@@ -49,7 +51,10 @@ export async function searchScientificCorpus(queryStr: string): Promise<SearchRe
   }));
 
   const enNormalized: SearchResult[] = pubmedResults.map(r => ({ ...r, language: 'en' as const }));
-  return [...frNormalized, ...enNormalized].slice(0, 4);
+
+  // Internal curated corpus first (highest signal/noise), then FR authorities,
+  // then PubMed fallback. Cap at 4 total for the prompt.
+  return [...internalResults, ...frNormalized, ...enNormalized].slice(0, 4);
 }
 
 /**
