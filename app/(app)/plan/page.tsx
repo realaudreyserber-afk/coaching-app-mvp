@@ -74,16 +74,16 @@ export default function PlanPage() {
   }
 
   return (
-    <div className="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
+    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       <div>
-        <h2 className="text-3xl font-bold font-serif text-foreground">Ton plan de transformation</h2>
+        <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">Ton plan de transformation</h2>
         <p className="text-sm text-muted-foreground">
           Calibré par l'IA le {plan.date_start ? new Date(plan.date_start).toLocaleDateString("fr-FR") : "récemment"}.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg border border-border">
+      <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg border border-border max-w-md">
         <button
           onClick={() => setActiveTab("nutrition")}
           className={`py-2 px-3 rounded-md text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
@@ -108,46 +108,48 @@ export default function PlanPage() {
 
       {/* NUTRITION TAB */}
       {activeTab === "nutrition" && (
-        <div className="space-y-6">
-          {/* Calorie & Macro Target Card */}
-          <Card className="border border-border bg-card shadow-xs">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                <Flame className="h-4 w-4 text-primary" /> Objectif Énergétique
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4">
-              <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 text-center">
-                <span className="text-[10px] uppercase text-primary block tracking-wider font-semibold">Cible Journalière</span>
-                <span className="text-2xl font-bold text-primary font-serif">{plan.kcal} kcal</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs font-medium">
-                <div className="bg-muted p-2 rounded-md">
-                  <span className="text-[9px] uppercase text-muted-foreground block">Protéines</span>
-                  <span className="text-sm font-bold text-foreground">{plan.macros.p} g</span>
+        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+          {/* LEFT: cible + calculateur (sticky on desktop) */}
+          <div className="space-y-6 lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
+            <Card className="border border-border bg-card shadow-xs">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
+                  <Flame className="h-4 w-4 text-primary" /> Objectif Énergétique
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0 space-y-4">
+                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 text-center">
+                  <span className="text-[10px] uppercase text-primary block tracking-wider font-semibold">Cible Journalière</span>
+                  <span className="text-2xl font-bold text-primary font-serif">{plan.kcal} kcal</span>
                 </div>
-                <div className="bg-muted p-2 rounded-md">
-                  <span className="text-[9px] uppercase text-muted-foreground block">Glucides</span>
-                  <span className="text-sm font-bold text-foreground">{plan.macros.c} g</span>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs font-medium">
+                  <div className="bg-muted p-2 rounded-md">
+                    <span className="text-[9px] uppercase text-muted-foreground block">Protéines</span>
+                    <span className="text-sm font-bold text-foreground">{plan.macros.p} g</span>
+                  </div>
+                  <div className="bg-muted p-2 rounded-md">
+                    <span className="text-[9px] uppercase text-muted-foreground block">Glucides</span>
+                    <span className="text-sm font-bold text-foreground">{plan.macros.c} g</span>
+                  </div>
+                  <div className="bg-muted p-2 rounded-md">
+                    <span className="text-[9px] uppercase text-muted-foreground block">Lipides</span>
+                    <span className="text-sm font-bold text-foreground">{plan.macros.f} g</span>
+                  </div>
                 </div>
-                <div className="bg-muted p-2 rounded-md">
-                  <span className="text-[9px] uppercase text-muted-foreground block">Lipides</span>
-                  <span className="text-sm font-bold text-foreground">{plan.macros.f} g</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <MealCalculator planKcal={plan.kcal} planMacros={plan.macros} />
+            <MealCalculator planKcal={plan.kcal} planMacros={plan.macros} />
+          </div>
 
-          {/* Meals Template */}
-          <div className="space-y-3">
-            <h3 className="text-lg font-serif font-semibold text-foreground px-1">Exemple de journée type</h3>
-            <div className="space-y-3">
-              {(() => {
-                const grouped = groupSupplementsByMeal(plan.meals_template, plan.supplements);
-                return (
-                  <>
+          {/* RIGHT: repas (grille de cartes sur desktop) */}
+          <div className="space-y-3 lg:col-span-2">
+            <h3 className="text-lg lg:text-xl font-serif font-semibold text-foreground px-1">Exemple de journée type</h3>
+            {(() => {
+              const grouped = groupSupplementsByMeal(plan.meals_template, plan.supplements);
+              return (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {grouped.meals.map((meal, idx) => (
                       <Card key={idx} className="border border-border/80 bg-card/65">
                         <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
@@ -180,48 +182,48 @@ export default function PlanPage() {
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
 
-                    {grouped.orphans.length > 0 && (
-                      <Card className="border border-border/60 bg-muted/30">
-                        <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-                          <CardTitle className="text-sm font-serif font-bold text-secondary flex items-center gap-1.5">
-                            <Pill className="h-4 w-4" />
-                            Hors repas
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-3 pt-0">
-                          <ul className="space-y-1.5 text-xs">
-                            {grouped.orphans.map((sup, idx) => (
-                              <li
-                                key={idx}
-                                className="flex justify-between items-start py-1 border-b border-border/40 last:border-0"
-                              >
-                                <div>
-                                  <strong className="text-foreground">{sup.name}</strong>
-                                  <span className="text-muted-foreground block text-[10px]">{sup.timing}</span>
-                                </div>
-                                <span className="font-semibold text-primary">{sup.dosage}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+                  {grouped.orphans.length > 0 && (
+                    <Card className="border border-border/60 bg-muted/30">
+                      <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-sm font-serif font-bold text-secondary flex items-center gap-1.5">
+                          <Pill className="h-4 w-4" />
+                          Hors repas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <ul className="space-y-1.5 text-xs">
+                          {grouped.orphans.map((sup, idx) => (
+                            <li
+                              key={idx}
+                              className="flex justify-between items-start py-1 border-b border-border/40 last:border-0"
+                            >
+                              <div>
+                                <strong className="text-foreground">{sup.name}</strong>
+                                <span className="text-muted-foreground block text-[10px]">{sup.timing}</span>
+                              </div>
+                              <span className="font-semibold text-primary">{sup.dosage}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
 
       {/* TRAINING TAB */}
       {activeTab === "training" && (
-        <div className="space-y-6">
-          {/* Workouts Splits */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-serif font-semibold text-foreground px-1">Programme sportif</h3>
-            <div className="space-y-4">
+        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+          {/* LEFT: programme (col-span-2) */}
+          <div className="space-y-4 lg:col-span-2">
+            <h3 className="text-lg lg:text-xl font-serif font-semibold text-foreground px-1">Programme sportif</h3>
+            <div className="grid gap-4 md:grid-cols-2">
               {plan.training.sessions.map((session, sIdx) => (
                 <Card key={sIdx} className="border border-border bg-card">
                   <CardHeader className="p-4 pb-2 bg-muted/40 border-b border-border/40">
@@ -250,30 +252,32 @@ export default function PlanPage() {
             </div>
           </div>
 
-          {/* Cardio Split */}
+          {/* RIGHT: cardio (col-span-1, sticky) */}
           {plan.cardio && (
-            <Card className="border border-border bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" /> Travail Cardiovasculaire
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 text-xs space-y-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted p-2 rounded-md text-center">
-                    <span className="text-[10px] text-muted-foreground block">Type</span>
-                    <strong className="text-foreground">{plan.cardio.type}</strong>
+            <div className="lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
+              <Card className="border border-border bg-card">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" /> Travail Cardiovasculaire
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 text-xs space-y-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-muted p-2 rounded-md text-center">
+                      <span className="text-[10px] text-muted-foreground block">Type</span>
+                      <strong className="text-foreground">{plan.cardio.type}</strong>
+                    </div>
+                    <div className="bg-muted p-2 rounded-md text-center">
+                      <span className="text-[10px] text-muted-foreground block">Intensité</span>
+                      <strong className="text-primary capitalize">{plan.cardio.intensity}</strong>
+                    </div>
                   </div>
-                  <div className="bg-muted p-2 rounded-md text-center">
-                    <span className="text-[10px] text-muted-foreground block">Intensité</span>
-                    <strong className="text-primary capitalize">{plan.cardio.intensity}</strong>
-                  </div>
-                </div>
-                <p className="text-center text-muted-foreground mt-2">
-                  Fais {plan.cardio.frequency_weekly} session(s) de {plan.cardio.duration_minutes} minutes par semaine.
-                </p>
-              </CardContent>
-            </Card>
+                  <p className="text-center text-muted-foreground mt-2">
+                    Fais {plan.cardio.frequency_weekly} session(s) de {plan.cardio.duration_minutes} minutes par semaine.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       )}

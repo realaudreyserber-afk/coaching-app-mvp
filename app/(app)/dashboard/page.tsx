@@ -246,11 +246,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
+    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       {/* Greetings Header */}
       <div>
         <div className="flex justify-between items-baseline">
-          <h2 className="text-3xl font-bold font-serif text-foreground">
+          <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">
             Salut {profile?.name || "athlète"} !
           </h2>
           {featureStreakActive && streak && streak.current > 0 && (
@@ -264,6 +264,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* Top status row : checkin / fasting / micro-task — grid up to 3 cols on lg */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {/* Daily Checkin Status Card */}
       {!todayCheckin ? (
         <Card className="border border-orange-burnt/30 bg-orange-light/30 dark:bg-primary/5 shadow-sm">
@@ -359,55 +361,61 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {/* Weight Chart Card */}
-      <div className="space-y-2">
-        <h3 className="text-lg font-serif font-semibold text-foreground px-1">Suivi du Poids Moyen Glissant</h3>
-        <WeightChart data={chartData} />
-        <p className="text-[10px] text-muted-foreground px-1 text-center">
-          La courbe sombre représente la moyenne glissante (7j) pour lisser les fluctuations d'eau.
-        </p>
+      </div>
+      {/* /Top status row */}
+
+      {/* Main row : chart 2/3 + progress 1/3 on lg */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Weight Chart Card */}
+        <div className="space-y-2 lg:col-span-2">
+          <h3 className="text-lg font-serif font-semibold text-foreground px-1">Suivi du Poids Moyen Glissant</h3>
+          <WeightChart data={chartData} />
+          <p className="text-[10px] text-muted-foreground px-1 text-center">
+            La courbe sombre représente la moyenne glissante (7j) pour lisser les fluctuations d'eau.
+          </p>
+        </div>
+
+        {/* Progress metrics */}
+        <Card className="border border-border bg-card shadow-xs lg:col-span-1">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" /> Objectif de Transformation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-muted p-2 rounded-md">
+                <span className="text-[10px] uppercase text-muted-foreground block">Départ</span>
+                <span className="text-sm font-semibold">{startWeight} kg</span>
+              </div>
+              <div className="bg-primary/10 p-2 rounded-md">
+                <span className="text-[10px] uppercase text-primary block">Actuel</span>
+                <span className="text-sm font-semibold text-primary">{currentWeight} kg</span>
+              </div>
+              <div className="bg-muted p-2 rounded-md">
+                <span className="text-[10px] uppercase text-muted-foreground block">Objectif</span>
+                <span className="text-sm font-semibold">{targetWeight} kg</span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs font-medium">
+                <span>Progression globale</span>
+                <span>{progressPercentage}%</span>
+              </div>
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Progress metrics */}
-      <Card className="border border-border bg-card shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" /> Objectif de Transformation
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 space-y-4">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-muted p-2 rounded-md">
-              <span className="text-[10px] uppercase text-muted-foreground block">Départ</span>
-              <span className="text-sm font-semibold">{startWeight} kg</span>
-            </div>
-            <div className="bg-primary/10 p-2 rounded-md">
-              <span className="text-[10px] uppercase text-primary block">Actuel</span>
-              <span className="text-sm font-semibold text-primary">{currentWeight} kg</span>
-            </div>
-            <div className="bg-muted p-2 rounded-md">
-              <span className="text-[10px] uppercase text-muted-foreground block">Objectif</span>
-              <span className="text-sm font-semibold">{targetWeight} kg</span>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs font-medium">
-              <span>Progression globale</span>
-              <span>{progressPercentage}%</span>
-            </div>
-            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary rounded-full transition-all duration-500" 
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions Grid */}
-      <div className="grid grid-cols-2 gap-4 pb-4">
+      {/* Quick Actions — wider grid on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-4">
         <Button
           variant="outline"
           onClick={() => router.push("/coach")}
@@ -421,6 +429,20 @@ export default function DashboardPage() {
           className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
         >
           <Calendar className="h-4 w-4 text-primary" /> Bilan Hebdomadaire
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => router.push("/progress")}
+          className="hidden lg:flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
+        >
+          <TrendingUp className="h-4 w-4 text-primary" /> Suivi détaillé
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => router.push("/plan")}
+          className="hidden lg:flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
+        >
+          <Trophy className="h-4 w-4 text-primary" /> Plan complet
         </Button>
       </div>
     </div>

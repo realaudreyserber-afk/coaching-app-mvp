@@ -261,10 +261,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
+    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       {/* Title */}
       <div>
-        <h2 className="text-3xl font-bold font-serif text-foreground">Réglages</h2>
+        <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">Réglages</h2>
         <p className="text-sm text-muted-foreground">
           Gère ton profil, tes préférences et la confidentialité de tes données.
         </p>
@@ -283,7 +283,7 @@ export default function SettingsPage() {
       )}
 
       {/* Main Settings Form */}
-      <form onSubmit={handleSaveSettings} className="space-y-6">
+      <form onSubmit={handleSaveSettings} className="grid gap-4 lg:grid-cols-2 lg:gap-6">
         {/* Profile Card */}
         <Card className="border border-border bg-card shadow-xs">
           <CardHeader className="p-4 pb-2">
@@ -636,7 +636,7 @@ export default function SettingsPage() {
         {/* Save button */}
         <Button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 h-11"
+          className="w-full flex items-center justify-center gap-2 h-11 lg:col-span-2"
           disabled={saving}
         >
           <Save className="h-4 w-4" />

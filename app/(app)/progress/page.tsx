@@ -203,17 +203,17 @@ export default function ProgressPage() {
   };
 
   return (
-    <div className="flex-1 max-w-md w-full mx-auto px-4 py-6 space-y-6">
+    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       {/* Title */}
       <div>
-        <h2 className="text-3xl font-bold font-serif text-foreground">Suivi des progrès</h2>
+        <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">Suivi des progrès</h2>
         <p className="text-sm text-muted-foreground">
           Visualise l'évolution de ton corps de manière objective.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg border border-border">
+      <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg border border-border max-w-md">
         <button
           onClick={() => setActiveTab("weight")}
           className={`py-2 px-1 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
@@ -248,13 +248,13 @@ export default function ProgressPage() {
 
       {/* WEIGHT TAB */}
       {activeTab === "weight" && (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-lg font-serif font-semibold text-foreground px-1">Graphique de poids</h3>
+        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+          <div className="space-y-2 lg:col-span-2">
+            <h3 className="text-lg lg:text-xl font-serif font-semibold text-foreground px-1">Graphique de poids</h3>
             <WeightChart data={chartData} />
           </div>
 
-          <Card className="border border-border bg-card">
+          <Card className="border border-border bg-card lg:col-span-1">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-base font-serif font-semibold">Historique quotidien</CardTitle>
               <CardDescription>Tes dernières pesées enregistrées</CardDescription>
@@ -305,15 +305,15 @@ export default function ProgressPage() {
 
       {/* MEASUREMENTS TAB */}
       {activeTab === "measurements" && (
-        <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           {/* Comparison tool */}
           {weeklyRecords.length < 1 ? (
-            <Card className="border border-border bg-card p-6 text-center text-xs text-muted-foreground font-serif">
+            <Card className="border border-border bg-card p-6 text-center text-xs text-muted-foreground font-serif lg:col-span-3">
               Tu dois compléter au moins ton onboarding pour voir tes mensurations initiales.
             </Card>
           ) : (
             <>
-              <Card className="border border-border bg-card shadow-xs">
+              <Card className="border border-border bg-card shadow-xs lg:col-span-2 lg:sticky lg:top-6 lg:self-start">
                 <CardHeader className="p-4 pb-2">
                   <CardTitle className="text-base font-serif font-semibold">Comparateur de mensurations</CardTitle>
                   <CardDescription>Compare deux bilans pour analyser ton évolution centimètre par centimètre.</CardDescription>
@@ -413,9 +413,9 @@ export default function ProgressPage() {
               </Card>
 
               {/* Complete measurement log */}
-              <div className="space-y-3">
+              <div className="space-y-3 lg:col-span-1">
                 <h3 className="text-sm font-serif font-bold text-foreground px-1 uppercase tracking-wider">Historique complet</h3>
-                <div className="space-y-3">
+                <div className="space-y-3 lg:max-h-[600px] lg:overflow-y-auto lg:pr-2">
                   {[...weeklyRecords].reverse().map((rec) => (
                     <Card key={rec.id} className="border border-border/80 bg-card/65 p-3 text-xs">
                       <div className="flex justify-between items-center border-b border-border/50 pb-2 mb-2">
