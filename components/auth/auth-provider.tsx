@@ -6,6 +6,9 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -18,6 +21,9 @@ interface AuthContextType {
   loading: boolean;
   hasProfile: boolean;
   loginWithGoogle: () => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  registerWithEmail: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   getFreshToken: () => Promise<string | null>;
   refreshProfileStatus: () => Promise<boolean>;
@@ -152,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    
+
     try {
       if (isNativePlatform()) {
         // Fallback for native wrapper or embedded webviews where popups are blocked
@@ -165,6 +171,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       throw error;
     }
+  };
+
+  const loginWithEmail = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged handles the rest (cookie, profile check, status).
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const registerWithEmail = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged handles the rest.
+    } catch (error) {
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
   };
 
   const logout = async () => {
@@ -197,6 +229,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         hasProfile,
         loginWithGoogle,
+        loginWithEmail,
+        registerWithEmail,
+        resetPassword,
         logout,
         getFreshToken,
         refreshProfileStatus,
