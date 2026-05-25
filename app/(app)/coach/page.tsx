@@ -304,17 +304,17 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
-      
+    <div className="flex-1 flex flex-col bg-zinc-950 max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
+
       {/* Header */}
-      <div className="flex items-center space-x-3 p-4 border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-30">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="h-10 w-10">
+      <div className="flex items-center space-x-3 p-4 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-md sticky top-0 z-30">
+        <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="h-10 w-10 text-zinc-100 hover:bg-zinc-800">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-serif font-bold text-foreground">Coach NoDream</h1>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold flex items-center">
-            <span className="h-2 w-2 rounded-full bg-green-500 mr-1.5 animate-pulse" />
+          <h1 className="text-lg font-serif font-bold text-zinc-50">Coach NoDream</h1>
+          <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" />
             En ligne
           </p>
         </div>
@@ -325,15 +325,15 @@ export default function CoachPage() {
         {messages.map((m, idx) => {
           const isUser = m.role === 'user';
           return (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1 max-w-[85%] ${isUser ? 'ml-auto' : 'mr-auto'}`}
             >
               <div
-                className={`p-3 rounded-2xl text-sm leading-relaxed ${
+                className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                   isUser
-                    ? 'bg-primary text-[#0a0a0a] font-semibold rounded-tr-none'
-                    : 'bg-card text-foreground border border-border rounded-tl-none font-serif'
+                    ? 'bg-amber-500 text-zinc-950 font-semibold rounded-tr-none'
+                    : 'bg-zinc-800 text-zinc-100 border border-zinc-700 rounded-tl-none font-serif'
                 }`}
               >
                 {/* Markdown-light renderer: **bold**, *italic*, `code`, paragraphs, lists */}
@@ -349,8 +349,8 @@ export default function CoachPage() {
 
                 {/* Render Scientific Sources/Citations inside message card if present */}
                 {!isUser && m.sources && m.sources.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-border/50 space-y-2">
-                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-primary uppercase tracking-wider">
+                  <div className="mt-4 pt-3 border-t border-zinc-700 space-y-2">
+                    <div className="flex items-center space-x-1.5 text-[10px] font-bold text-amber-400 uppercase tracking-wider">
                       <BookOpen className="h-3.5 w-3.5" />
                       <span>Sources scientifiques ({m.sources.length})</span>
                     </div>
@@ -361,25 +361,25 @@ export default function CoachPage() {
                           href={src.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2 rounded bg-muted border border-border hover:border-primary/40 transition-all text-xs text-foreground/95"
+                          className="flex items-center justify-between p-2 rounded bg-zinc-900 border border-zinc-700 hover:border-amber-500/60 hover:bg-zinc-900/80 transition-all text-xs text-zinc-200"
                         >
                           <div className="truncate pr-2 flex items-center gap-1.5">
                             {src.language && (
                               <span
                                 className={`text-[9px] font-bold uppercase tracking-wider px-1 rounded ${
                                   src.language === 'fr'
-                                    ? 'bg-primary/15 text-primary'
-                                    : 'bg-muted text-muted-foreground'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'bg-zinc-800 text-zinc-400'
                                 }`}
                               >
                                 {src.language === 'fr' ? 'FR' : 'EN'}
                               </span>
                             )}
-                            <span className="font-semibold text-primary">{src.authors} ({src.year})</span>
-                            <span className="text-muted-foreground">•</span>
-                            <span className="italic truncate">{src.title}</span>
+                            <span className="font-semibold text-amber-400">{src.authors} ({src.year})</span>
+                            <span className="text-zinc-500">•</span>
+                            <span className="italic truncate text-zinc-300">{src.title}</span>
                           </div>
-                          <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <ExternalLink className="h-3 w-3 text-zinc-500 flex-shrink-0" />
                         </a>
                       ))}
                     </div>
@@ -391,14 +391,14 @@ export default function CoachPage() {
         })}
 
         {sending && (
-          <div className="flex items-center space-x-2 text-muted-foreground mr-auto bg-card border border-border p-3 rounded-2xl rounded-tl-none max-w-[85%]">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <div className="flex items-center space-x-2 text-zinc-400 mr-auto bg-zinc-800 border border-zinc-700 p-3 rounded-2xl rounded-tl-none max-w-[85%]">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
             <span className="text-xs font-serif italic">NoDream réfléchit...</span>
           </div>
         )}
 
         {error && (
-          <div className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 p-3 rounded-xl text-center max-w-[85%] mx-auto">
+          <div className="text-xs text-red-300 bg-red-950/40 border border-red-900 p-3 rounded-xl text-center max-w-[85%] mx-auto">
             {error}
           </div>
         )}
@@ -408,7 +408,7 @@ export default function CoachPage() {
       {/* Input box */}
       <form
         onSubmit={handleSendMessage}
-        className="absolute bottom-0 left-0 right-0 p-4 bg-card/90 backdrop-blur-md border-t border-border flex items-center space-x-2 z-30"
+        className="absolute bottom-0 left-0 right-0 p-4 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 flex items-center space-x-2 z-30"
       >
         <input
           type="text"
@@ -416,7 +416,7 @@ export default function CoachPage() {
           onChange={(e) => setInputMessage(e.target.value)}
           placeholder="Pose ta question (ex: pates crues vs cuites ?)"
           disabled={sending}
-          className="flex-1 h-11 px-4 rounded-full border border-border bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+          className="flex-1 h-11 px-4 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 text-sm"
         />
         <Button 
           type="submit" 
