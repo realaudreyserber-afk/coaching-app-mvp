@@ -302,7 +302,7 @@ export default function SettingsPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                 required
               />
             </div>
@@ -314,7 +314,7 @@ export default function SettingsPage() {
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
-                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                   required
                 />
               </div>
@@ -323,7 +323,7 @@ export default function SettingsPage() {
                 <select id="settings-activite"
                   value={activityLevel}
                   onChange={(e: any) => setActivityLevel(e.target.value)}
-                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
                 >
                   <option value="sedentary">Sédentaire</option>
                   <option value="lightly_active">Légèrement actif</option>
@@ -375,7 +375,7 @@ export default function SettingsPage() {
                       <select id="settings-molecule"
                         value={glp1Molecule}
                         onChange={(e: any) => setGlp1Molecule(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
                       >
                         <option value="semaglutide">Sémaglutide (Ozempic/Wegovy)</option>
                         <option value="tirzepatide">Tirzépatide (Mounjaro/Zepbound)</option>
@@ -388,7 +388,7 @@ export default function SettingsPage() {
                       <select id="settings-frequence"
                         value={glp1Frequency}
                         onChange={(e: any) => setGlp1Frequency(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
                       >
                         <option value="weekly">Hebdomadaire</option>
                         <option value="daily">Quotidien</option>
@@ -405,7 +405,7 @@ export default function SettingsPage() {
                         placeholder="ex: 0.5mg"
                         value={glp1Dose}
                         onChange={(e) => setGlp1Dose(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div className="space-y-1">
@@ -414,7 +414,7 @@ export default function SettingsPage() {
                         type="date"
                         value={glp1StartDate}
                         onChange={(e) => setGlp1StartDate(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                   </div>
@@ -510,7 +510,7 @@ export default function SettingsPage() {
                           setFastingEnd("18:00");
                         }
                       }}
-                      className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden font-serif"
+                      className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
                     >
                       <option value="16:8">16:8 (16h Jeûne / 8h Repas)</option>
                       <option value="18:6">18:6 (18h Jeûne / 6h Repas)</option>
@@ -527,7 +527,7 @@ export default function SettingsPage() {
                         type="time"
                         value={fastingStart}
                         onChange={(e) => setFastingStart(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                     <div className="space-y-1">
@@ -536,7 +536,7 @@ export default function SettingsPage() {
                         type="time"
                         value={fastingEnd}
                         onChange={(e) => setFastingEnd(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-hidden"
+                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       />
                     </div>
                   </div>
@@ -639,7 +639,7 @@ export default function SettingsPage() {
               <select
                 value={language}
                 onChange={(e: any) => setLanguage(e.target.value)}
-                className="bg-muted border border-border text-foreground py-1 px-2 rounded-md focus:outline-hidden font-serif"
+                className="bg-muted border border-border text-foreground py-1 px-2 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
               >
                 <option value="fr">Français (tu)</option>
                 <option value="en">English</option>
@@ -711,7 +711,7 @@ export default function SettingsPage() {
                   value={deleteInput}
                   onChange={(e) => setDeleteInput(e.target.value)}
                   placeholder="SUPPRIMER"
-                  className="w-full bg-card border border-red-300 dark:border-red-900 text-foreground py-1.5 px-2 rounded-md focus:outline-hidden font-mono uppercase"
+                  className="w-full bg-card border border-red-300 dark:border-red-900 text-foreground py-1.5 px-2 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono uppercase"
                 />
                 <Button
                   type="button"
