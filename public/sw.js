@@ -1,4 +1,7 @@
-const CACHE_VERSION = 'linsociable-v2';
+// Bump version on each design system migration to invalidate stale caches.
+// Suffix incrémenté à chaque release majeure pour forcer le SW à effacer les
+// anciens chunks JS/CSS (sinon les users gardent l'ancien rendu post-deploy).
+const CACHE_VERSION = 'nodream-v3-stitch-migration';
 const PRECACHE_URLS = ['/', '/login', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
