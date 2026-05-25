@@ -6,7 +6,9 @@ import { useAuth } from '@/lib/firebase/hooks';
 import { useSubscription } from '@/lib/stripe/hooks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Crown, Loader2, ExternalLink, CheckCircle } from 'lucide-react';
+import { TierCard } from '@/components/ui/tier-card';
+import { Loader } from '@/components/ui/loader';
+import { ArrowLeft, Crown, Loader2, ExternalLink } from 'lucide-react';
 
 export default function SubscriptionPage() {
   const router = useRouter();
@@ -53,85 +55,104 @@ export default function SubscriptionPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <Loader size="fullscreen" message="Chargement de ton abonnement..." />;
   }
 
+  const FEATURES = [
+    "Plan IA personnalisé recalibré chaque semaine",
+    "Coach IA conversationnel avec sources scientifiques",
+    "Bilans hebdomadaires + analyse photos de progrès",
+    "Suivi détaillé poids, mensurations, micronutriments",
+  ];
+
   return (
-    <div className="flex-1 flex flex-col p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-8">
       <div className="flex items-center space-x-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/settings')} className="h-10 w-10">
-          <ArrowLeft className="h-5 w-5" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push('/settings')}
+          aria-label="Retour aux réglages"
+          className="h-11 w-11"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
-        <h1 className="text-xl font-serif font-bold">Abonnement</h1>
+        <h1 className="text-3xl lg:text-4xl font-bold font-serif text-zinc-50">Abonnement</h1>
       </div>
 
       {premium ? (
-        <Card>
+        <Card className="border border-amber-500/40 bg-zinc-900">
           <CardHeader>
             <div className="flex items-center space-x-2">
-              <Crown className="h-5 w-5 text-primary" />
-              <CardTitle className="text-2xl font-serif">Premium actif</CardTitle>
+              <Crown className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              <CardTitle className="text-2xl font-serif text-zinc-50">Premium actif</CardTitle>
             </div>
-            <CardDescription>
+            <CardDescription className="text-zinc-400">
               {subState?.current_period_end && (
                 <>Renouvellement le {new Date(subState.current_period_end).toLocaleDateString('fr-FR')}.</>
               )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button onClick={openPortal} disabled={action === 'portal'} className="w-full h-11">
-              {action === 'portal' ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+            <Button
+              onClick={openPortal}
+              disabled={action === 'portal'}
+              aria-label="Gérer mon abonnement Premium"
+              className="w-full h-11"
+            >
+              {action === 'portal' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : (
                 <>
-                  <ExternalLink className="h-4 w-4 mr-2" />
+                  <ExternalLink className="h-4 w-4 mr-2" aria-hidden="true" />
                   Gérer mon abonnement (pause, changer, annuler)
                 </>
               )}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Tu peux mettre en pause jusqu'à 3 mois, changer de plan ou annuler. Tes données restent intactes.
+            <p className="text-xs text-zinc-400 text-center">
+              Tu peux mettre en pause jusqu&apos;à 3 mois, changer de plan ou annuler. Tes données restent intactes.
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          <Card className="border-primary/30 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="text-2xl font-serif">Mensuel</CardTitle>
-              <CardDescription>Sans engagement, résiliable à tout moment.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ul className="text-sm space-y-1.5">
-                <li className="flex items-center"><CheckCircle className="h-4 w-4 text-primary mr-2" /> Plan IA personnalisé</li>
-                <li className="flex items-center"><CheckCircle className="h-4 w-4 text-primary mr-2" /> Coach IA conversationnel</li>
-                <li className="flex items-center"><CheckCircle className="h-4 w-4 text-primary mr-2" /> Bilans hebdomadaires</li>
-                <li className="flex items-center"><CheckCircle className="h-4 w-4 text-primary mr-2" /> Photos de progrès analysées</li>
-              </ul>
-              <Button onClick={() => startCheckout('monthly')} disabled={action === 'monthly'} className="w-full h-11">
-                {action === 'monthly' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Choisir mensuel'}
-              </Button>
-            </CardContent>
-          </Card>
+        <>
+          <div>
+            <h2 className="text-2xl lg:text-3xl font-serif font-bold text-zinc-50">
+              Passe au niveau supérieur
+            </h2>
+            <p className="text-sm text-zinc-400 mt-2">
+              Tout NoDream sans limite : IA, coach, analyses, suivi premium.
+            </p>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl font-serif">Annuel <span className="text-xs text-primary uppercase">-30%</span></CardTitle>
-              <CardDescription>Engagement 12 mois, accès complet.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => startCheckout('yearly')} disabled={action === 'yearly'} variant="outline" className="w-full h-11">
-                {action === 'yearly' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Choisir annuel'}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+          <div className="grid gap-6 md:grid-cols-2 max-w-3xl">
+            <TierCard
+              name="Mensuel"
+              price="9,99 €/mois"
+              subtitle="Sans engagement, résiliable à tout moment."
+              features={FEATURES}
+              ctaLabel="Choisir mensuel"
+              onCta={() => startCheckout('monthly')}
+              loading={action === 'monthly'}
+              recommended
+            />
+            <TierCard
+              name="Annuel"
+              price="83,90 €/an"
+              subtitle="Soit 6,99 €/mois. Économie de 30 % vs le mensuel."
+              features={FEATURES}
+              ctaLabel="Choisir annuel"
+              onCta={() => startCheckout('yearly')}
+              loading={action === 'yearly'}
+              ctaVariant="outline"
+            />
+          </div>
+        </>
       )}
 
       {err && (
-        <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 p-3 rounded">
+        <div
+          role="alert"
+          className="text-sm text-red-300 bg-red-950/40 border border-red-900 p-3 rounded"
+        >
           {err}
         </div>
       )}
