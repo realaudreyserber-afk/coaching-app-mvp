@@ -9,6 +9,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  signInAnonymously,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -67,10 +68,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const mockAuthEnabled =
-      process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH === '1' &&
+      typeof window !== 'undefined' &&
+      (process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH === '1' ||
+        window.localStorage.getItem('mock_user') !== null) &&
       process.env.NODE_ENV !== 'production';
 
-    if (typeof window !== 'undefined' && mockAuthEnabled) {
+    console.log("[AuthProvider] mockAuthEnabled:", mockAuthEnabled);
+    console.log("[AuthProvider] window:", typeof window !== 'undefined');
+    console.log("[AuthProvider] localStorage mock_user:", typeof window !== 'undefined' ? window.localStorage.getItem('mock_user') : null);
+    console.log("[AuthProvider] process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH:", process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH);
+    console.log("[AuthProvider] process.env.NODE_ENV:", process.env.NODE_ENV);
+
+    if (mockAuthEnabled) {
       try {
         const mockUserVal = window.localStorage.getItem('mock_user');
         if (mockUserVal === 'true' || mockUserVal === 'non-admin' || mockUserVal === 'no-profile') {
@@ -120,9 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    let anonymousAttempted = false;
+
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
-      setUser(currentUser);
       if (currentUser) {
+        setUser(currentUser);
         if (lastSessionUidRef.current !== currentUser.uid) {
           try {
             const idToken = await currentUser.getIdToken();
@@ -137,17 +148,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
         await checkProfileExistence(currentUser.uid);
-      } else {
-        if (lastSessionUidRef.current !== null) {
-          try {
-            await fetch('/api/auth/session', { method: 'DELETE' });
-          } catch {
-            // best-effort
-          }
-          lastSessionUidRef.current = null;
-        }
-        setHasProfile(false);
+        setLoading(false);
+        return;
       }
+
+      // No user signed in. Try anonymous sign-in once so the app stays
+      // accessible without an explicit login flow. Requires the Anonymous
+      // provider to be enabled in Firebase Console.
+      if (!anonymousAttempted) {
+        anonymousAttempted = true;
+        try {
+          await signInAnonymously(auth);
+          // onAuthStateChanged will fire again with the new anonymous user.
+          return;
+        } catch (err) {
+          console.error('[auth] Anonymous sign-in failed:', err);
+          // fall through to truly-unauthenticated state below
+        }
+      }
+
+      setUser(null);
+      if (lastSessionUidRef.current !== null) {
+        try {
+          await fetch('/api/auth/session', { method: 'DELETE' });
+        } catch {
+          // best-effort
+        }
+        lastSessionUidRef.current = null;
+      }
+      setHasProfile(false);
       setLoading(false);
     });
 
