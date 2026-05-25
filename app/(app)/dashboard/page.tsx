@@ -10,7 +10,10 @@ import { useAuth } from "@/lib/firebase/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
-import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy } from "lucide-react";
+import { Loader } from "@/components/ui/loader";
+import { KPICard } from "@/components/ui/kpi-card";
+import { RadialProgress } from "@/components/ui/radial-progress";
+import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy, Scale, Flame, Award } from "lucide-react";
 import { flags } from "@/lib/features/flags";
 import { getFastingState } from "@/lib/features/fasting/fasting-util";
 import { getDailyTaskForUser } from "@/lib/features/micro-tasks/selector";
@@ -218,14 +221,7 @@ export default function DashboardPage() {
   }, [user, loading]);
 
   if (loading || fetching) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background px-4">
-        <div className="text-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-sm text-muted-foreground font-serif">Ouverture de ton espace...</p>
-        </div>
-      </div>
-    );
+    return <Loader size="fullscreen" message="Ouverture de ton espace..." />;
   }
 
   // Calculate progress stats
@@ -249,19 +245,65 @@ export default function DashboardPage() {
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       {/* Greetings Header */}
       <div>
-        <div className="flex justify-between items-baseline">
+        <div className="flex justify-between items-baseline gap-4">
           <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">
             Salut {profile?.name || "athlète"} !
           </h2>
           {featureStreakActive && streak && streak.current > 0 && (
-            <div className="flex items-center gap-1 text-xs font-semibold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-full" title="Régularité active">
-              <span>🔥 {streak.current} {streak.current === 1 ? 'jour' : 'jours'}</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full" title="Régularité active">
+              <Award className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="tabular-nums">{streak.current}</span>
+              <span>{streak.current === 1 ? 'jour' : 'jours'}</span>
             </div>
           )}
         </div>
         <p className="text-sm text-muted-foreground">
           Voici l'état de ta transformation aujourd'hui.
         </p>
+      </div>
+
+      {/* KPI Row — 3 metrics on desktop, stacked on mobile */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <KPICard
+          label="Poids actuel"
+          value={currentWeight.toFixed(1)}
+          unit="kg"
+          delta={parseFloat(deltaPoids.toFixed(1))}
+          deltaUnit="kg"
+          deltaLabel="depuis le départ"
+          deltaDirection={targetDelta < 0 ? "down-good" : "up-good"}
+          icon={Scale}
+          variant="gold"
+        />
+        <KPICard
+          label="Objectif poids"
+          value={targetWeight || "—"}
+          unit={targetWeight ? "kg" : undefined}
+          delta={parseFloat((targetWeight - currentWeight).toFixed(1))}
+          deltaUnit="kg"
+          deltaLabel="restant"
+          deltaDirection={targetDelta < 0 ? "down-good" : "up-good"}
+          icon={Trophy}
+        />
+        {featureStreakActive && streak ? (
+          <KPICard
+            label="Série"
+            value={streak.current || 0}
+            unit={streak.current === 1 ? "jour" : "jours"}
+            delta={streak.best ? streak.current - streak.best : undefined}
+            deltaLabel={streak.best ? `record : ${streak.best}` : undefined}
+            deltaDirection="up-good"
+            icon={Flame}
+          />
+        ) : (
+          <KPICard
+            label="Progression"
+            value={progressPercentage}
+            unit="%"
+            deltaLabel="vers ton objectif"
+            icon={TrendingUp}
+          />
+        )}
       </div>
 
       {/* Top status row : checkin / fasting / micro-task — grid up to 3 cols on lg */}
@@ -375,7 +417,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Progress metrics */}
+        {/* Progress metrics — radial + steps */}
         <Card className="border border-border bg-card shadow-xs lg:col-span-1">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
@@ -383,31 +425,27 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-4">
+            <div className="flex justify-center">
+              <RadialProgress
+                value={progressPercentage}
+                subLabel={progressPercentage >= 100 ? "atteint" : "complet"}
+                size={140}
+                strokeWidth={10}
+              />
+            </div>
+
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-muted p-2 rounded-md">
                 <span className="text-[10px] uppercase text-muted-foreground block">Départ</span>
-                <span className="text-sm font-semibold">{startWeight} kg</span>
+                <span className="text-sm font-semibold tabular-nums">{startWeight} kg</span>
               </div>
-              <div className="bg-primary/10 p-2 rounded-md">
+              <div className="bg-primary/10 p-2 rounded-md border border-primary/20">
                 <span className="text-[10px] uppercase text-primary block">Actuel</span>
-                <span className="text-sm font-semibold text-primary">{currentWeight} kg</span>
+                <span className="text-sm font-semibold text-primary tabular-nums">{currentWeight} kg</span>
               </div>
               <div className="bg-muted p-2 rounded-md">
                 <span className="text-[10px] uppercase text-muted-foreground block">Objectif</span>
-                <span className="text-sm font-semibold">{targetWeight} kg</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs font-medium">
-                <span>Progression globale</span>
-                <span>{progressPercentage}%</span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${progressPercentage}%` }}
-                />
+                <span className="text-sm font-semibold tabular-nums">{targetWeight || "—"} {targetWeight ? "kg" : ""}</span>
               </div>
             </div>
           </CardContent>

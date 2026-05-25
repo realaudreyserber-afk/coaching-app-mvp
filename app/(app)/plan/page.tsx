@@ -1,6 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
+import { Loader } from "@/components/ui/loader";
 import React, { useEffect, useState } from "react";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -43,12 +44,7 @@ export default function PlanPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background px-4">
-        <div className="text-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-sm text-muted-foreground font-serif">Chargement de ton plan d'action...</p>
-        </div>
-      </div>
+      <Loader size="fullscreen" message="Chargement de ton plan d'action..." />
     );
   }
 

@@ -7,6 +7,7 @@ import { FirebaseError } from "firebase/app";
 import { useAuth } from "@/lib/firebase/hooks";
 import { db } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
+import { Loader } from "@/components/ui/loader";
 
 export default function OnboardingIndexPage() {
   const { user, loading, hasProfile } = useAuth();
@@ -106,13 +107,6 @@ export default function OnboardingIndexPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="text-center space-y-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-        <p className="text-sm text-muted-foreground font-serif">
-          Redirection vers ton parcours...
-        </p>
-      </div>
-    </div>
+    <Loader size="fullscreen" message="Redirection vers ton parcours..." />
   );
 }

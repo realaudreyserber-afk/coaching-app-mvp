@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { Loader } from "@/components/ui/loader";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
@@ -251,12 +252,7 @@ export default function SettingsPage() {
 
   if (loadingProfile) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background px-4">
-        <div className="text-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-sm text-muted-foreground font-serif">Chargement de tes préférences...</p>
-        </div>
-      </div>
+      <Loader size="fullscreen" message="Chargement de tes préférences..." />
     );
   }
 

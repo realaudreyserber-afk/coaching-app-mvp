@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader } from "@/components/ui/loader";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -111,12 +112,7 @@ export default function OnboardingStepPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="text-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-sm text-muted-foreground font-serif">{"Chargement de l'étape..."}</p>
-        </div>
-      </div>
+      <Loader size="fullscreen" message="Chargement de l'étape..." />
     );
   }
 

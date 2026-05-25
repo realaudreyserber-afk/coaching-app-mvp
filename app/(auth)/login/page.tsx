@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Loader } from "@/components/ui/loader";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -104,14 +105,7 @@ export default function LoginPage() {
 
   if (loading || (user && !submitting)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="text-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-          <p className="text-sm text-muted-foreground font-serif">
-            Préparation de ton espace de coaching...
-          </p>
-        </div>
-      </div>
+      <Loader size="fullscreen" message="Préparation de ton espace de coaching..." />
     );
   }
 
