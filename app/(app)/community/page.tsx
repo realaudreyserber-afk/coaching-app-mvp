@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "Rejoins la communauté NoDream sur Discord. Échange avec d'autres abonnés, partage tes progrès, pose tes questions.",
 };
 
-const DISCORD_INVITE_URL = "https://discord.gg/JdHShHV5";
+const DISCORD_INVITE_URL = "https://discord.gg/aT7vUUvawj";
 
 export default function CommunityPage() {
   return (
