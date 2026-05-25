@@ -12,6 +12,9 @@ import { useRouter } from "next/navigation";
 import { PlanDoc } from "@/types/plan";
 import { Flame, Dumbbell, ShieldCheck, Apple, Calendar, Scale, ChevronDown, ChevronUp, Plus, Trash2, Pill } from "lucide-react";
 import { groupSupplementsByMeal } from "@/lib/features/plans/group-supplements";
+import { MealCard } from "@/components/plan/meal-card";
+import { MacroBar } from "@/components/plan/macro-bar";
+import { ExerciseCard } from "@/components/plan/exercise-card";
 
 export default function PlanPage() {
   const { user, loading } = useAuth();
@@ -107,31 +110,36 @@ export default function PlanPage() {
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           {/* LEFT: cible + calculateur (sticky on desktop) */}
           <div className="space-y-6 lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
-            <Card className="border border-border bg-card shadow-xs">
+            <Card className="border border-zinc-800 bg-zinc-900 shadow-xs">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-primary" /> Objectif Énergétique
+                <CardTitle className="text-base font-serif font-semibold flex items-center gap-2 text-zinc-50">
+                  <Flame className="h-4 w-4 text-amber-500" aria-hidden="true" /> Objectif du jour
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-4">
-                <div className="bg-primary/5 p-3 rounded-lg border border-primary/20 text-center">
-                  <span className="text-[10px] uppercase text-primary block tracking-wider font-semibold">Cible Journalière</span>
-                  <span className="text-2xl font-bold text-primary font-serif">{plan.kcal} kcal</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs font-medium">
-                  <div className="bg-muted p-2 rounded-md">
-                    <span className="text-[9px] uppercase text-muted-foreground block">Protéines</span>
-                    <span className="text-sm font-bold text-foreground">{plan.macros.p} g</span>
-                  </div>
-                  <div className="bg-muted p-2 rounded-md">
-                    <span className="text-[9px] uppercase text-muted-foreground block">Glucides</span>
-                    <span className="text-sm font-bold text-foreground">{plan.macros.c} g</span>
-                  </div>
-                  <div className="bg-muted p-2 rounded-md">
-                    <span className="text-[9px] uppercase text-muted-foreground block">Lipides</span>
-                    <span className="text-sm font-bold text-foreground">{plan.macros.f} g</span>
+              <CardContent className="p-4 pt-0 space-y-5">
+                {/* Kcal cible — gros chiffre centré */}
+                <div className="text-center py-3 px-2 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                  <span className="text-[10px] uppercase text-amber-400 block tracking-widest font-semibold">
+                    Cible quotidienne
+                  </span>
+                  <div className="mt-1 flex items-baseline justify-center gap-1">
+                    <span className="text-3xl font-bold text-amber-400 font-serif tabular-nums">
+                      {plan.kcal}
+                    </span>
+                    <span className="text-sm text-amber-400/80">kcal</span>
                   </div>
                 </div>
+
+                {/* Macros cibles (consommation jour à venir Phase 2) */}
+                <div className="space-y-3">
+                  <MacroBar label="Protéines" value={plan.macros.p} />
+                  <MacroBar label="Glucides" value={plan.macros.c} />
+                  <MacroBar label="Lipides" value={plan.macros.f} />
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  Valeurs cibles du plan. La consommation réelle s&apos;affichera ici
+                  une fois ton bilan du jour validé.
+                </p>
               </CardContent>
             </Card>
 
@@ -139,67 +147,48 @@ export default function PlanPage() {
           </div>
 
           {/* RIGHT: repas (grille de cartes sur desktop) */}
-          <div className="space-y-3 lg:col-span-2">
-            <h3 className="text-lg lg:text-xl font-serif font-semibold text-foreground px-1">Exemple de journée type</h3>
+          <div className="space-y-4 lg:col-span-2">
+            <h3 className="text-lg lg:text-xl font-serif font-semibold text-zinc-50 px-1">
+              Suggestions de repas
+            </h3>
             {(() => {
               const grouped = groupSupplementsByMeal(plan.meals_template, plan.supplements);
               return (
                 <>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     {grouped.meals.map((meal, idx) => (
-                      <Card key={idx} className="border border-border/80 bg-card/65">
-                        <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-                          <CardTitle className="text-sm font-serif font-bold text-secondary">{meal.name}</CardTitle>
-                          <span className="text-xs font-semibold px-2 py-0.5 bg-muted rounded-full text-muted-foreground">
-                            ~{meal.approx_kcal} kcal
-                          </span>
-                        </CardHeader>
-                        <CardContent className="p-3 pt-0 space-y-2">
-                          <p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p>
-
-                          {meal.supplements.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-border/60 space-y-1.5">
-                              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-                                <Pill className="h-3 w-3" />
-                                <span>Complément{meal.supplements.length > 1 ? 's' : ''} avec ce repas</span>
-                              </div>
-                              <ul className="space-y-1 pl-1">
-                                {meal.supplements.map((sup, sIdx) => (
-                                  <li key={sIdx} className="flex justify-between items-center text-xs">
-                                    <span className="text-foreground">
-                                      <strong>{sup.name}</strong>
-                                    </span>
-                                    <span className="font-semibold text-primary">{sup.dosage}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
+                      <MealCard
+                        key={idx}
+                        meal={{
+                          name: meal.name,
+                          description: meal.description,
+                          approxKcal: meal.approx_kcal,
+                          supplements: meal.supplements,
+                        }}
+                      />
                     ))}
                   </div>
 
                   {grouped.orphans.length > 0 && (
-                    <Card className="border border-border/60 bg-muted/30">
-                      <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
-                        <CardTitle className="text-sm font-serif font-bold text-secondary flex items-center gap-1.5">
-                          <Pill className="h-4 w-4" />
-                          Hors repas
+                    <Card className="border border-zinc-800 bg-zinc-900">
+                      <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-sm font-serif font-bold text-zinc-50 flex items-center gap-1.5">
+                          <Pill className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                          Compléments hors repas
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="p-3 pt-0">
+                      <CardContent className="p-4 pt-0">
                         <ul className="space-y-1.5 text-xs">
                           {grouped.orphans.map((sup, idx) => (
                             <li
                               key={idx}
-                              className="flex justify-between items-start py-1 border-b border-border/40 last:border-0"
+                              className="flex justify-between items-start py-2 border-b border-zinc-800 last:border-0"
                             >
                               <div>
-                                <strong className="text-foreground">{sup.name}</strong>
-                                <span className="text-muted-foreground block text-[10px]">{sup.timing}</span>
+                                <strong className="text-zinc-100">{sup.name}</strong>
+                                <span className="text-zinc-400 block text-[10px] mt-0.5">{sup.timing}</span>
                               </div>
-                              <span className="font-semibold text-primary">{sup.dosage}</span>
+                              <span className="font-semibold text-amber-400 tabular-nums">{sup.dosage}</span>
                             </li>
                           ))}
                         </ul>
@@ -217,35 +206,39 @@ export default function PlanPage() {
       {activeTab === "training" && (
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           {/* LEFT: programme (col-span-2) */}
-          <div className="space-y-4 lg:col-span-2">
-            <h3 className="text-lg lg:text-xl font-serif font-semibold text-foreground px-1">Programme sportif</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {plan.training.sessions.map((session, sIdx) => (
-                <Card key={sIdx} className="border border-border bg-card">
-                  <CardHeader className="p-4 pb-2 bg-muted/40 border-b border-border/40">
-                    <CardTitle className="text-base font-serif font-bold text-foreground">{session.name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      Fréquence recommandée : {session.frequency_weekly}x par semaine
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="divide-y divide-border">
-                      {session.exercises.map((ex, eIdx) => (
-                        <div key={eIdx} className="p-3 flex items-center justify-between text-xs hover:bg-muted/10 transition-all">
-                          <div className="max-w-[65%]">
-                            <span className="font-semibold text-foreground block">{ex.name}</span>
-                            <span className="text-muted-foreground text-[10px]">Repos : {ex.rest_seconds}s</span>
-                          </div>
-                          <span className="font-bold text-primary text-sm whitespace-nowrap">
-                            {ex.sets} x {ex.reps}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          <div className="space-y-6 lg:col-span-2">
+            <h3 className="text-lg lg:text-xl font-serif font-semibold text-zinc-50 px-1">
+              Programme sportif
+            </h3>
+            {plan.training.sessions.map((session, sIdx) => (
+              <section key={sIdx} className="space-y-3">
+                <div className="flex items-baseline justify-between px-1">
+                  <h4 className="text-base font-serif font-bold text-zinc-50">
+                    {session.name}
+                  </h4>
+                  <span className="text-xs text-zinc-400">
+                    <span className="text-amber-400 font-semibold tabular-nums">
+                      {session.frequency_weekly}×
+                    </span>{" "}
+                    / semaine
+                  </span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {session.exercises.map((ex, eIdx) => (
+                    <ExerciseCard
+                      key={eIdx}
+                      index={eIdx + 1}
+                      exercise={{
+                        name: ex.name,
+                        sets: ex.sets,
+                        reps: ex.reps,
+                        restSeconds: ex.rest_seconds,
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
 
           {/* RIGHT: cardio (col-span-1, sticky) */}
