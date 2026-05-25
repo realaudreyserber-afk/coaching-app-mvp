@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { LogOut, User, Mic } from "lucide-react";
+import { LogOut, User, Mic, BookOpen, Users } from "lucide-react";
 import { useAuth } from "@/lib/firebase/hooks";
 import { useRouter } from "next/navigation";
 import { flags } from "@/lib/features/flags";
@@ -37,7 +37,21 @@ export default function TopBar() {
 
         {/* User Actions */}
         {user && (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/blog")}
+              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
+              title="Journal"
+            >
+              <BookOpen className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => router.push("/community")}
+              className="flex items-center justify-center h-8 w-8 rounded-full border border-border bg-card text-foreground hover:bg-muted transition-all"
+              title="Communauté"
+            >
+              <Users className="h-4 w-4" />
+            </button>
             {isVoiceEnabled && (
               <button
                 onClick={() => setIsVoiceModalOpen(true)}
