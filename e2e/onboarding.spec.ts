@@ -18,11 +18,11 @@ test.describe('MVP — Onboarding parcours', () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test('progress bar à 1/11 pour user no-profile sur /onboarding/1', async ({ page }) => {
+  test('progress bar à 1/6 pour user no-profile sur /onboarding/1', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('mock_user', 'no-profile');
     });
     await page.goto('/onboarding/1');
-    await expect(page.locator('text=Étape 1 sur 11')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Étape 1 sur 6')).toBeVisible({ timeout: 10000 });
   });
 });
