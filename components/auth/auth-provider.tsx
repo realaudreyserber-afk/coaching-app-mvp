@@ -10,7 +10,6 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
-import { isNativePlatform } from "@/lib/platform";
 import { refreshFlags } from "@/lib/features/flags";
 
 interface AuthContextType {
