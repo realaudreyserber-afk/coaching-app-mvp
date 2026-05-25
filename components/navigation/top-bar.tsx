@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/firebase/hooks";
 import { useRouter } from "next/navigation";
 import { flags } from "@/lib/features/flags";
 import VoiceRecordModal from "@/components/features/voice-log/VoiceRecordModal";
+import { Logo } from "@/components/branding/logo";
 
 export default function TopBar() {
   const { user, logout } = useAuth();
@@ -27,14 +28,14 @@ export default function TopBar() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
-        {/* Brand Title */}
+        {/* Brand Title — icon + wordmark */}
         <button
           type="button"
           onClick={() => router.push("/dashboard")}
           aria-label="Aller au tableau de bord NoDream"
-          className="text-xl font-extrabold tracking-tight font-serif text-primary select-none rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          NoDream
+          <Logo variant="full" size="md" />
         </button>
 
         {/* User Actions */}
