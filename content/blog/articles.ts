@@ -29,7 +29,7 @@ export const ARTICLES: Article[] = [
     date: "2026-05-25",
     read_minutes: 4,
     citations: ["Garthe 2011"],
-    hero_image: "/blog-images/garthe-rate.jpg",
+    hero_image: "/garthe-rate.jpeg",
     hero_alt: "Athlète en sèche, barre de squat sur les épaules, salle minimaliste éclairée à contre-jour",
     accent_chart: "garthe-2011",
     body: `On te vend partout des plans "perte 1 kg/semaine garantie". Marketing efficace. Physiologie médiocre.
@@ -74,7 +74,7 @@ La sèche, c'est un investissement, pas une dette à la consommation.`,
     date: "2026-05-25",
     read_minutes: 5,
     citations: ["Ashwell 2012"],
-    hero_image: "/blog-images/imc-mort.jpg",
+    hero_image: "/imc-mort.jpeg",
     hero_alt: "Mètre ruban enroulé sur un fond charcoal, lumière dorée latérale, objet isolé",
     accent_chart: "whtr-scale",
     body: `Adolphe Quetelet, statisticien belge, 1832. Il cherche à décrire des populations entières. Il invente un indice rapide : poids divisé par taille au carré. Il prévient lui-même : *ne pas utiliser au niveau individuel*.
@@ -128,7 +128,7 @@ L'IMC n'a aucune place dans un plan personnalisé. Il a sa place dans des étude
     date: "2026-05-25",
     read_minutes: 3,
     citations: ["Jäger 2017"],
-    hero_image: "/blog-images/fenetre-anabolique.jpg",
+    hero_image: "/fenetre-anabolique.jpeg",
     hero_alt: "Horloge analogique abstraite éclatée, fond charcoal éditorial, lumière or",
     accent_chart: "anabolic-window",
     body: `Le mythe est simple : passé 30 minutes après la fin de la séance, ton muscle ne profiterait plus des protéines. Donc shaker immédiat. Sinon c'est perdu.
