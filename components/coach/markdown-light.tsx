@@ -27,7 +27,7 @@ function renderInline(text: string, keyBase: string): React.ReactNode[] {
       return (
         <code
           key={key}
-          className="px-1 py-0.5 rounded bg-zinc-900 text-amber-300 text-[0.85em] font-mono border border-zinc-700"
+          className="px-1 py-0.5 rounded bg-zinc-100 text-amber-800 text-[0.85em] font-mono border border-zinc-300"
         >
           {part.slice(1, -1)}
         </code>
