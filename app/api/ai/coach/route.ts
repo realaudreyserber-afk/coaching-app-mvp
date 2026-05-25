@@ -223,12 +223,23 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
         let lastFlushAt = 0;
         const FLUSH_INTERVAL_MS = 600;
 
+        // Persist a cleaned version of the message (without the <COACH_SAVE>
+        // tag) so chat-history reloads don't expose the structured-data
+        // block to the user. The raw stream still includes the tag so the
+        // frontend can parse + POST it to /api/profile/update-fields.
+        const stripCoachSaveTag = (s: string) => {
+          let out = s.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
+          const openIdx = out.indexOf('<COACH_SAVE>');
+          if (openIdx !== -1) out = out.slice(0, openIdx);
+          return out.trimEnd();
+        };
+
         const flushPartial = async () => {
           const now = Date.now();
           if (now - lastFlushAt < FLUSH_INTERVAL_MS) return;
           lastFlushAt = now;
           try {
-            await placeholderRef.update({ content: accumulated });
+            await placeholderRef.update({ content: stripCoachSaveTag(accumulated) });
           } catch {
             // best-effort
           }
@@ -237,7 +248,7 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
         const finalize = async (status: 'done' | 'error', errorMsg?: string) => {
           try {
             await placeholderRef.update({
-              content: accumulated,
+              content: stripCoachSaveTag(accumulated),
               streaming: false,
               ...(status === 'error' ? { error: errorMsg ?? 'unknown' } : {}),
               finalized_at: new Date().toISOString(),

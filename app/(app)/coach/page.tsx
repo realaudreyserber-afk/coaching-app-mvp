@@ -121,10 +121,17 @@ export default function CoachPage() {
           const loadedHistory: ChatMessage[] = [];
           snap.forEach((doc) => {
             const data = doc.data();
+            // Strip any leftover <COACH_SAVE> blocks from legacy messages
+            // persisted before the backend started cleaning them.
+            const rawContent = data.content ?? '';
+            const cleanContent =
+              data.role === 'assistant'
+                ? stripCoachSaveTag(rawContent)
+                : rawContent;
             loadedHistory.push({
               id: doc.id,
               role: data.role,
-              content: data.content,
+              content: cleanContent,
               sources: data.sources || [],
               timestamp: data.timestamp
             });
