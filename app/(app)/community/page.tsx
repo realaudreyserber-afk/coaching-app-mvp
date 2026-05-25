@@ -7,8 +7,7 @@ export const metadata: Metadata = {
     "Rejoins la communauté NoDream sur Discord. Échange avec d'autres abonnés, partage tes progrès, pose tes questions.",
 };
 
-// TODO: remplacer par l'URL réelle d'invitation Discord une fois le serveur créé.
-const DISCORD_INVITE_URL = "https://discord.gg/your-invite-here";
+const DISCORD_INVITE_URL = "https://discord.gg/JdHShHV5";
 
 export default function CommunityPage() {
   return (
