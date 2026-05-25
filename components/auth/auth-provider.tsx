@@ -5,6 +5,7 @@ import {
   User,
   GoogleAuthProvider,
   signInWithRedirect,
+  getRedirectResult,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -112,6 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Error configuring mock user:", e);
       }
     }
+
+    // Finalize signInWithRedirect: the SDK needs an explicit getRedirectResult
+    // call on mount to consume the redirect token, otherwise onAuthStateChanged
+    // never fires and the user appears not-logged-in after Google bounces back.
+    getRedirectResult(auth).catch((err) => {
+      console.error("getRedirectResult failed:", err);
+    });
 
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       setUser(currentUser);
