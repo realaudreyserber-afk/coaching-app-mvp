@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { MessageCircle, ExternalLink, Hash, Shield, Lock } from "lucide-react";
+import { LeaderboardPodium, PodiumUser } from "@/components/community/leaderboard-podium";
+import { RankingRow, RankingUser } from "@/components/community/ranking-row";
+import { ChallengeCard } from "@/components/community/challenge-card";
 
 export const metadata: Metadata = {
   title: "La communauté — NoDream",
@@ -8,6 +11,30 @@ export const metadata: Metadata = {
 };
 
 const DISCORD_INVITE_URL = "https://discord.gg/aT7vUUvawj";
+
+// Mock data Phase 1 — sera remplacé par query Firestore users top 100 by points
+// (cf MIGRATION_BRIEF.md section 3.8). Tous prénoms fictifs.
+const MOCK_PODIUM: PodiumUser[] = [
+  { rank: 1, name: "Elena S.", initials: "ES", tier: "Or", points: 18420, stat: "Régularité 99 %" },
+  { rank: 2, name: "Marco R.", initials: "MR", tier: "Argent", points: 14650, stat: "Régularité 98 %" },
+  { rank: 3, name: "Anya K.", initials: "AK", tier: "Bronze", points: 14210, stat: "Régularité 97 %" },
+];
+
+const MOCK_RANKINGS: RankingUser[] = [
+  { rank: 4, name: "David L.", initials: "DL", consistencyPct: 99, points: 15420 },
+  { rank: 5, name: "Sarah M.", initials: "SM", consistencyPct: 98, points: 15420 },
+  { rank: 6, name: "Martin C.", initials: "MC", consistencyPct: 98, points: 12380 },
+  { rank: 7, name: "Élise L.", initials: "EL", consistencyPct: 98, points: 14650 },
+  { rank: 8, name: "Sarah H.", initials: "SH", consistencyPct: 98, points: 14480 },
+  { rank: 9, name: "David H.", initials: "DH", consistencyPct: 97, points: 14200 },
+  { rank: 10, name: "Anya K.", initials: "AK", consistencyPct: 97, points: 14210 },
+];
+
+const MOCK_CHALLENGES = [
+  { title: "Volonté de fer", progressPct: 85, subtitle: "12 jours restants" },
+  { title: "Roi de la régularité", progressPct: 90, subtitle: "5 jours restants" },
+  { title: "Pic de performance", progressPct: 70, subtitle: "18 jours restants" },
+];
 
 const CHANNELS = [
   { name: "présentations", desc: "Tu démarres ici. Format : prénom, âge, taille, poids, objectif." },
@@ -45,18 +72,88 @@ const RULES_HIGHLIGHT = [
 export default function CommunityPage() {
   return (
     <main className="nd-scope flex-1 min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         {/* Header */}
-        <header className="mb-16 nd-fade-up">
+        <header className="mb-12 nd-fade-up">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[--color-nd-gold] mb-4">
             <div className="h-px w-8 bg-[--color-nd-gold]" />
             <span className="font-semibold">La communauté</span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-bold border border-amber-500/40">
+              Bêta
+            </span>
           </div>
-          <h1 className="font-serif text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] tracking-tight text-[--color-nd-white]">
-            On parle <span className="text-[--color-nd-gold]">vrai.</span>
-            <br />
-            Sur Discord.
+          <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.05] tracking-tight text-[--color-nd-white]">
+            Cercle <span className="text-[--color-nd-gold]">NoDream.</span>
           </h1>
+          <p className="mt-4 max-w-2xl text-base sm:text-lg text-[--color-nd-white-dim] leading-relaxed">
+            Classement mensuel basé sur ta régularité (check-ins quotidiens) et tes
+            performances (records, défis). Pas de vanity metrics — juste le travail réel.
+          </p>
+        </header>
+
+        {/* Leaderboard section */}
+        <section className="mb-16 nd-fade-up nd-stagger-1">
+          <div className="grid gap-8 lg:grid-cols-[18rem_1fr]">
+            {/* Sidebar : Monthly Challenges */}
+            <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+              <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[--color-nd-muted]">
+                <div className="h-px w-8 bg-[--color-nd-stroke]" />
+                <span>Défis du mois</span>
+              </div>
+              <div className="space-y-3">
+                {MOCK_CHALLENGES.map((c) => (
+                  <ChallengeCard
+                    key={c.title}
+                    title={c.title}
+                    progressPct={c.progressPct}
+                    subtitle={c.subtitle}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px] text-[--color-nd-muted] italic leading-relaxed pt-2">
+                Données Bêta — le classement live arrivera quand le Cercle atteindra
+                100 membres actifs.
+              </p>
+            </aside>
+
+            {/* Main : Podium + Rankings */}
+            <div className="space-y-8">
+              <div>
+                <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[--color-nd-gold] mb-4">
+                  <div className="h-px w-8 bg-[--color-nd-gold]" />
+                  <span className="font-semibold">Top 3 Élite</span>
+                </div>
+                <LeaderboardPodium users={MOCK_PODIUM} />
+              </div>
+
+              <div className="rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden">
+                <header className="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-3 px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+                  <span>Rang</span>
+                  <span>Athlète</span>
+                  <span className="text-right">Régularité</span>
+                  <span className="text-right">Points</span>
+                </header>
+                <ul role="list" aria-label="Classement global">
+                  {MOCK_RANKINGS.map((u) => (
+                    <RankingRow key={u.rank} user={u} />
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Discord section separator */}
+        <div className="border-t border-[--color-nd-stroke] my-12" aria-hidden="true" />
+
+        <header className="mb-16 nd-fade-up">
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[--color-nd-gold] mb-4">
+            <div className="h-px w-8 bg-[--color-nd-gold]" />
+            <span className="font-semibold">Discord</span>
+          </div>
+          <h2 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold leading-[1.05] tracking-tight text-[--color-nd-white]">
+            On parle <span className="text-[--color-nd-gold]">vrai.</span>
+          </h2>
           <p className="mt-6 max-w-2xl text-base sm:text-lg text-[--color-nd-white-dim] leading-relaxed">
             Un chat communautaire dans une app de santé exige une
             modération sérieuse. Plutôt que mal le faire en interne, on
