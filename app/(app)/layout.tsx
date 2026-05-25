@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Show a loading screen during initial authentication state resolution
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-sm text-muted-foreground font-serif">{"Accès à ton espace..."}</p>
@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-cream dark:bg-anthracite">
+    <div className="min-h-screen flex flex-col bg-background">
       {!isOnboarding && <TopBar />}
       <main className={`flex-1 flex flex-col ${!isOnboarding ? "pb-20" : ""}`}>{children}</main>
       {!isOnboarding && <BottomNav />}

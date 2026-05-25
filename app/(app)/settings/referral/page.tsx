@@ -129,7 +129,7 @@ export default function ReferralPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -138,7 +138,7 @@ export default function ReferralPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -158,7 +158,7 @@ export default function ReferralPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -188,7 +188,7 @@ export default function ReferralPage() {
               </div>
 
               {/* Code display area */}
-              <div className="bg-white/80 dark:bg-black/40 border border-border rounded-xl p-3 flex items-center justify-between max-w-xs mx-auto">
+              <div className="bg-card/80 border border-border rounded-xl p-3 flex items-center justify-between max-w-xs mx-auto">
                 <span className="font-mono text-lg font-bold tracking-widest text-primary pl-2">{code}</span>
                 <div className="flex space-x-1">
                   <Button variant="ghost" size="icon" onClick={handleCopyCode} className="h-9 w-9 text-muted-foreground hover:text-foreground">
@@ -222,7 +222,7 @@ export default function ReferralPage() {
 
           {/* Apply a referrer code form */}
           {!referredBy ? (
-            <Card className="border-border bg-white dark:bg-black/10">
+            <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-serif">Tu as été parrainé par un ami ?</CardTitle>
                 <CardDescription className="text-xs">

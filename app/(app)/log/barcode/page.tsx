@@ -179,7 +179,7 @@ export default function BarcodePage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -188,7 +188,7 @@ export default function BarcodePage() {
   // Feature flag guard
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -208,7 +208,7 @@ export default function BarcodePage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -223,7 +223,7 @@ export default function BarcodePage() {
         <div className="space-y-4">
           {!isScanning ? (
             <div className="space-y-4">
-              <Card className="border-border overflow-hidden bg-white/50 dark:bg-black/20 backdrop-blur-md">
+              <Card className="border-border overflow-hidden bg-card/50 backdrop-blur-md">
                 <CardContent className="flex flex-col items-center py-10 text-center space-y-6">
                   <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center text-primary">
                     <Scan className="h-8 w-8" />
@@ -258,7 +258,7 @@ export default function BarcodePage() {
                       placeholder="Ex: 3017670010105"
                       value={manualCode}
                       onChange={(e) => setManualCode(e.target.value)}
-                      className="flex-1 h-11 px-3 rounded-md border border-border bg-white/50 dark:bg-black/20 focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="flex-1 h-11 px-3 rounded-md border border-border bg-card/50 focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                     <Button type="submit" className="h-11">Rechercher</Button>
                   </div>
@@ -341,9 +341,9 @@ export default function BarcodePage() {
 
       {/* Product Display Card & Quantifier */}
       {product && !loadingProduct && (
-        <Card className="border-border overflow-hidden bg-white dark:bg-black/10 shadow-lg animate-[fadeIn_0.3s_ease-out]">
+        <Card className="border-border overflow-hidden bg-card shadow-lg animate-[fadeIn_0.3s_ease-out]">
           {product.imageUrl && (
-            <div className="relative h-48 w-full bg-cream dark:bg-anthracite/50 flex items-center justify-center overflow-hidden border-b border-border">
+            <div className="relative h-48 w-full bg-muted flex items-center justify-center overflow-hidden border-b border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src={product.imageUrl} 
@@ -375,23 +375,23 @@ export default function BarcodePage() {
           <CardContent className="space-y-6">
             {/* Nutritional Values Grid */}
             <div className="grid grid-cols-4 gap-2 text-center">
-              <div className="bg-cream dark:bg-anthracite/40 p-2 rounded border border-border">
+              <div className="bg-muted p-2 rounded border border-border">
                 <div className="text-base font-bold font-serif">{Math.round(product.kcal_100g * (quantity / 100))}</div>
                 <div className="text-[10px] text-muted-foreground">Kcal</div>
               </div>
-              <div className="bg-cream dark:bg-anthracite/40 p-2 rounded border border-border">
+              <div className="bg-muted p-2 rounded border border-border">
                 <div className="text-base font-bold text-orange-light font-serif">
                   {Math.round(product.p_100g * (quantity / 100) * 10) / 10}g
                 </div>
                 <div className="text-[10px] text-muted-foreground">Protéines</div>
               </div>
-              <div className="bg-cream dark:bg-anthracite/40 p-2 rounded border border-border">
+              <div className="bg-muted p-2 rounded border border-border">
                 <div className="text-base font-bold text-secondary font-serif">
                   {Math.round(product.c_100g * (quantity / 100) * 10) / 10}g
                 </div>
                 <div className="text-[10px] text-muted-foreground">Glucides</div>
               </div>
-              <div className="bg-cream dark:bg-anthracite/40 p-2 rounded border border-border">
+              <div className="bg-muted p-2 rounded border border-border">
                 <div className="text-base font-bold text-foreground/80 font-serif">
                   {Math.round(product.f_100g * (quantity / 100) * 10) / 10}g
                 </div>

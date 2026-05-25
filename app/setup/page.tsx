@@ -36,7 +36,7 @@ export default function SetupPage() {
   const allOk = okCount === total;
 
   return (
-    <main className="min-h-screen bg-cream dark:bg-anthracite px-4 py-10 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-background px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
         <header className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-serif font-bold text-primary">

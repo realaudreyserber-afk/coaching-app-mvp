@@ -130,7 +130,7 @@ export default function DailyCheckinPage() {
 
   if (aiInsight) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-cream dark:bg-anthracite">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-background">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="text-center space-y-2">
             <span className="text-3xl">✨</span>
@@ -151,7 +151,7 @@ export default function DailyCheckinPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-cream dark:bg-anthracite">
+    <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-background">
       <Card className="max-w-md w-full border-border">
         <CardHeader className="text-center space-y-2">
           <CardTitle className="text-3xl font-serif">Bilan Quotidien</CardTitle>

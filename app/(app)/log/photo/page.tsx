@@ -186,7 +186,7 @@ export default function PhotoMealPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -195,7 +195,7 @@ export default function PhotoMealPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -215,7 +215,7 @@ export default function PhotoMealPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -230,7 +230,7 @@ export default function PhotoMealPage() {
         
         {/* Upload Button & Preview */}
         {!imagePreview ? (
-          <Card className="border-dashed border-2 border-border bg-white/50 dark:bg-black/20">
+          <Card className="border-dashed border-2 border-border bg-card/50">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Camera className="h-7 w-7" />
@@ -325,7 +325,7 @@ export default function PhotoMealPage() {
 
         {/* Detected Items & Editor */}
         {detectedItems.length > 0 && (
-          <Card className="border-border bg-white dark:bg-black/10">
+          <Card className="border-border bg-card">
             <CardHeader className="pb-3 border-b border-border">
               <CardTitle className="text-lg font-serif">Aliments détectés</CardTitle>
               <CardDescription>
@@ -365,7 +365,7 @@ export default function PhotoMealPage() {
               ))}
 
               {/* Total Display */}
-              <div className="p-4 bg-cream/40 dark:bg-anthracite/20 flex flex-col space-y-2">
+              <div className="p-4 bg-muted flex flex-col space-y-2">
                 <div className="flex justify-between items-center text-sm font-serif font-bold">
                   <span>Total Repas</span>
                   <span>{totalKcal} kcal</span>
@@ -379,7 +379,7 @@ export default function PhotoMealPage() {
 
               {/* Form to manually add custom item */}
               {showAddForm ? (
-                <form onSubmit={handleAddCustomItem} className="p-4 bg-cream/20 dark:bg-anthracite/10 space-y-3">
+                <form onSubmit={handleAddCustomItem} className="p-4 bg-muted space-y-3">
                   <div className="text-xs font-semibold text-muted-foreground uppercase">Ajouter un ingrédient</div>
                   <input
                     type="text"

@@ -84,7 +84,7 @@ export default function OnboardingIndexPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center space-y-4 max-w-md">
           <p className="text-sm text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-950/20 p-3 rounded-md">
             {error}
@@ -106,7 +106,7 @@ export default function OnboardingIndexPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream px-4 dark:bg-anthracite">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="text-center space-y-4">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
         <p className="text-sm text-muted-foreground font-serif">

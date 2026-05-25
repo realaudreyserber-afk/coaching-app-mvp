@@ -43,7 +43,7 @@ export default function PlanPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <div className="text-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-sm text-muted-foreground font-serif">Chargement de ton plan d'action...</p>
@@ -54,7 +54,7 @@ export default function PlanPage() {
 
   if (!plan) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">📋</span>

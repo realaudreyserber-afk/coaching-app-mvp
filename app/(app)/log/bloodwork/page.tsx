@@ -166,7 +166,7 @@ export default function BloodworkUploadPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -175,7 +175,7 @@ export default function BloodworkUploadPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -195,7 +195,7 @@ export default function BloodworkUploadPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -210,7 +210,7 @@ export default function BloodworkUploadPage() {
         {/* File selection */}
         {!file ? (
           <div className="space-y-6">
-            <Card className="border-dashed border-2 border-border bg-white/50 dark:bg-black/20">
+            <Card className="border-dashed border-2 border-border bg-card/50">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
                 <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   <FileText className="h-7 w-7" />
@@ -258,7 +258,7 @@ export default function BloodworkUploadPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            <Card className="border-border bg-white dark:bg-black/20">
+            <Card className="border-border bg-card">
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center space-x-2 min-w-0">
                   <FileText className="h-5 w-5 text-primary flex-shrink-0" />
@@ -340,7 +340,7 @@ export default function BloodworkUploadPage() {
           <div className="space-y-4">
             
             {/* General card */}
-            <Card className="border-border bg-white dark:bg-black/10">
+            <Card className="border-border bg-card">
               <CardContent className="p-4 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground uppercase font-semibold">Date du prélèvement</span>

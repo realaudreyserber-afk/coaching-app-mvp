@@ -104,7 +104,7 @@ export default function LoginPage() {
 
   if (loading || (user && !submitting)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-sm text-muted-foreground font-serif">
@@ -160,7 +160,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-11 px-3 rounded-md border border-border bg-white dark:bg-black/20 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full h-11 px-3 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -182,7 +182,7 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-11 px-3 rounded-md border border-border bg-white dark:bg-black/20 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full h-11 px-3 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   {mode === "signup" && (
                     <p className="mt-1 text-[10px] text-muted-foreground">

@@ -169,7 +169,7 @@ export default function ProgressPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <div className="text-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-sm text-muted-foreground font-serif">Analyse de tes bilans et progrès...</p>

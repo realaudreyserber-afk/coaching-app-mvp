@@ -97,7 +97,7 @@ export default function FormCheckPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -106,7 +106,7 @@ export default function FormCheckPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -126,7 +126,7 @@ export default function FormCheckPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -140,7 +140,7 @@ export default function FormCheckPage() {
         
         {/* Upload & Instructions */}
         {!videoPreview ? (
-          <Card className="border-dashed border-2 border-border bg-white/50 dark:bg-black/20">
+          <Card className="border-dashed border-2 border-border bg-card/50">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Video className="h-7 w-7" />
@@ -152,7 +152,7 @@ export default function FormCheckPage() {
                 </p>
               </div>
               
-              <div className="text-left bg-white/80 dark:bg-black/40 p-3 rounded-lg border border-border text-[11px] space-y-1.5 max-w-xs">
+              <div className="text-left bg-card/80 p-3 rounded-lg border border-border text-[11px] space-y-1.5 max-w-xs">
                 <div className="font-bold text-foreground font-serif">Consignes de prise de vue :</div>
                 <div className="text-muted-foreground">• Place l'appareil de profil ou à 45°.</div>
                 <div className="text-muted-foreground">• Cadre l'intégralité du mouvement (tête aux pieds).</div>

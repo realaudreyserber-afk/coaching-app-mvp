@@ -144,7 +144,7 @@ export default function BodyScannerPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -153,7 +153,7 @@ export default function BodyScannerPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -173,7 +173,7 @@ export default function BodyScannerPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6 pb-20">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6 pb-20">
       
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -207,7 +207,7 @@ export default function BodyScannerPage() {
               <div key={index} className="space-y-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block text-[10px] text-center">{name}</span>
                 
-                <label className="relative block aspect-[3/4] border-2 border-dashed border-border rounded-xl overflow-hidden bg-white/40 dark:bg-black/10 hover:border-primary/50 transition-all cursor-pointer">
+                <label className="relative block aspect-[3/4] border-2 border-dashed border-border rounded-xl overflow-hidden bg-card/40 hover:border-primary/50 transition-all cursor-pointer">
                   {images[index] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img 
@@ -261,7 +261,7 @@ export default function BodyScannerPage() {
                   <button
                     key={hIdx}
                     onClick={() => setReport(h)}
-                    className="flex justify-between items-center p-3 rounded-lg border border-border bg-white dark:bg-black/10 hover:border-primary/40 transition-all text-xs"
+                    className="flex justify-between items-center p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-all text-xs"
                   >
                     <span className="font-semibold">Scan du {h.date}</span>
                     <span className="text-primary font-bold font-serif">{h.bf_pct_estimated}% BF</span>
@@ -296,7 +296,7 @@ export default function BodyScannerPage() {
         <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
           
           {/* Main estimation summary card */}
-          <Card className="border-border bg-white dark:bg-black/10 shadow-lg text-center overflow-hidden">
+          <Card className="border-border bg-card shadow-lg text-center overflow-hidden">
             <div className="bg-primary/5 p-6 border-b border-border space-y-2">
               <div className="text-[10px] text-primary uppercase font-bold tracking-widest">Masse Grasse Estimée</div>
               <div className="text-5xl font-serif font-extrabold text-primary">{report.bf_pct_estimated}%</div>

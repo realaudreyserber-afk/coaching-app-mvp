@@ -23,7 +23,7 @@ export default function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-cream/80 backdrop-blur-md dark:bg-anthracite/80">
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
       <div className="flex h-14 items-center justify-between px-4 sm:px-6">
         {/* Brand Title */}
         <div className="flex items-center gap-2">

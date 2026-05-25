@@ -102,7 +102,7 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -153,20 +153,20 @@ export default function AdminPage() {
           </div>
 
           {/* Engagement Cohort card */}
-          <Card className="border-border bg-white dark:bg-black/10">
+          <Card className="border-border bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-serif">Activité des cohortes</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2 text-center pt-2">
-              <div className="bg-cream/40 dark:bg-anthracite/20 p-2 rounded-lg">
+              <div className="bg-muted p-2 rounded-lg">
                 <div className="text-[10px] text-muted-foreground">DAU (Jour)</div>
                 <div className="text-sm font-bold font-mono">{metrics.activeCohorts.dau}</div>
               </div>
-              <div className="bg-cream/40 dark:bg-anthracite/20 p-2 rounded-lg">
+              <div className="bg-muted p-2 rounded-lg">
                 <div className="text-[10px] text-muted-foreground">WAU (Semaine)</div>
                 <div className="text-sm font-bold font-mono">{metrics.activeCohorts.wau}</div>
               </div>
-              <div className="bg-cream/40 dark:bg-anthracite/20 p-2 rounded-lg">
+              <div className="bg-muted p-2 rounded-lg">
                 <div className="text-[10px] text-muted-foreground">MAU (Mois)</div>
                 <div className="text-sm font-bold font-mono">{metrics.activeCohorts.mau}</div>
               </div>
@@ -223,7 +223,7 @@ export default function AdminPage() {
           </Card>
 
           {/* Funnel chart */}
-          <Card className="border-border bg-white dark:bg-black/10">
+          <Card className="border-border bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-serif flex items-center space-x-1.5">
                 <BarChart3 className="h-4 w-4" />

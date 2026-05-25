@@ -297,17 +297,17 @@ export default function CoachPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
+    <div className="flex-1 flex flex-col bg-background max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
       
       {/* Header */}
-      <div className="flex items-center space-x-3 p-4 border-b border-border bg-white/80 dark:bg-anthracite/80 backdrop-blur-md sticky top-0 z-30">
+      <div className="flex items-center space-x-3 p-4 border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-30">
         <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')} className="h-10 w-10">
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -329,11 +329,11 @@ export default function CoachPage() {
               key={idx} 
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1 max-w-[85%] ${isUser ? 'ml-auto' : 'mr-auto'}`}
             >
-              <div 
+              <div
                 className={`p-3 rounded-2xl text-sm leading-relaxed ${
-                  isUser 
-                    ? 'bg-primary text-white rounded-tr-none' 
-                    : 'bg-white dark:bg-black/20 text-foreground border border-border rounded-tl-none font-serif'
+                  isUser
+                    ? 'bg-primary text-[#0a0a0a] font-semibold rounded-tr-none'
+                    : 'bg-card text-foreground border border-border rounded-tl-none font-serif'
                 }`}
               >
                 {/* Markdown-light renderer: **bold**, *italic*, `code`, paragraphs, lists */}
@@ -361,7 +361,7 @@ export default function CoachPage() {
                           href={src.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2 rounded bg-cream/50 dark:bg-anthracite/50 border border-border hover:border-primary/30 transition-all text-xs text-foreground/95"
+                          className="flex items-center justify-between p-2 rounded bg-muted border border-border hover:border-primary/40 transition-all text-xs text-foreground/95"
                         >
                           <div className="truncate pr-2 flex items-center gap-1.5">
                             {src.language && (
@@ -391,7 +391,7 @@ export default function CoachPage() {
         })}
 
         {sending && (
-          <div className="flex items-center space-x-2 text-muted-foreground mr-auto bg-white/50 dark:bg-black/10 border border-border p-3 rounded-2xl rounded-tl-none max-w-[85%]">
+          <div className="flex items-center space-x-2 text-muted-foreground mr-auto bg-card border border-border p-3 rounded-2xl rounded-tl-none max-w-[85%]">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="text-xs font-serif italic">NoDream réfléchit...</span>
           </div>
@@ -406,9 +406,9 @@ export default function CoachPage() {
       </div>
 
       {/* Input box */}
-      <form 
-        onSubmit={handleSendMessage} 
-        className="absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-anthracite/80 backdrop-blur-md border-t border-border flex items-center space-x-2 z-30"
+      <form
+        onSubmit={handleSendMessage}
+        className="absolute bottom-0 left-0 right-0 p-4 bg-card/90 backdrop-blur-md border-t border-border flex items-center space-x-2 z-30"
       >
         <input
           type="text"
@@ -416,7 +416,7 @@ export default function CoachPage() {
           onChange={(e) => setInputMessage(e.target.value)}
           placeholder="Pose ta question (ex: pates crues vs cuites ?)"
           disabled={sending}
-          className="flex-1 h-11 px-4 rounded-full border border-border bg-white dark:bg-black/20 focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+          className="flex-1 h-11 px-4 rounded-full border border-border bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary text-sm"
         />
         <Button 
           type="submit" 

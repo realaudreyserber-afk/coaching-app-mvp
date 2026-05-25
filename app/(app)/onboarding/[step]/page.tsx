@@ -111,7 +111,7 @@ export default function OnboardingStepPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="text-center space-y-4">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
           <p className="text-sm text-muted-foreground font-serif">{"Chargement de l'étape..."}</p>
@@ -143,7 +143,7 @@ export default function OnboardingStepPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-cream dark:bg-anthracite">
+    <div className="flex-1 flex flex-col justify-center items-center py-10 px-4 bg-background">
       {/* Step Indicator */}
       <div className="mb-6 text-center">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

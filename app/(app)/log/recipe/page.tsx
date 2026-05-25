@@ -251,7 +251,7 @@ export default function RecipeOcrPage() {
 
   if (isFlagActive === null) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-cream px-4 dark:bg-anthracite">
+      <div className="flex-1 flex items-center justify-center bg-background px-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -260,7 +260,7 @@ export default function RecipeOcrPage() {
   // Feature flag check
   if (!isFlagActive) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-cream dark:bg-anthracite text-center space-y-6">
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
             <span className="text-4xl">🚧</span>
@@ -280,7 +280,7 @@ export default function RecipeOcrPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-cream dark:bg-anthracite p-4 max-w-md mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col bg-background p-4 max-w-md mx-auto w-full space-y-6">
       
       {/* Header */}
       <div className="flex items-center space-x-3">
@@ -294,7 +294,7 @@ export default function RecipeOcrPage() {
         
         {/* Upload & Photo Preview */}
         {!imagePreview ? (
-          <Card className="border-dashed border-2 border-border bg-white/50 dark:bg-black/20">
+          <Card className="border-dashed border-2 border-border bg-card/50">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
               <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                 <Camera className="h-7 w-7" />
@@ -387,7 +387,7 @@ export default function RecipeOcrPage() {
           <div className="space-y-4">
             
             {/* General details */}
-            <Card className="border-border bg-white dark:bg-black/10">
+            <Card className="border-border bg-card">
               <CardContent className="p-4 space-y-3">
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground font-serif">Nom de la recette</label>
@@ -413,7 +413,7 @@ export default function RecipeOcrPage() {
             </Card>
 
             {/* Ingredients Editor */}
-            <Card className="border-border bg-white dark:bg-black/10">
+            <Card className="border-border bg-card">
               <CardHeader className="pb-2 border-b border-border">
                 <CardTitle className="text-sm font-serif">Ingrédients & Teneurs</CardTitle>
               </CardHeader>
@@ -458,7 +458,7 @@ export default function RecipeOcrPage() {
                 ))}
 
                 {/* Totals */}
-                <div className="p-3 bg-cream/30 dark:bg-anthracite/20 space-y-1">
+                <div className="p-3 bg-muted space-y-1">
                   <div className="flex justify-between text-xs font-serif font-bold">
                     <span>Total Recette</span>
                     <span>{recipe.totalKcal} kcal</span>
@@ -476,7 +476,7 @@ export default function RecipeOcrPage() {
 
                 {/* Add ingredient manual form */}
                 {showAddIng ? (
-                  <form onSubmit={handleAddIngredient} className="p-3 bg-cream/10 dark:bg-anthracite/5 space-y-2">
+                  <form onSubmit={handleAddIngredient} className="p-3 bg-muted space-y-2">
                     <input
                       type="text"
                       required
@@ -527,7 +527,7 @@ export default function RecipeOcrPage() {
             </Card>
 
             {/* Preparation Steps */}
-            <Card className="border-border bg-white dark:bg-black/10">
+            <Card className="border-border bg-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-serif">Instructions de préparation</CardTitle>
               </CardHeader>

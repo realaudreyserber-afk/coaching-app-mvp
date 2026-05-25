@@ -171,7 +171,7 @@ export default function VoiceRecordModal({ isOpen, onClose }: VoiceRecordModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-sm border-border bg-white dark:bg-anthracite shadow-2xl relative animate-[fadeIn_0.2s_ease-out]">
+      <Card className="w-full max-w-sm border-border bg-card shadow-2xl relative animate-[fadeIn_0.2s_ease-out]">
         
         {/* Close Button */}
         <button 
