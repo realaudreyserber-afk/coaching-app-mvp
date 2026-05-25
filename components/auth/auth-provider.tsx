@@ -11,11 +11,9 @@ import React, {
 import {
   User,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut,
-  AuthError,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
@@ -36,13 +34,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const POPUP_FALLBACK_ERROR_CODES = new Set([
-  "auth/popup-blocked",
-  "auth/popup-closed-by-user",
-  "auth/cancelled-popup-request",
-  "auth/operation-not-supported-in-this-environment",
-]);
 
 function log(...args: unknown[]) {
   if (process.env.NODE_ENV !== "production") {
@@ -247,37 +238,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     provider.setCustomParameters({ prompt: "select_account" });
 
     try {
-      log("attempting signInWithPopup");
-      await signInWithPopup(auth, provider);
-      // onAuthStateChanged will fire and set status="authenticated"
+      log("attempting signInWithRedirect");
+      await signInWithRedirect(auth, provider);
+      // Browser navigates away to Google; nothing more to do here.
+      // On bounce-back, AuthProvider mounts and getRedirectResult()
+      // consumes the token, then onAuthStateChanged fires.
     } catch (err) {
-      const authErr = err as AuthError;
-      log("signInWithPopup failed", authErr.code);
-
-      if (POPUP_FALLBACK_ERROR_CODES.has(authErr.code)) {
-        // Browser blocked the popup (COOP, popup blocker, or user closed it).
-        // Fall back to redirect — the user will navigate fully to Google
-        // and bounce back, and getRedirectResult on next mount completes it.
-        log("falling back to signInWithRedirect");
-        try {
-          await signInWithRedirect(auth, provider);
-          // The page navigates away; nothing more to do here.
-          return;
-        } catch (redirectErr) {
-          console.error(
-            "[auth] signInWithRedirect fallback failed:",
-            redirectErr,
-          );
-          setError("La connexion a échoué. Réessaie dans un instant.");
-          setStatus("unauthenticated");
-          throw redirectErr;
-        }
-      }
-
-      console.error("[auth] Google login failed:", authErr);
+      console.error("[auth] signInWithRedirect failed:", err);
       setError("La connexion a échoué. Réessaie dans un instant.");
       setStatus("unauthenticated");
-      throw authErr;
+      throw err;
     }
   }, []);
 
