@@ -76,38 +76,44 @@ export default function MicronutrientsDashboardPage() {
         return;
       }
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Wave 13B — Use local YYYY-MM-DD (Europe time) instead of UTC. The
+      // previous toISOString().split('T') showed tomorrow's date for users
+      // in CEST evening (after ~22h UTC).
+      const localYmd = (d: Date) =>
+        d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+      const todayStr = localYmd(new Date());
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const startStr = localYmd(sevenDaysAgo);
 
       try {
-        // Query food logs for today
-        const qToday = query(
+        // Wave 13B — Single range query for the full 7-day window instead
+        // of 7 parallel `where('date', '==', day)` queries. Saves 6
+        // round-trips per page mount and bypasses the need for a separate
+        // "today" query.
+        const qRange = query(
           collection(db, 'users', user.uid, 'food_logs'),
-          where('date', '==', todayStr)
+          where('date', '>=', startStr),
+          where('date', '<=', todayStr),
         );
-        const snapshotToday = await getDocs(qToday);
-        const logsToday = snapshotToday.docs.map(doc => doc.data() as any);
-        
+        const snapshotRange = await getDocs(qRange);
+        const byDay = new Map<string, any[]>();
+        snapshotRange.docs.forEach((d) => {
+          const data = d.data() as any;
+          const dateStr = data?.date ?? '';
+          if (!dateStr) return;
+          const bucket = byDay.get(dateStr) ?? [];
+          bucket.push(data);
+          byDay.set(dateStr, bucket);
+        });
+
+        const logsToday = byDay.get(todayStr) ?? [];
         const computedToday = calculateDailyMicronutrients(logsToday);
         setTodayNutrients(computedToday);
 
-        // Fetch logs from last 7 days to analyze potential deficiencies
+        // Build the 7-day list (skip empty days from the average)
         const logsLast7Days: any[] = [];
-        const promises = [];
-        for (let i = 0; i < 7; i++) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          
-          const q = query(
-            collection(db, 'users', user.uid, 'food_logs'),
-            where('date', '==', dateStr)
-          );
-          promises.push(getDocs(q));
-        }
-
-        const snapshots = await Promise.all(promises);
-        snapshots.forEach((snap, idx) => {
-          const dayLogs = snap.docs.map(doc => doc.data() as any);
+        byDay.forEach((dayLogs) => {
           if (dayLogs.length > 0) {
             logsLast7Days.push(calculateDailyMicronutrients(dayLogs));
           }

@@ -75,6 +75,18 @@ function WorkoutSummaryInner() {
     load();
   }, [user, loading, sessionId]);
 
+  // Wave 13B — reset the dedup ref when session.id changes so navigating
+  // from one summary to another (rare but possible via /workout/summary?id=)
+  // doesn't get stuck on the previous session's "already requested" state.
+  useEffect(() => {
+    if (!session) return;
+    if (debriefRequestedFor.current && debriefRequestedFor.current !== session.id) {
+      debriefRequestedFor.current = null;
+      setDebrief(null);
+      setDebriefErr(null);
+    }
+  }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Trigger debrief generation once we have a session.
   // Dedupe via useRef to avoid double-fetch on StrictMode / navigation thrash.
   useEffect(() => {
@@ -149,14 +161,29 @@ function WorkoutSummaryInner() {
   const m = session.metrics;
   const durationMin = Math.round(m.duration_seconds / 60);
 
-  const handleShare = (label: string, value: string) => {
+  // Wave 13B — Fallback to clipboard when Web Share API isn't available
+  // (Firefox desktop, Safari < 14, some embedded webviews). Silent failure
+  // before this fix made the share button look broken.
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const handleShare = async (label: string, value: string) => {
+    const text = `${label} : ${value}`;
     if (typeof navigator !== "undefined" && "share" in navigator) {
-      navigator
-        .share({
-          title: `${label} — NoDream`,
-          text: `${label} : ${value}`,
-        })
-        .catch(() => undefined);
+      try {
+        await navigator.share({ title: `${label} — NoDream`, text });
+        return;
+      } catch {
+        // User cancelled or share threw — fall through to clipboard
+      }
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setShareToast(`${label} copié`);
+        setTimeout(() => setShareToast(null), 2000);
+      } catch {
+        setShareToast("Impossible de copier");
+        setTimeout(() => setShareToast(null), 2000);
+      }
     }
   };
 
@@ -382,6 +409,29 @@ function WorkoutSummaryInner() {
           Retour au tableau
         </button>
       </div>
+
+      {/* Wave 13B — Toast for clipboard-fallback share confirmation */}
+      {shareToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mono fixed bottom-24 left-1/2 -translate-x-1/2 z-50"
+          style={{
+            padding: "8px 16px",
+            fontSize: 11,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            color: "var(--ink-900)",
+            background: "var(--gold-400)",
+            border: "1px solid var(--gold-500)",
+            fontWeight: 700,
+            boxShadow: "var(--glow-gold-soft)",
+            clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+          }}
+        >
+          {shareToast}
+        </div>
+      )}
     </div>
   );
 }

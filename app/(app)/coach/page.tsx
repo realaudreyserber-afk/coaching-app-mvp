@@ -158,14 +158,31 @@ export default function CoachPage() {
   // Hard timeout watchdog — if the IA hangs for 90s, we kill the stream and
   // restore the user input so they can retry.
   const STREAM_TIMEOUT_MS = 90_000;
+  // Wave 13B — throttle scroll-to-bottom while streaming. The previous
+  // smooth-scroll on every chunk caused juddery animation on mobile.
+  const lastScrollAtRef = useRef(0);
 
-  // Scroll to bottom on new messages
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Wave 13B — Scroll to bottom: smooth when idle, throttled-instant while
+  // streaming. Prevents the juddery animation on mobile where each chunk
+  // triggered a separate `smooth` scroll and the easing functions stacked
+  // up.
+  const scrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (sending) {
+      // While streaming, throttle to ~6 fps and use instant scroll so the
+      // chunks don't fight each other animating.
+      const now = Date.now();
+      if (now - lastScrollAtRef.current > 160) {
+        lastScrollAtRef.current = now;
+        scrollToBottom('auto');
+      }
+    } else {
+      // Final smooth scroll once the stream completes or on idle reload.
+      scrollToBottom('smooth');
+    }
   }, [messages, sending]);
 
   // Wave 11D — Cleanup any in-flight stream on unmount. Without this, the
@@ -442,7 +459,7 @@ export default function CoachPage() {
 
   return (
     <div
-      className="flex-1 flex flex-col max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20"
+      className="flex-1 flex flex-col max-w-3xl mx-auto w-full h-[calc(100dvh-4rem)] relative pb-20"
       style={{ background: 'transparent' }}
     >
 
