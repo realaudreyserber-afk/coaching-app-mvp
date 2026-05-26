@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
@@ -52,33 +52,34 @@ export default function ReferralPage() {
 
       try {
         const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          const refInfo = data.referral;
-
-          if (refInfo?.code) {
-            setCode(refInfo.code);
-            setReferredBy(refInfo.referredBy || null);
-            setReferredCount(refInfo.referredUsers?.length || 0);
-            setCredits(refInfo.premiumCredits || 0);
-          } else {
-            // Generate and save new code
-            const newCode = generateReferralCode();
-            await updateDoc(userRef, {
-              'referral.code': newCode,
-              'referral.referredBy': null,
-              'referral.referredUsers': [],
-              'referral.premiumCredits': 0,
-              'referral.updatedAt': new Date().toISOString()
-            });
-            setCode(newCode);
-            setReferredBy(null);
-            setReferredCount(0);
-            setCredits(0);
+        // Wave 11E — Use a transaction so two parallel tabs don't both
+        // generate a referral code and last-write-wins overwrites the first.
+        // The transaction re-reads the doc inside the critical section and
+        // only writes a new code if none exists yet.
+        const result = await runTransaction(db, async (tx) => {
+          const snap = await tx.get(userRef);
+          if (!snap.exists()) {
+            return { code: '', referredBy: null, referredUsers: [], premiumCredits: 0 };
           }
-        }
+          const refInfo = snap.data().referral;
+          if (refInfo?.code) {
+            return refInfo;
+          }
+          const newCode = generateReferralCode();
+          tx.update(userRef, {
+            'referral.code': newCode,
+            'referral.referredBy': null,
+            'referral.referredUsers': [],
+            'referral.premiumCredits': 0,
+            'referral.updatedAt': new Date().toISOString(),
+          });
+          return { code: newCode, referredBy: null, referredUsers: [], premiumCredits: 0 };
+        });
+
+        setCode(result.code);
+        setReferredBy(result.referredBy || null);
+        setReferredCount(result.referredUsers?.length || 0);
+        setCredits(result.premiumCredits || 0);
       } catch (err) {
         console.error('Error loading referral data:', err);
       } finally {
@@ -183,7 +184,7 @@ export default function ReferralPage() {
               <div className="space-y-1">
                 <h2 className="text-lg font-bold font-serif text-foreground">Invite tes amis, gagnez du Premium</h2>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Partage ton code unique. Pour chaque ami qui s'inscrit avec ton code, **vous gagnez tous les deux 1 mois d'abonnement Premium offert**.
+                  Partage ton code unique. Pour chaque ami qui s&apos;inscrit avec ton code, <strong>vous gagnez tous les deux 1 mois d&apos;abonnement Premium offert</strong>.
                 </p>
               </div>
 

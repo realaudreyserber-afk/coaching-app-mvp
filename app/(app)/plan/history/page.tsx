@@ -16,7 +16,7 @@
 
 import { Loader } from "@/components/ui/loader";
 import React, { useEffect, useState } from "react";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { useRouter } from "next/navigation";
@@ -60,10 +60,11 @@ export default function PlanHistoryPage() {
     const fetchAll = async () => {
       try {
         const plansRef = collection(db, "users", user.uid, "plans");
-        // Order by created_at desc so the most recent plan (likely the
-        // active one) appears first. Firestore composite index NOT required
-        // because we don't combine with a where().
-        const q = query(plansRef, orderBy("created_at", "desc"));
+        // Wave 11E — Cap to the 50 most recent plans. Without limit, a power
+        // user with months of weekly regenerations could pull hundreds of
+        // docs on every visit. 50 = covers ~1 year of weekly regen + room
+        // to spare. Pagination "Charger plus" can be added if needed.
+        const q = query(plansRef, orderBy("created_at", "desc"), limit(50));
         const snap = await getDocs(q);
         setPlans(
           snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PlanDoc),

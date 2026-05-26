@@ -4,7 +4,7 @@
 
 import { Loader } from "@/components/ui/loader";
 import React, { useEffect, useState } from "react";
-import { collection, query, orderBy, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
@@ -164,8 +164,11 @@ export default function ProgressPage() {
           }
         }
 
+        // Wave 11E — Cap to the last 180 daily check-ins (~6 months). Without
+        // limit the chart re-downloaded the entire history on every visit,
+        // and on a 2-year veteran account would push ~700 docs through.
         const dailyRef = collection(db, "users", user.uid, "checkins_daily");
-        const dailyQuery = query(dailyRef, orderBy("created_at", "desc"));
+        const dailyQuery = query(dailyRef, orderBy("created_at", "desc"), limit(180));
         const dailySnap = await getDocs(dailyQuery);
 
         const weightsList: any[] = [];
@@ -197,8 +200,11 @@ export default function ProgressPage() {
           setChartData(formattedData);
         }
 
+        // Wave 11E — Cap to the last 104 weekly check-ins (~2 years). Even
+        // if the user keeps going past 2y the chart already shows enough
+        // signal; if needed we'll add pagination later.
         const weeklyRef = collection(db, "users", user.uid, "checkins_weekly");
-        const weeklyQuery = query(weeklyRef, orderBy("created_at", "asc"));
+        const weeklyQuery = query(weeklyRef, orderBy("created_at", "asc"), limit(104));
         const weeklySnap = await getDocs(weeklyQuery);
 
         const recordsList: WeeklyRecord[] = [];
@@ -760,12 +766,30 @@ export default function ProgressPage() {
                             className="object-cover w-full h-full"
                             style={{ filter: 'grayscale(0.5) contrast(1.05)' }}
                             referrerPolicy="no-referrer"
+                            // Wave 11E — graceful fallback when Storage signed
+                            // URL expires (1h-7d) or the file was purged. Shows
+                            // "Photo expirée" instead of a broken icon.
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
                           />
-                        ) : (
-                          <span className="mono" style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--fg-5)', textTransform: 'uppercase' }}>
-                            Aucune photo
-                          </span>
-                        )}
+                        ) : null}
+                        <span
+                          data-photo-fallback
+                          className="mono items-center justify-center w-full h-full"
+                          style={{
+                            display: recordA?.photos?.[photoType] ? 'none' : 'flex',
+                            fontSize: 9,
+                            letterSpacing: '0.15em',
+                            color: 'var(--fg-5)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {recordA?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
+                        </span>
                       </div>
                     </div>
 
@@ -790,12 +814,27 @@ export default function ProgressPage() {
                             alt={`Photo ${photoType} - ${recordB.date}`}
                             className="object-cover w-full h-full"
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
                           />
-                        ) : (
-                          <span className="mono" style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--fg-5)', textTransform: 'uppercase' }}>
-                            Aucune photo
-                          </span>
-                        )}
+                        ) : null}
+                        <span
+                          data-photo-fallback
+                          className="mono items-center justify-center w-full h-full"
+                          style={{
+                            display: recordB?.photos?.[photoType] ? 'none' : 'flex',
+                            fontSize: 9,
+                            letterSpacing: '0.15em',
+                            color: 'var(--fg-5)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {recordB?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
+                        </span>
                       </div>
                     </div>
                   </div>
