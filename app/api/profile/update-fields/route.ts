@@ -14,13 +14,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 
-type FieldValue = string | number | boolean | null;
+type FieldValue = string | number | boolean | null | string[];
 
 interface FieldSpec {
-  type: "string" | "number" | "boolean";
+  type: "string" | "number" | "boolean" | "string_array";
   min?: number;
   max?: number;
   enum?: string[];
+  /** For string_array : max items in the array, max chars per item */
+  maxItems?: number;
+  maxItemLen?: number;
+  /** For string_array : whitelist of allowed item values (e.g. equipment slugs) */
+  itemEnum?: string[];
 }
 
 // Whitelist of writable paths with type + range validation.
@@ -45,6 +50,34 @@ const ALLOWED_FIELDS: Record<string, FieldSpec> = {
     type: "string",
     enum: ["gym", "home_gym", "home_bodyweight", "mixed"],
   },
+  // Wave 6 review item 6 : allow coach to persist the user's actual equipment
+  // list via <COACH_SAVE>. Item slugs match lib/features/exercises/database.json
+  // `equipment` field whitelist + lib/features/rag-coach/context.ts ENV_EQUIPMENT.
+  "profile.available_equipment": {
+    type: "string_array",
+    maxItems: 30,
+    maxItemLen: 40,
+    itemEnum: [
+      "aucun", "barre", "barre_ez", "halteres", "haltere",
+      "banc_plat", "banc_incline", "banc_decline", "banc_dossier",
+      "banc_predicateur", "banc_hyperext", "rack",
+      "barre_traction", "barre_traction_neutre", "barres_paralleles",
+      "kettlebells", "kettlebell", "anneaux", "elastique",
+      "disques", "disque", "trap_bar", "ceinture_lest", "roue_abdo",
+      "corde_a_sauter", "box", "box_plyometrique", "tapis", "mur",
+      "marche", "appui_chevilles", "partenaire", "banc", "sled",
+      "battle_ropes", "machine_chest_press", "machine_pec_deck",
+      "machine_pulldown", "poulie_haute", "poulie_basse", "poulies_doubles",
+      "corde", "barre_droite", "poignee_v", "machine_row",
+      "machine_chest_supported", "landmine", "machine_shrug",
+      "machine_shoulder_press", "machine_hack_squat", "machine_leg_press",
+      "machine_leg_extension", "machine_leg_curl_assis", "machine_leg_curl_couche",
+      "machine_abduction", "machine_mollets_debout", "machine_mollets_assis",
+      "machine_donkey", "sissy_bench", "farmer_handles", "stair_climber",
+      "rameur", "ski_erg", "air_bike", "tapis_motorise",
+    ],
+  },
+  "profile.timezone": { type: "string", max: 50 },
   "profile.waist_cm": { type: "number", min: 40, max: 200 },
   "profile.neck_cm": { type: "number", min: 25, max: 70 },
   "profile.hips_cm": { type: "number", min: 50, max: 200 },
@@ -75,6 +108,22 @@ function validateField(path: string, value: FieldValue): { ok: boolean; reason?:
   const spec = ALLOWED_FIELDS[path];
   if (!spec) return { ok: false, reason: "field_not_allowed" };
   if (value === null) return { ok: true }; // allow clearing
+  if (spec.type === "string_array") {
+    if (!Array.isArray(value)) return { ok: false, reason: "not_an_array" };
+    if (spec.maxItems !== undefined && value.length > spec.maxItems) {
+      return { ok: false, reason: "too_many_items" };
+    }
+    for (const item of value) {
+      if (typeof item !== "string") return { ok: false, reason: "item_not_string" };
+      if (spec.maxItemLen !== undefined && item.length > spec.maxItemLen) {
+        return { ok: false, reason: "item_too_long" };
+      }
+      if (spec.itemEnum && !spec.itemEnum.includes(item)) {
+        return { ok: false, reason: `item_not_in_enum:${item}` };
+      }
+    }
+    return { ok: true };
+  }
   if (typeof value !== spec.type) return { ok: false, reason: "type_mismatch" };
   if (spec.type === "number" && typeof value === "number") {
     if (spec.min !== undefined && value < spec.min) return { ok: false, reason: "below_min" };

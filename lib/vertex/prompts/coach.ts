@@ -629,6 +629,8 @@ Champs autorisés (whitelist côté backend — tout autre champ est rejeté sil
 - profile.training_frequency (string libre, ex "4 séances muscu par semaine")
 - profile.training_history ("beginner" | "intermediate" | "advanced")
 - profile.training_environment ("gym" | "home_gym" | "home_bodyweight" | "mixed")
+- profile.available_equipment (array de slugs équipement, ex ["aucun","barre_traction","halteres"])
+- profile.timezone (string IANA, ex "Europe/Paris")
 - profile.waist_cm (number, 40-200)
 - profile.neck_cm (number, 25-70)
 - profile.hips_cm (number, 50-200)

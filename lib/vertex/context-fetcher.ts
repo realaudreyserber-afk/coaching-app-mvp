@@ -31,13 +31,57 @@ import type {
 } from './context-builder';
 
 /**
- * Returns the YYYY-MM-DD slug in the user's local timezone (or fallback UTC).
- * We use local TZ to align with how check-ins and food logs are bucketed in
- * UI (which uses `new Date().toISOString().split('T')[0]` server-side and
- * local-time client-side — a known inconsistency to revisit in Wave 6).
+ * Returns the YYYY-MM-DD slug in the user's local timezone.
+ *
+ * Post-Wave-6 review fix : was using UTC, which broke the coach context for
+ * any user east of UTC+0 after their local 23:00 (UTC rolls to the next day
+ * but their food_logs / wearables are bucketed local-time). For an FR user
+ * at 23:30 local (UTC+1), the coach used to report "0 food logs today"
+ * because the UTC day had already advanced.
+ *
+ * `Intl.DateTimeFormat('en-CA', { timeZone })` returns "YYYY-MM-DD" reliably.
  */
-function todayIsoYmd(): string {
-  return new Date().toISOString().split('T')[0];
+function todayIsoYmd(timezone?: string): string {
+  const tz = timezone || 'Europe/Paris';
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    // Invalid tz string — fall back to server UTC
+    return new Date().toISOString().split('T')[0];
+  }
+}
+
+/**
+ * Returns the Date object representing "start of today" in the given TZ,
+ * expressed as a UTC Date (for Firestore range queries on ISO timestamps).
+ */
+function startOfTodayInTz(timezone?: string): Date {
+  const ymd = todayIsoYmd(timezone);
+  // Parse "YYYY-MM-DD" as midnight in the user's TZ, then convert to UTC.
+  // Trick: get the TZ offset by formatting a fixed instant and reading
+  // the resulting hour offset.
+  const tz = timezone || 'Europe/Paris';
+  const [y, m, d] = ymd.split('-').map((s) => parseInt(s, 10));
+  // Approximate via Date constructor at midnight local + adjust for TZ offset
+  // computed from the difference between UTC time and TZ-formatted time.
+  const utcMidnightOfYmd = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts = formatter.formatToParts(utcMidnightOfYmd);
+  const tzHour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+  const tzMinute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+  // If tzHour is 1, the UTC midnight is 1am in TZ → TZ midnight was 1h earlier in UTC
+  const offsetMs = (tzHour * 60 + tzMinute) * 60 * 1000;
+  return new Date(utcMidnightOfYmd.getTime() - offsetMs);
 }
 
 interface FoodLogDoc {
@@ -55,10 +99,10 @@ interface FoodLogDoc {
 async function fetchTodayFoodLogs(
   uid: string,
   kcalTarget?: number,
+  timezone?: string,
 ): Promise<TodayFoodLogsSummary | undefined> {
   try {
-    const startOfToday = new Date();
-    startOfToday.setUTCHours(0, 0, 0, 0);
+    const startOfToday = startOfTodayInTz(timezone);
     const snap = await adminDb
       .collection('users')
       .doc(uid)
@@ -88,7 +132,7 @@ async function fetchTodayFoodLogs(
     });
 
     return {
-      date: todayIsoYmd(),
+      date: todayIsoYmd(timezone),
       count: snap.size,
       kcal_total: Math.round(kcalTotal),
       macros_total: {
@@ -229,9 +273,9 @@ interface WearableSyncDoc {
  *
  * TODO Wave 6 : migrate writer to snake_case `active_calories_kcal`.
  */
-async function fetchWearablesToday(uid: string): Promise<WearablesToday | undefined> {
+async function fetchWearablesToday(uid: string, timezone?: string): Promise<WearablesToday | undefined> {
   try {
-    const today = todayIsoYmd();
+    const today = todayIsoYmd(timezone);
     const snap = await adminDb
       .collection('users')
       .doc(uid)
@@ -277,12 +321,16 @@ export async function fetchEnrichmentContext(
     | 'subscription'
   >
 > {
+  // Timezone fix : read profile.timezone for proper "today" bucketing.
+  // Defaults to Europe/Paris if missing (matches FR-67 product focus).
+  const timezone: string | undefined = userData.profile?.timezone;
+
   const [todayFoodLogs, recentFormChecks, bodyScanRecent, wearablesToday] =
     await Promise.all([
-      fetchTodayFoodLogs(uid, activePlanKcal),
+      fetchTodayFoodLogs(uid, activePlanKcal, timezone),
       fetchRecentFormChecks(uid),
       fetchBodyScanRecent(uid),
-      fetchWearablesToday(uid),
+      fetchWearablesToday(uid, timezone),
     ]);
 
   const lastSessionSummary = (userData.last_session_summary as LastSessionSummary | undefined) ?? undefined;
