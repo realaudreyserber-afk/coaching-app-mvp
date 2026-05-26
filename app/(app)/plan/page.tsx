@@ -86,43 +86,59 @@ export default function PlanPage() {
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
       {/* Tactical header */}
-      <div className="space-y-2">
-        <span
-          className="mono"
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: '0.3em',
+              color: 'var(--accent-tech)',
+              opacity: 0.85,
+            }}
+          >
+            [PLAN-TRANSFO] · ACTIF
+          </span>
+          <h2
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 900,
+              fontSize: 'var(--type-h1)',
+              letterSpacing: 'var(--tracking-display)',
+              lineHeight: 1.05,
+              color: 'var(--fg-1)',
+              marginTop: 4,
+            }}
+          >
+            Plan de <span style={{ color: 'var(--gold-400)' }}>transformation</span>
+          </h2>
+          <p
+            className="mono"
+            style={{
+              marginTop: 6,
+              fontSize: 'var(--type-meta)',
+              letterSpacing: '0.18em',
+              color: 'var(--fg-4)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Calibré · {plan.date_start ? new Date(plan.date_start).toLocaleDateString("fr-FR") : "récent"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/plan/history")}
+          className="btn btn-ghost mono"
           style={{
+            height: 36,
             fontSize: 10,
-            letterSpacing: '0.3em',
-            color: 'var(--accent-tech)',
-            opacity: 0.85,
-          }}
-        >
-          [PLAN-TRANSFO] · ACTIF
-        </span>
-        <h2
-          style={{
-            fontFamily: 'var(--font-sans)',
-            fontWeight: 900,
-            fontSize: 'var(--type-h1)',
-            letterSpacing: 'var(--tracking-display)',
-            lineHeight: 1.05,
-            color: 'var(--fg-1)',
-            marginTop: 4,
-          }}
-        >
-          Plan de <span style={{ color: 'var(--gold-400)' }}>transformation</span>
-        </h2>
-        <p
-          className="mono"
-          style={{
-            marginTop: 6,
-            fontSize: 'var(--type-meta)',
-            letterSpacing: '0.18em',
-            color: 'var(--fg-4)',
+            letterSpacing: '0.2em',
             textTransform: 'uppercase',
+            whiteSpace: 'nowrap',
           }}
         >
-          Calibré · {plan.date_start ? new Date(plan.date_start).toLocaleDateString("fr-FR") : "récent"}
-        </p>
+          Historique
+        </button>
       </div>
 
       {/* Tactical Tabs */}
