@@ -10,6 +10,59 @@ import { TierCard } from '@/components/ui/tier-card';
 import { Loader } from '@/components/ui/loader';
 import { ArrowLeft, Crown, Loader2, ExternalLink } from 'lucide-react';
 
+/**
+ * Wave 13A — Allowlist of Stripe origins we trust to redirect to. If the
+ * /api/stripe/checkout or /api/stripe/portal response was ever compromised
+ * to return an arbitrary URL, we'd otherwise navigate the user anywhere
+ * (phishing risk). Stripe-hosted pages live on these origins only.
+ */
+const STRIPE_ALLOWED_ORIGINS = [
+  'https://checkout.stripe.com',
+  'https://billing.stripe.com',
+];
+
+function isAllowedStripeUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false;
+  try {
+    const u = new URL(url);
+    return STRIPE_ALLOWED_ORIGINS.includes(u.origin);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wave 13A — Firestore returns the period-end either as an ISO string (when
+ * the server wrote new Date().toISOString()) or as a Timestamp (when the
+ * Cloud Function wrote FieldValue.serverTimestamp()). new Date() on a
+ * Timestamp returns Invalid Date → "Invalid Date" rendered. Normalize.
+ */
+function formatPeriodEnd(raw: unknown): string | null {
+  if (!raw) return null;
+  let date: Date | null = null;
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    date = new Date(raw);
+  } else if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    typeof (raw as { toDate?: () => Date }).toDate === 'function'
+  ) {
+    try {
+      date = (raw as { toDate: () => Date }).toDate();
+    } catch {
+      date = null;
+    }
+  } else if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    typeof (raw as { seconds?: number }).seconds === 'number'
+  ) {
+    date = new Date((raw as { seconds: number }).seconds * 1000);
+  }
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('fr-FR');
+}
+
 export default function SubscriptionPage() {
   const router = useRouter();
   const { getFreshToken } = useAuth();
@@ -29,6 +82,9 @@ export default function SubscriptionPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || 'Erreur lors du checkout.');
+      if (!isAllowedStripeUrl(data.url)) {
+        throw new Error('URL de paiement invalide. Réessaye ou contacte le support.');
+      }
       window.location.href = data.url;
     } catch (e: any) {
       setErr(e.message);
@@ -47,6 +103,9 @@ export default function SubscriptionPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || 'Erreur portail.');
+      if (!isAllowedStripeUrl(data.url)) {
+        throw new Error('URL portail invalide. Réessaye ou contacte le support.');
+      }
       window.location.href = data.url;
     } catch (e: any) {
       setErr(e.message);
@@ -88,9 +147,10 @@ export default function SubscriptionPage() {
               <CardTitle className="text-2xl font-serif text-zinc-50">Premium actif</CardTitle>
             </div>
             <CardDescription className="text-zinc-400">
-              {subState?.current_period_end && (
-                <>Renouvellement le {new Date(subState.current_period_end).toLocaleDateString('fr-FR')}.</>
-              )}
+              {(() => {
+                const renewal = formatPeriodEnd(subState?.current_period_end);
+                return renewal ? <>Renouvellement le {renewal}.</> : null;
+              })()}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

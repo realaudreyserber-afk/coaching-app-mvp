@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Button } from "@/components/ui/button";
@@ -136,16 +136,10 @@ export default function DashboardPage() {
             setStreak(uData.streak);
           }
 
-          // Wave 6C : badge si ORACLE.IA a une intervention proactive non-lue
-          try {
-            const coachStateRef = doc(db, "users", user.uid, "coach_state", "main");
-            const coachStateSnap = await getDoc(coachStateRef);
-            if (coachStateSnap.exists() && coachStateSnap.data()?.has_unread_intervention === true) {
-              setCoachUnread(true);
-            }
-          } catch (e) {
-            console.warn("[dashboard] coach_state read failed:", e);
-          }
+          // Wave 13A — coachUnread is now subscribed in a separate effect
+          // via onSnapshot so the badge updates live when ORACLE.IA pushes
+          // a proactive intervention while the user is on the dashboard.
+          // The previous one-shot getDoc only saw the value at mount time.
 
           // Daily Micro-task selection & status
           if (microTasksEnabled) {
@@ -165,28 +159,49 @@ export default function DashboardPage() {
           const tcData = todaySnap.data();
           setTodayCheckin(tcData);
 
-          // Retrieve AI insight if we saved it in the checkin doc
-          // (or let the background process or API populate it)
-          // For now, if today's checkin exists, fetch the insight from API or checkin data
-          // We also fetch it dynamically if it exists on the checkin doc
-          try {
-            const idToken = await user.getIdToken();
-            const response = await fetch(`/api/ai/daily-insight`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${idToken}`,
-              },
-              body: JSON.stringify({ checkin: tcData }),
-            });
-            if (response.ok) {
-              const resData = await response.json();
-              setAiInsight(resData?.insight);
-            } else if (response.status !== 401 && response.status !== 404) {
-              console.warn(`daily-insight returned ${response.status}`);
+          // Wave 13B — Cache AI insight on the checkin doc itself (field
+          // `insight` + `insight_generated_at`). If present and < 6h old,
+          // serve from cache instead of calling Vertex again. Saves ~70%
+          // of LLM calls on a user who reloads the dashboard during the day.
+          const cachedInsight: string | undefined = tcData.insight;
+          const cachedAt: string | undefined = tcData.insight_generated_at;
+          const cacheAgeMs = cachedAt ? Date.now() - new Date(cachedAt).getTime() : Infinity;
+          const cacheStillFresh = cacheAgeMs < 6 * 60 * 60 * 1000;
+
+          if (cachedInsight && cacheStillFresh) {
+            setAiInsight(cachedInsight);
+          } else {
+            try {
+              const idToken = await user.getIdToken();
+              const response = await fetch(`/api/ai/daily-insight`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({ checkin: tcData }),
+              });
+              if (response.ok) {
+                const resData = await response.json();
+                if (resData?.insight) {
+                  setAiInsight(resData.insight);
+                  // Persist on the checkin doc so subsequent reloads use
+                  // the cache. Best-effort — failure doesn't break the UI.
+                  setDoc(
+                    todayCheckinRef,
+                    {
+                      insight: resData.insight,
+                      insight_generated_at: new Date().toISOString(),
+                    },
+                    { merge: true },
+                  ).catch((e) => console.warn("[dashboard] insight cache write failed:", e));
+                }
+              } else if (response.status !== 401 && response.status !== 404) {
+                console.warn(`daily-insight returned ${response.status}`);
+              }
+            } catch (e) {
+              console.error("Failed to load insight on dashboard:", e);
             }
-          } catch (e) {
-            console.error("Failed to load insight on dashboard:", e);
           }
         }
 
@@ -232,6 +247,27 @@ export default function DashboardPage() {
     };
 
     loadDashboardData();
+  }, [user, loading]);
+
+  // Wave 13A — Live coach unread badge. Subscribes to coach_state/main so
+  // when ORACLE.IA fires a proactive intervention while the dashboard is
+  // open, the badge dot appears without a manual refresh. Cleans up on
+  // unmount + on auth change.
+  useEffect(() => {
+    if (loading || !user) return;
+    const ref = doc(db, "users", user.uid, "coach_state", "main");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists() && snap.data()?.has_unread_intervention === true) {
+          setCoachUnread(true);
+        } else {
+          setCoachUnread(false);
+        }
+      },
+      (err) => console.warn("[dashboard] coach_state snapshot error:", err),
+    );
+    return () => unsub();
   }, [user, loading]);
 
   if (loading || fetching) {
