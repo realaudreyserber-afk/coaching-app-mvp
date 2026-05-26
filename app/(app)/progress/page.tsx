@@ -8,7 +8,7 @@ import { collection, query, orderBy, getDocs, doc, getDoc } from "firebase/fires
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
-import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus, Activity, Sparkles } from "lucide-react";
 import { WeightHistoryRow } from "@/components/progress/weight-history-row";
 import { HudCard, PanelHeader, Tag } from "@/components/nodream";
 
@@ -91,8 +91,36 @@ function TacticalTabBtn({ active, accent, onClick, children }: TacticalTabBtnPro
 }
 
 export default function ProgressPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, getFreshToken } = useAuth();
   const [activeTab, setActiveTab] = useState<"weight" | "measurements" | "photos">("weight");
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+
+  const handleRequestAnalysis = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiErr(null);
+    try {
+      const token = await getFreshToken();
+      if (!token) throw new Error("Auth requise");
+      const res = await fetch("/api/ai/coach-progress-analysis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "analysis_failed");
+      setAiAnalysis(data.analysis);
+    } catch (e: any) {
+      setAiErr(e?.message ?? "erreur");
+    } finally {
+      setAiLoading(false);
+    }
+  };
   const [fetching, setFetching] = useState(true);
   const [chartData, setChartData] = useState<WeightDataPoint[]>([]);
   const [dailyWeights, setDailyWeights] = useState<any[]>([]);
@@ -296,6 +324,88 @@ export default function ProgressPage() {
           Évolution objective · sans illusion
         </p>
       </div>
+
+      {/* AI Analysis panel (Wave 5D) */}
+      <HudCard accent="tech" chamfer="sm" style={{ padding: "0.85rem 1.25rem" }}>
+        <PanelHeader
+          code="ORACLE.IA · ANALYSE"
+          title={
+            <span className="flex items-center gap-2">
+              <Activity className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
+              Analyse de ta progression (4 sem.)
+            </span>
+          }
+          accent="tech"
+          right={
+            !aiAnalysis && !aiLoading ? (
+              <button
+                onClick={handleRequestAnalysis}
+                className="btn btn-tech mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.2em",
+                  textTransform: "uppercase",
+                  height: 36,
+                  padding: "0 14px",
+                }}
+              >
+                <Sparkles className="h-3 w-3" aria-hidden="true" /> Demander l'analyse
+              </button>
+            ) : aiLoading ? (
+              <Tag accent="tech">ANALYSE...</Tag>
+            ) : (
+              <Tag accent="tech">CACHED 6H</Tag>
+            )
+          }
+        />
+        {aiErr && (
+          <p className="mono" style={{ fontSize: 11, color: "var(--alert-500)", letterSpacing: "0.05em" }}>
+            [ERR-ANALYSE] {aiErr}
+          </p>
+        )}
+        {aiLoading && !aiAnalysis && (
+          <p
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "var(--accent-tech)",
+              letterSpacing: "0.1em",
+              fontStyle: "italic",
+              margin: 0,
+            }}
+          >
+            ORACLE.IA · synthèse en cours...
+          </p>
+        )}
+        {aiAnalysis && (
+          <p
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontStyle: "italic",
+              fontSize: "var(--type-body)",
+              lineHeight: 1.7,
+              color: "var(--fg-1)",
+              margin: 0,
+            }}
+          >
+            « {aiAnalysis} »
+          </p>
+        )}
+        {!aiAnalysis && !aiLoading && !aiErr && (
+          <p
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "var(--fg-5)",
+              letterSpacing: "0.05em",
+              fontStyle: "italic",
+              margin: 0,
+            }}
+          >
+            Demande à ORACLE.IA un débrief : tendance poids, mesures, sessions, plateau éventuel.
+          </p>
+        )}
+      </HudCard>
 
       {/* Tactical tabs (3) */}
       <div

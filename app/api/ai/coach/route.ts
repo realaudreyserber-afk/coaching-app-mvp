@@ -11,6 +11,7 @@ import { buildRAGPrompt } from '@/lib/features/rag-sourcing/prompts';
 import { PROFILE_PATH_COACH_INSTRUCTIONS } from '@/lib/features/profile-paths/prompts';
 import { ProfilePath } from '@/lib/features/profile-paths/schema';
 import { buildEnrichedSystemPrompt, buildUserContext } from '@/lib/vertex/context-builder';
+import { fetchEnrichmentContext, extractPlanKcal } from '@/lib/vertex/context-fetcher';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
 
 export async function POST(req: NextRequest) {
@@ -158,12 +159,23 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
         }
       }
 
+      // 5. Wave 5A: fetch enrichment context (sessions, food logs today, form
+      // checks, body scan, wearables) in parallel — degrades gracefully if any
+      // collection is missing. The user doc itself carries last_session_summary
+      // + streak (denormalized) so they don't require extra reads.
+      const enrichments = await fetchEnrichmentContext(
+        uid,
+        userData,
+        extractPlanKcal(activePlan),
+      );
+
       // 5. Build the unified user context (single source of truth for the prompt)
       const ctx = buildUserContext({
         userData,
         activePlan,
         bloodwork,
         ragSources: searchResults,
+        ...enrichments,
       });
 
       // Decide which optional blocks to include based on feature flags so the

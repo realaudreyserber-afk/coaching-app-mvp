@@ -1,150 +1,466 @@
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Weight, Timer, Trophy, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { VolumeStatCard } from "@/components/workout/volume-stat-card";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
+import { useAuth } from "@/lib/firebase/hooks";
+import { Loader } from "@/components/ui/loader";
+import { HudCard, PanelHeader, Tag } from "@/components/nodream";
+import { ArrowLeft, Share2, Activity, Flame, Trophy, Weight, Timer } from "lucide-react";
+import type { SessionDoc } from "@/types/session";
 
 /**
- * /workout/summary — récap après une séance terminée.
+ * /workout/summary?from=<sessionId>
  *
- * Stitch ref : workout-summary-d.jpg ("Mission Accomplie" + 3 KPI cards
- * Volume/Time/PRs + Share Your Success grid).
- *
- * Phase 1 : route statique avec mock data. Phase 2 : route dynamique
- * /workout/summary/[sessionId] avec lecture Firestore users/{uid}/workouts/{id}.
+ * Récap d'une séance terminée + debrief ORACLE.IA (cached server-side).
+ * Si pas de `from` query, fallback sur le dernier `last_session_summary`
+ * dénormalisé sur users/{uid}.
  */
-
-const MOCK_SESSION = {
-  athleteFirstName: "Athlète",
-  totalVolumeKg: 12450,
-  durationLabel: "1 h 15 min",
-  prCount: 3,
-  highlights: [
-    {
-      label: "Record Développé Couché",
-      value: "100 kg",
-      meta: "Nouveau PR",
-    },
-    {
-      label: "Volume séance",
-      value: "12 450 kg",
-      meta: "+8 % vs semaine passée",
-    },
-    {
-      label: "Durée totale",
-      value: "1 h 15 min",
-      meta: "RPE moyen 7/10",
-    },
-  ],
-};
-
 export default function WorkoutSummaryPage() {
-  const router = useRouter();
-  const session = MOCK_SESSION;
+  // Next.js 15 App Router requires useSearchParams() to live under a Suspense
+  // boundary; otherwise the entire route opts out of SSG and prerender fails.
+  return (
+    <Suspense fallback={<Loader size="fullscreen" message="Chargement du récap..." />}>
+      <WorkoutSummaryInner />
+    </Suspense>
+  );
+}
 
-  const handleShare = (highlight: (typeof MOCK_SESSION.highlights)[number]) => {
+function WorkoutSummaryInner() {
+  const { user, loading, getFreshToken } = useAuth();
+  const router = useRouter();
+  const params = useSearchParams();
+  const sessionId = params?.get("from") ?? null;
+  // Dedupe debrief generation per-session-id to survive React StrictMode double-effects
+  // and fast back/forward navigation.
+  const debriefRequestedFor = useRef<string | null>(null);
+
+  const [session, setSession] = useState<(SessionDoc & { id: string }) | null>(null);
+  const [fetching, setFetching] = useState(true);
+  const [debrief, setDebrief] = useState<string | null>(null);
+  const [debriefLoading, setDebriefLoading] = useState(false);
+  const [debriefErr, setDebriefErr] = useState<string | null>(null);
+  const [debriefIsCached, setDebriefIsCached] = useState(false);
+
+  // Load the session doc (either from ?from= or fallback to last_session_summary)
+  useEffect(() => {
+    if (loading || !user) return;
+    const load = async () => {
+      try {
+        let targetId = sessionId;
+        if (!targetId) {
+          // Fallback to denormalized last_session_summary
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          targetId = (userSnap.data()?.last_session_summary?.session_id as string | undefined) ?? null;
+        }
+        if (!targetId) {
+          setFetching(false);
+          return;
+        }
+        const snap = await getDoc(
+          doc(db, "users", user.uid, "workout_sessions", targetId),
+        );
+        if (snap.exists()) {
+          setSession({ id: snap.id, ...(snap.data() as SessionDoc) });
+        }
+      } catch (e) {
+        console.error("[summary] load failed:", e);
+      } finally {
+        setFetching(false);
+      }
+    };
+    load();
+  }, [user, loading, sessionId]);
+
+  // Trigger debrief generation once we have a session.
+  // Dedupe via useRef to avoid double-fetch on StrictMode / navigation thrash.
+  useEffect(() => {
+    if (!session || !user || debrief) return;
+    if (debriefRequestedFor.current === session.id) return;
+    // Aborted sessions don't produce a useful debrief — server returns 409.
+    if (session.status === "aborted") {
+      setDebriefErr("Session abandonnée — pas de debrief.");
+      return;
+    }
+    debriefRequestedFor.current = session.id;
+    let cancelled = false;
+    const generate = async () => {
+      setDebriefLoading(true);
+      setDebriefErr(null);
+      try {
+        const token = await getFreshToken();
+        if (!token) throw new Error("Auth requise");
+        const res = await fetch("/api/ai/coach-session-debrief", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ session_id: session.id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "debrief_failed");
+        if (!cancelled) {
+          setDebrief(data.debrief);
+          setDebriefIsCached(Boolean(data.cached));
+        }
+      } catch (e: any) {
+        if (!cancelled) setDebriefErr(e?.message ?? "erreur");
+      } finally {
+        if (!cancelled) setDebriefLoading(false);
+      }
+    };
+    generate();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, user, debrief, getFreshToken]);
+
+  const avgRpe = useMemo(() => {
+    if (!session) return null;
+    const rpes = session.exercises.flatMap((ex) => ex.sets_logged.map((s) => s.rpe_felt));
+    if (rpes.length === 0) return null;
+    return (rpes.reduce((a, b) => a + b, 0) / rpes.length).toFixed(1);
+  }, [session]);
+
+  if (loading || fetching) {
+    return <Loader size="fullscreen" message="Chargement du récap..." />;
+  }
+
+  if (!session) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-6 py-10">
+        <HudCard accent="tech" chamfer="sm" style={{ padding: "1.5rem", maxWidth: 480 }}>
+          <PanelHeader code="NO-SESSION" title="Aucune séance à afficher" accent="tech" />
+          <p style={{ fontSize: 12, color: "var(--fg-3)", margin: "0 0 16px 0" }}>
+            Termine une séance via /session pour voir ton récap ici.
+          </p>
+          <button onClick={() => router.push("/session")} className="btn btn-primary" style={{ width: "100%" }}>
+            Aller au sélecteur
+          </button>
+        </HudCard>
+      </div>
+    );
+  }
+
+  const m = session.metrics;
+  const durationMin = Math.round(m.duration_seconds / 60);
+
+  const handleShare = (label: string, value: string) => {
     if (typeof navigator !== "undefined" && "share" in navigator) {
       navigator
         .share({
-          title: `${highlight.label} — NoDream`,
-          text: `${highlight.label} : ${highlight.value} (${highlight.meta})`,
+          title: `${label} — NoDream`,
+          text: `${label} : ${value}`,
         })
-        .catch(() => {
-          // user cancelled, no-op
-        });
+        .catch(() => undefined);
     }
   };
 
   return (
-    <div className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-10">
+    <div className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
       {/* Header */}
       <div className="flex items-center space-x-3">
-        <Button
-          variant="ghost"
-          size="icon"
+        <button
+          type="button"
           onClick={() => router.push("/dashboard")}
           aria-label="Retour au tableau de bord"
-          className="h-11 w-11"
+          className="btn btn-ghost"
+          style={{ height: 40, padding: "0 10px" }}
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Button>
-        <span className="text-[10px] uppercase tracking-widest font-semibold text-amber-500">
-          Séance terminée
+        </button>
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.3em",
+            color: "var(--accent-tech)",
+            textTransform: "uppercase",
+          }}
+        >
+          [SESSION-FIN] · {session.session_code}
         </span>
       </div>
 
       {/* Hero */}
-      <header className="text-center space-y-3">
-        <h1 className="text-4xl lg:text-5xl font-bold font-serif text-amber-400">
-          Mission accomplie
+      <div className="space-y-2">
+        <h1
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontWeight: 900,
+            fontSize: "var(--type-h1)",
+            letterSpacing: "var(--tracking-display)",
+            lineHeight: 1.05,
+            color: "var(--fg-1)",
+          }}
+        >
+          Mission <span style={{ color: "var(--gold-400)" }}>accomplie</span>
         </h1>
-        <p className="text-base text-zinc-400 max-w-xl mx-auto">
-          Excellente séance, {session.athleteFirstName}. Voici ton récap.
+        <p
+          className="mono"
+          style={{
+            fontSize: "var(--type-meta)",
+            letterSpacing: "0.18em",
+            color: "var(--fg-4)",
+            textTransform: "uppercase",
+          }}
+        >
+          {session.operation_name}
         </p>
-      </header>
+      </div>
 
-      {/* 3 KPI radial cards */}
-      <section
-        aria-label="Statistiques de la séance"
-        className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl mx-auto"
-      >
-        <VolumeStatCard
-          label="Volume"
-          value={session.totalVolumeKg.toLocaleString("fr-FR")}
-          unit="kg"
-          icon={Weight}
-        />
-        <VolumeStatCard
+      {/* Stats principales */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
           label="Durée"
-          value={session.durationLabel}
-          icon={Timer}
+          value={`${durationMin} min`}
+          icon={<Timer className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />}
+          accent="tech"
         />
-        <VolumeStatCard
-          label="Records"
-          value={session.prCount}
-          unit={session.prCount > 1 ? "battus" : "battu"}
-          icon={Trophy}
+        <StatCard
+          label="Volume total"
+          value={formatVolume(m.volume_kg)}
+          delta={m.vs_previous_volume_pct}
+          icon={<Weight className="h-4 w-4" style={{ color: "var(--gold-400)" }} aria-hidden="true" />}
+          accent="gold"
         />
-      </section>
+        <StatCard
+          label="Sets complétés"
+          value={`${m.sets_completed} / ${m.sets_planned}`}
+          icon={<Trophy className="h-4 w-4" style={{ color: "var(--gold-400)" }} aria-hidden="true" />}
+          accent="gold"
+        />
+        <StatCard
+          label="RPE moyen"
+          value={avgRpe ?? "—"}
+          icon={<Flame className="h-4 w-4" style={{ color: "var(--alert-500)" }} aria-hidden="true" />}
+          accent="tech"
+        />
+      </div>
 
-      {/* Share grid */}
-      <section className="space-y-4">
-        <h2 className="text-xl lg:text-2xl font-serif font-bold text-zinc-50 text-center">
-          Partage ta victoire
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {session.highlights.map((h, idx) => (
-            <article
-              key={idx}
-              className="relative overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 p-5 flex flex-col gap-3 hover:border-amber-500/40 transition-colors"
+      {/* Debrief ORACLE.IA */}
+      <HudCard accent="tech" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
+        <PanelHeader
+          code="ORACLE.IA · DEBRIEF"
+          title={
+            <span className="flex items-center gap-2">
+              <Activity className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
+              Analyse de la séance
+            </span>
+          }
+          accent="tech"
+          right={
+            debrief
+              ? <Tag accent="tech">{debriefIsCached ? 'CACHED' : 'LIVE'}</Tag>
+              : debriefLoading
+                ? <Tag accent="tech">ANALYSE...</Tag>
+                : null
+          }
+        />
+        {debriefLoading && !debrief && (
+          <p
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "var(--accent-tech)",
+              letterSpacing: "0.1em",
+              fontStyle: "italic",
+            }}
+          >
+            ORACLE.IA · analyse en cours...
+          </p>
+        )}
+        {debriefErr && (
+          <p
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: "var(--alert-500)",
+              letterSpacing: "0.05em",
+            }}
+          >
+            [ERR-DEBRIEF] {debriefErr}
+          </p>
+        )}
+        {debrief && (
+          <p
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontStyle: "italic",
+              fontSize: "var(--type-body)",
+              lineHeight: 1.7,
+              color: "var(--fg-1)",
+              margin: 0,
+            }}
+          >
+            « {debrief} »
+          </p>
+        )}
+      </HudCard>
+
+      {/* Top lift */}
+      {(() => {
+        const topLift = findTopLift(session);
+        if (!topLift) return null;
+        return (
+          <HudCard accent="gold" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
+            <PanelHeader
+              code="TOP-LIFT"
+              title={
+                <span className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4" style={{ color: "var(--gold-400)" }} aria-hidden="true" />
+                  Performance max de la séance
+                </span>
+              }
+              accent="gold"
+              right={
+                <button
+                  onClick={() =>
+                    handleShare(
+                      "Top lift",
+                      `${topLift.exercise_name} ${topLift.weight_kg}kg × ${topLift.reps_done} reps`,
+                    )
+                  }
+                  className="btn btn-ghost mono"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    height: 32,
+                    padding: "0 10px",
+                  }}
+                >
+                  <Share2 className="h-3 w-3" aria-hidden="true" /> Partager
+                </button>
+              }
+            />
+            <p
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 22,
+                fontWeight: 900,
+                color: "var(--fg-1)",
+                margin: 0,
+              }}
             >
-              <span className="text-[10px] uppercase tracking-widest font-semibold text-amber-500">
-                {h.label}
-              </span>
-              <span className="text-2xl font-bold font-serif text-zinc-50 tabular-nums">
-                {h.value}
-              </span>
-              <span className="text-xs text-zinc-400">{h.meta}</span>
-              <button
-                type="button"
-                onClick={() => handleShare(h)}
-                aria-label={`Partager : ${h.label}`}
-                className="mt-2 inline-flex items-center justify-center gap-2 h-9 rounded-md bg-amber-500 text-zinc-950 text-sm font-semibold hover:bg-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
-              >
-                <Share2 className="h-4 w-4" aria-hidden="true" />
-                Partager
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+              {topLift.exercise_name}
+            </p>
+            <p
+              className="stat-num gold"
+              style={{ fontSize: 36, lineHeight: 1.1, marginTop: 8 }}
+            >
+              {topLift.weight_kg} kg × {topLift.reps_done}
+            </p>
+            <p
+              className="mono"
+              style={{
+                fontSize: 10,
+                color: "var(--fg-5)",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+                marginTop: 6,
+              }}
+            >
+              RPE {topLift.rpe_felt}/10 · 1RM estimé {Math.round(topLift.weight_kg * (1 + topLift.reps_done / 30))} kg
+            </p>
+          </HudCard>
+        );
+      })()}
 
-      <p className="text-center text-xs text-zinc-500 max-w-md mx-auto">
-        Cette page sera bientôt connectée à tes séances logguées. Pour l&apos;instant,
-        elle affiche un exemple — le coach IA t&apos;aidera à logguer ta première
-        séance.
-      </p>
+      {/* CTA retour */}
+      <div className="flex justify-center pt-4">
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard")}
+          className="btn btn-primary"
+          style={{ minWidth: 240, height: 48 }}
+        >
+          Retour au tableau
+        </button>
+      </div>
     </div>
   );
+}
+
+function StatCard({
+  label,
+  value,
+  delta,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  delta?: number;
+  icon?: React.ReactNode;
+  accent: "gold" | "tech";
+}) {
+  const valueColor = accent === "tech" ? "var(--accent-tech)" : "var(--gold-400)";
+  return (
+    <HudCard accent={accent} chamfer="sm" corners style={{ padding: "0.85rem 1rem" }}>
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className="mono"
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.3em",
+            color: "var(--fg-4)",
+            textTransform: "uppercase",
+          }}
+        >
+          {label}
+        </span>
+        {icon}
+      </div>
+      <div className="stat-num" style={{ fontSize: 24, lineHeight: 1, color: valueColor }}>
+        {value}
+      </div>
+      {delta !== undefined && delta !== 0 && (
+        <span
+          className="mono"
+          style={{
+            fontSize: 9,
+            letterSpacing: "0.1em",
+            color: delta > 0 ? "var(--accent-tech)" : "var(--alert-500)",
+            marginTop: 4,
+            display: "inline-block",
+          }}
+        >
+          {delta > 0 ? "+" : ""}
+          {delta}% vs précédente
+        </span>
+      )}
+    </HudCard>
+  );
+}
+
+function findTopLift(session: SessionDoc) {
+  let bestE1rm = 0;
+  let best: { exercise_name: string; weight_kg: number; reps_done: number; rpe_felt: number } | undefined;
+  for (const ex of session.exercises) {
+    for (const set of ex.sets_logged) {
+      const load = (set.weight_kg ?? 0) + (set.loaded_kg ?? 0);
+      if (load <= 0) continue;
+      const e1rm = load * (1 + set.reps_done / 30);
+      if (e1rm > bestE1rm) {
+        bestE1rm = e1rm;
+        best = {
+          exercise_name: ex.exercise_name,
+          weight_kg: load,
+          reps_done: set.reps_done,
+          rpe_felt: set.rpe_felt,
+        };
+      }
+    }
+  }
+  return best;
+}
+
+function formatVolume(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
+  return `${kg.toLocaleString("fr-FR")} kg`;
 }

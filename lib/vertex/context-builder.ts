@@ -114,6 +114,72 @@ export interface NotificationContext {
   hour_local?: number;
 }
 
+// ---- Wave 5A : context enrichments ---------------------------------------
+
+export interface LastSessionSummary {
+  session_id: string;
+  session_code: string;
+  operation_name: string;
+  finished_at: string;
+  duration_seconds: number;
+  volume_kg: number;
+  completion_pct: number;
+  vs_previous_volume_pct?: number;
+  top_lift?: {
+    exercise_name: string;
+    weight_kg: number;
+    reps_done: number;
+    rpe_felt: number;
+  };
+}
+
+export interface TodayFoodLogsSummary {
+  date: string; // YYYY-MM-DD
+  count: number;
+  kcal_total: number;
+  macros_total: { p: number; c: number; f: number };
+  kcal_target?: number; // from active_plan, copied for delta computation
+  meals_sample: Array<{ name: string; kcal: number }>;
+}
+
+export interface RecentFormCheck {
+  exercise_name: string;
+  date: string; // YYYY-MM-DD or ISO
+  feedback_short: string; // top correction phrase, 1-2 sentences
+}
+
+export interface StreakState {
+  current: number;
+  longest: number;
+  last_checkin_date?: string;
+}
+
+export interface BodyScanRecent {
+  date: string;
+  bf_pct?: number;
+  muscle_mass_kg?: number;
+  diff_vs_previous?: {
+    bf_pct_delta?: number;
+    muscle_mass_kg_delta?: number;
+    days_between?: number;
+  };
+}
+
+export interface WearablesToday {
+  date: string;
+  steps?: number;
+  active_calories_kcal?: number;
+  hr_resting_bpm?: number;
+  source?: string;
+}
+
+export interface SubscriptionContext {
+  tier: 'free' | 'premium';
+  current_period_end?: string;
+}
+
+// ---------------------------------------------------------------------------
+
 export interface UserContext {
   profile?: UserProfile;
   baseline?: UserBaseline;
@@ -125,6 +191,14 @@ export interface UserContext {
   bloodwork?: BloodworkSummary;
   rag_sources?: SearchResult[];
   notification_context?: NotificationContext;
+  // Wave 5A — enrichments
+  last_session_summary?: LastSessionSummary;
+  today_food_logs?: TodayFoodLogsSummary;
+  recent_form_checks?: RecentFormCheck[];
+  streak?: StreakState;
+  body_scan_recent?: BodyScanRecent;
+  wearables_today?: WearablesToday;
+  subscription?: SubscriptionContext;
 }
 
 // =====================================================================
@@ -275,6 +349,104 @@ function notificationBlock(ctx: UserContext): string {
   return `\nCONTEXTE NOTIFICATION :\n${hints.join('\n')}\n`;
 }
 
+// ---- Wave 5A block builders ---------------------------------------------
+
+function lastSessionBlock(ctx: UserContext): string {
+  const s = ctx.last_session_summary;
+  if (!s) return '';
+  const minutes = Math.round(s.duration_seconds / 60);
+  const finishedDate = new Date(s.finished_at);
+  const daysAgo = Math.floor((Date.now() - finishedDate.getTime()) / (24 * 3600 * 1000));
+  const recency = daysAgo === 0 ? "aujourd'hui" : daysAgo === 1 ? "hier" : `il y a ${daysAgo}j`;
+  const delta = s.vs_previous_volume_pct !== undefined
+    ? ` (${s.vs_previous_volume_pct > 0 ? '+' : ''}${s.vs_previous_volume_pct}% volume vs précédente)`
+    : '';
+  const topLiftLine = s.top_lift
+    ? `\n- Top lift : ${s.top_lift.exercise_name} ${s.top_lift.weight_kg}kg × ${s.top_lift.reps_done} reps @ RPE ${s.top_lift.rpe_felt}`
+    : '';
+  return `
+[DERNIÈRE SÉANCE — ${recency}] · ${s.session_code} · "${s.operation_name}"
+- Durée : ${minutes} min · Volume : ${s.volume_kg} kg · Complétion : ${s.completion_pct}%${delta}${topLiftLine}
+
+Tu peux référencer cette séance pour féliciter, ajuster la prochaine, repérer une stagnation ou une régression. Si l'utilisateur te pose une question liée à la musculation et qu'il a fait sa séance récemment, ouvre par une phrase qui le montre.
+`;
+}
+
+function todayFoodBlock(ctx: UserContext): string {
+  const f = ctx.today_food_logs;
+  if (!f) return '';
+  const target = f.kcal_target;
+  const delta = target ? f.kcal_total - target : undefined;
+  const deltaStr = delta !== undefined
+    ? `Reste à manger : ${Math.max(0, -delta)} kcal (cible ${target}, actuel ${f.kcal_total})`
+    : `Total kcal : ${f.kcal_total}`;
+  const meals = f.meals_sample.slice(0, 5).map((m) => `  - ${m.name} (${m.kcal} kcal)`).join('\n');
+  return `
+[ALIMENTATION JOUR EN COURS — ${f.date}] · ${f.count} repas loggués
+${deltaStr}
+Macros consommées : ${f.macros_total.p}g P / ${f.macros_total.c}g C / ${f.macros_total.f}g F
+Repas du jour :
+${meals || '  (aucun détail)'}
+
+Tu peux conseiller des choix alimentaires précis pour le reste de la journée en fonction du delta restant.
+`;
+}
+
+function recentFormChecksBlock(ctx: UserContext): string {
+  const fc = ctx.recent_form_checks;
+  if (!fc || fc.length === 0) return '';
+  const lines = fc.slice(0, 3).map((c) => `- ${c.date} · ${c.exercise_name} : ${c.feedback_short}`).join('\n');
+  return `
+[ANALYSES VIDÉO TECHNIQUE RÉCENTES]
+${lines}
+
+Si la question utilisateur porte sur un de ces exos, rappelle la correction technique précédente.
+`;
+}
+
+function streakBlock(ctx: UserContext): string {
+  const s = ctx.streak;
+  if (!s || (!s.current && !s.longest)) return '';
+  return `
+[STREAK D'ENGAGEMENT]
+- Actuelle : ${s.current} jour(s) · Record : ${s.longest} jour(s)
+${s.current === s.longest && s.current > 0 ? "L'utilisateur est sur son record perso — souligne-le si pertinent." : ''}
+`;
+}
+
+function bodyScanBlock(ctx: UserContext): string {
+  const b = ctx.body_scan_recent;
+  if (!b) return '';
+  const diff = b.diff_vs_previous;
+  const diffStr = diff
+    ? `\nDiff vs scan précédent (${diff.days_between ?? '?'}j) : ${diff.bf_pct_delta !== undefined ? `${diff.bf_pct_delta > 0 ? '+' : ''}${diff.bf_pct_delta}% BF` : ''} ${diff.muscle_mass_kg_delta !== undefined ? `${diff.muscle_mass_kg_delta > 0 ? '+' : ''}${diff.muscle_mass_kg_delta}kg muscle` : ''}`.trim()
+    : '';
+  return `
+[SCAN CORPOREL RÉCENT — ${b.date}]
+- BF : ${b.bf_pct !== undefined ? `${b.bf_pct}%` : 'N/A'} · Masse musculaire : ${b.muscle_mass_kg !== undefined ? `${b.muscle_mass_kg}kg` : 'N/A'}${diffStr}
+`;
+}
+
+function wearablesBlock(ctx: UserContext): string {
+  const w = ctx.wearables_today;
+  if (!w) return '';
+  const fields: string[] = [];
+  if (w.steps !== undefined) fields.push(`Pas : ${w.steps}`);
+  if (w.active_calories_kcal !== undefined) fields.push(`Cal actives : ${w.active_calories_kcal} kcal`);
+  if (w.hr_resting_bpm !== undefined) fields.push(`FC repos : ${w.hr_resting_bpm} bpm`);
+  if (fields.length === 0) return '';
+  return `\n[WEARABLE JOUR EN COURS · ${w.source ?? 'inconnu'}] ${fields.join(' · ')}\n`;
+}
+
+function subscriptionBlock(ctx: UserContext): string {
+  const s = ctx.subscription;
+  if (!s) return '';
+  if (s.tier === 'free') {
+    return `\n[TIER : FREE] — Ne pousse pas l'upgrade sauf si l'utilisateur demande explicitement. Reste utile sur les fonctionnalités gratuites.\n`;
+  }
+  return `\n[TIER : PREMIUM] — L'utilisateur a accès à toutes les features (form-check vidéo, scan corporel, RAG scientifique étendu).\n`;
+}
+
 // =====================================================================
 // Public API
 // =====================================================================
@@ -288,6 +460,14 @@ export interface EnrichOptions {
   includeBloodwork?: boolean;
   includeRag?: boolean;
   includeNotification?: boolean;
+  // Wave 5A
+  includeLastSession?: boolean;
+  includeTodayFood?: boolean;
+  includeFormChecks?: boolean;
+  includeStreak?: boolean;
+  includeBodyScan?: boolean;
+  includeWearables?: boolean;
+  includeSubscription?: boolean;
 }
 
 const DEFAULT_OPTS: Required<EnrichOptions> = {
@@ -299,6 +479,13 @@ const DEFAULT_OPTS: Required<EnrichOptions> = {
   includeBloodwork: true,
   includeRag: true,
   includeNotification: false,
+  includeLastSession: true,
+  includeTodayFood: true,
+  includeFormChecks: true,
+  includeStreak: true,
+  includeBodyScan: true,
+  includeWearables: true,
+  includeSubscription: true,
 };
 
 /**
@@ -315,10 +502,17 @@ export function buildEnrichedSystemPrompt(
 
   if (o.includeProfile) parts.push(profileBlock(ctx));
   if (o.includeActivePlan) parts.push(activePlanBlock(ctx));
+  if (o.includeSubscription) parts.push(subscriptionBlock(ctx));
   if (o.includeProfilePath) parts.push(profilePathBlock(ctx));
   if (o.includeGlp1) parts.push(glp1Block(ctx));
   if (o.includeFasting) parts.push(fastingBlock(ctx));
   if (o.includeBloodwork) parts.push(bloodworkBlock(ctx));
+  if (o.includeLastSession) parts.push(lastSessionBlock(ctx));
+  if (o.includeTodayFood) parts.push(todayFoodBlock(ctx));
+  if (o.includeFormChecks) parts.push(recentFormChecksBlock(ctx));
+  if (o.includeStreak) parts.push(streakBlock(ctx));
+  if (o.includeBodyScan) parts.push(bodyScanBlock(ctx));
+  if (o.includeWearables) parts.push(wearablesBlock(ctx));
   if (o.includeRag) parts.push(ragBlock(ctx));
   if (o.includeNotification) parts.push(notificationBlock(ctx));
 
@@ -337,11 +531,32 @@ export interface BuildContextInput {
   bloodwork?: Record<string, any>;
   ragSources?: SearchResult[];
   notificationContext?: NotificationContext;
+  // Wave 5A
+  lastSessionSummary?: LastSessionSummary;
+  todayFoodLogs?: TodayFoodLogsSummary;
+  recentFormChecks?: RecentFormCheck[];
+  streak?: StreakState;
+  bodyScanRecent?: BodyScanRecent;
+  wearablesToday?: WearablesToday;
+  subscription?: SubscriptionContext;
 }
 
 export function buildUserContext(input: BuildContextInput): UserContext {
   const u = input.userData ?? {};
   const ap = input.activePlan;
+
+  // last_session_summary is denormalized onto users/{uid} by /api/sessions/finish.
+  // We prefer the input override (caller may have refetched) but fall back on the doc.
+  const lastSession =
+    input.lastSessionSummary ?? (u.last_session_summary as LastSessionSummary | undefined);
+
+  // Subscription tier defaults to 'free' if not set
+  const sub = input.subscription ?? (u.subscription
+    ? { tier: (u.subscription.tier ?? 'free') as 'free' | 'premium', current_period_end: u.subscription.current_period_end }
+    : undefined);
+
+  // Streak lives on users/{uid}.streak per Wave 2 design
+  const streak = input.streak ?? (u.streak as StreakState | undefined);
 
   return {
     profile: u.profile,
@@ -361,5 +576,12 @@ export function buildUserContext(input: BuildContextInput): UserContext {
     bloodwork: input.bloodwork,
     rag_sources: input.ragSources,
     notification_context: input.notificationContext,
+    last_session_summary: lastSession,
+    today_food_logs: input.todayFoodLogs,
+    recent_form_checks: input.recentFormChecks,
+    streak,
+    body_scan_recent: input.bodyScanRecent,
+    wearables_today: input.wearablesToday,
+    subscription: sub,
   };
 }

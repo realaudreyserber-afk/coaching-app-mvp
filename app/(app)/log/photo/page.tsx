@@ -168,6 +168,12 @@ export default function PhotoMealPage() {
       });
 
       setSuccessMsg(`Repas (${detectedItems.length} aliment(s)) enregistré dans ton journal !`);
+      // Wave 5E : feedback ORACLE.IA sur le repas vs macros du jour
+      void requestCoachFeedback({
+        name: `Photo · ${detectedItems.map((i) => i.name).slice(0, 3).join(', ')}`,
+        kcal: totalKcal,
+        macros: { p: totalP, c: totalC, f: totalF },
+      });
       setDetectedItems([]);
       setImageFile(null);
       setImagePreview(null);
@@ -176,6 +182,33 @@ export default function PhotoMealPage() {
       setErrorMsg(err?.message || 'Impossible d\'enregistrer les aliments.');
     } finally {
       setSavingLogs(false);
+    }
+  };
+
+  // Wave 5E — meal feedback hook
+  const [coachFeedback, setCoachFeedback] = useState<string | null>(null);
+  const [coachFeedbackLoading, setCoachFeedbackLoading] = useState(false);
+
+  const requestCoachFeedback = async (meal: { name: string; kcal: number; macros: { p: number; c: number; f: number } }) => {
+    if (!user) return;
+    setCoachFeedbackLoading(true);
+    setCoachFeedback(null);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/ai/coach-meal-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ meal }),
+      });
+      const data = await res.json();
+      if (res.ok && data.feedback) setCoachFeedback(data.feedback);
+    } catch (e) {
+      console.warn('[coach-feedback] photo failed:', e);
+    } finally {
+      setCoachFeedbackLoading(false);
     }
   };
 
@@ -321,6 +354,56 @@ export default function PhotoMealPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Wave 5E — ORACLE.IA feedback on the just-logged meal */}
+        {(coachFeedbackLoading || coachFeedback) && (
+          <div
+            className="relative"
+            style={{
+              padding: "12px 14px",
+              background: "var(--accent-tech-tint)",
+              border: "1px solid var(--accent-tech)",
+              boxShadow: "0 0 12px var(--accent-tech-tint-strong)",
+              clipPath:
+                "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+            }}
+          >
+            <span
+              className="mono flex items-center gap-2"
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.3em",
+                color: "var(--accent-tech)",
+                textTransform: "uppercase",
+                marginBottom: 6,
+              }}
+            >
+              <span className="status-dot" aria-hidden="true" />
+              ORACLE.IA · BRIEFING REPAS
+            </span>
+            {coachFeedbackLoading ? (
+              <p
+                className="mono"
+                style={{ fontSize: 11, color: "var(--accent-tech)", fontStyle: "italic", margin: 0 }}
+              >
+                analyse en cours...
+              </p>
+            ) : (
+              <p
+                style={{
+                  fontFamily: "var(--font-serif)",
+                  fontStyle: "italic",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: "var(--fg-1)",
+                  margin: 0,
+                }}
+              >
+                « {coachFeedback} »
+              </p>
+            )}
+          </div>
         )}
 
         {/* Detected Items & Editor */}

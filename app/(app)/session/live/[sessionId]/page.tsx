@@ -119,8 +119,25 @@ export default function LiveSessionPage() {
   useEffect(() => {
     if (restRemainingSec === null) return;
     if (restRemainingSec <= 0) {
-      // Beep + audio cue + auto-clear
-      void speakCoach("Repos terminé. Prépare la prochaine série.");
+      // Dynamic cue for the next set focus + auto-clear
+      const ex = session?.exercises[activeExerciseIdx];
+      if (ex) {
+        void speakCoachDynamic(
+          "rest_end",
+          {
+            exercise_id: ex.exercise_id,
+            exercise_name: ex.exercise_name,
+            set_index: activeSetIdx + 1,
+            target_sets: ex.target_sets,
+            target_reps_range: ex.target_reps_range,
+            target_rpe: ex.target_rpe,
+            last_performance: ex.last_performance,
+          },
+          "Repos terminé. Prépare la prochaine série.",
+        );
+      } else {
+        void speakCoach("Repos terminé. Prépare la prochaine série.");
+      }
       setRestRemainingSec(null);
       return;
     }
@@ -173,6 +190,51 @@ export default function LiveSessionPage() {
     [audioMuted, audioUnlocked, getFreshToken],
   );
 
+  /**
+   * Generate a dynamic coaching cue via /api/ai/coach-session-cue then play
+   * it via /api/ai/coach-audio. Falls back to the provided default text if
+   * the cue generation fails (e.g. rate-limited).
+   */
+  const speakCoachDynamic = useCallback(
+    async (
+      trigger: "set_start" | "set_finish" | "rest_start" | "rest_end" | "session_start",
+      payload: {
+        exercise_id: string;
+        exercise_name: string;
+        set_index?: number;
+        target_sets?: number;
+        target_reps_range?: string;
+        target_rpe?: number;
+        weight_kg?: number;
+        reps_done?: number;
+        rpe_felt?: number;
+        last_performance?: { weight_kg: number; reps_done: number; rpe_felt: number; days_ago: number };
+      },
+      fallbackText?: string,
+    ) => {
+      if (audioMuted || !audioUnlocked) return;
+      try {
+        const token = await getFreshToken();
+        if (!token) return;
+        const res = await fetch("/api/ai/coach-session-cue", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...payload, trigger }),
+        });
+        const data = await res.json();
+        const text = res.ok ? (data?.text as string | undefined) : fallbackText;
+        if (text) await speakCoach(text);
+      } catch (e) {
+        console.warn("[cue] dynamic failed, falling back:", e);
+        if (fallbackText) await speakCoach(fallbackText);
+      }
+    },
+    [audioMuted, audioUnlocked, getFreshToken, speakCoach],
+  );
+
   // Submit a set log
   const handleValidateSet = async () => {
     if (!session || submitting) return;
@@ -200,9 +262,22 @@ export default function LiveSessionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "log_set_failed");
 
-      // Trigger rest timer
+      // Trigger rest timer + dynamic ORACLE.IA cue
       setRestRemainingSec(ex.rest_seconds);
-      void speakCoach(
+      void speakCoachDynamic(
+        "set_finish",
+        {
+          exercise_id: ex.exercise_id,
+          exercise_name: ex.exercise_name,
+          set_index: activeSetIdx + 1,
+          target_sets: ex.target_sets,
+          target_reps_range: ex.target_reps_range,
+          target_rpe: ex.target_rpe,
+          weight_kg: weight,
+          reps_done: reps,
+          rpe_felt: rpe,
+          last_performance: ex.last_performance,
+        },
         `Série validée. ${reps} répétitions, RPE ${rpe}. Repos ${ex.rest_seconds} secondes.`,
       );
 

@@ -241,11 +241,48 @@ export default function RecipeOcrPage() {
       });
 
       setSuccessMsg(`Une portion (${portionKcal} kcal) a été ajoutée à ton journal de nutrition.`);
+      // Wave 5E : feedback ORACLE.IA sur cette portion vs macros du jour
+      void requestCoachFeedback({
+        name: `Recette · ${recipe.name}`,
+        kcal: portionKcal,
+        macros: { p: portionP, c: portionC, f: portionF },
+      });
     } catch (err: any) {
       console.error('Log recipe portion error:', err);
       setErrorMsg(err?.message || 'Impossible de consigner la portion dans ton journal.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Wave 5E — meal feedback hook
+  const [coachFeedback, setCoachFeedback] = useState<string | null>(null);
+  const [coachFeedbackLoading, setCoachFeedbackLoading] = useState(false);
+
+  const requestCoachFeedback = async (meal: {
+    name: string;
+    kcal: number;
+    macros: { p: number; c: number; f: number };
+  }) => {
+    if (!user) return;
+    setCoachFeedbackLoading(true);
+    setCoachFeedback(null);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/ai/coach-meal-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ meal }),
+      });
+      const data = await res.json();
+      if (res.ok && data.feedback) setCoachFeedback(data.feedback);
+    } catch (e) {
+      console.warn('[coach-feedback] recipe failed:', e);
+    } finally {
+      setCoachFeedbackLoading(false);
     }
   };
 
@@ -380,6 +417,56 @@ export default function RecipeOcrPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Wave 5E — ORACLE.IA feedback on the just-logged portion */}
+        {(coachFeedbackLoading || coachFeedback) && (
+          <div
+            className="relative"
+            style={{
+              padding: '12px 14px',
+              background: 'var(--accent-tech-tint)',
+              border: '1px solid var(--accent-tech)',
+              boxShadow: '0 0 12px var(--accent-tech-tint-strong)',
+              clipPath:
+                'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+            }}
+          >
+            <span
+              className="mono flex items-center gap-2"
+              style={{
+                fontSize: 10,
+                letterSpacing: '0.3em',
+                color: 'var(--accent-tech)',
+                textTransform: 'uppercase',
+                marginBottom: 6,
+              }}
+            >
+              <span className="status-dot" aria-hidden="true" />
+              ORACLE.IA · BRIEFING REPAS
+            </span>
+            {coachFeedbackLoading ? (
+              <p
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--accent-tech)', fontStyle: 'italic', margin: 0 }}
+              >
+                analyse en cours...
+              </p>
+            ) : (
+              <p
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  fontStyle: 'italic',
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: 'var(--fg-1)',
+                  margin: 0,
+                }}
+              >
+                « {coachFeedback} »
+              </p>
+            )}
+          </div>
         )}
 
         {/* Recipe Editor Form */}
