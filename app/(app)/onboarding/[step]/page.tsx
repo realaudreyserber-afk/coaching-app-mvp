@@ -32,27 +32,27 @@ const TOTAL_STEPS = 6;
  */
 const STEP_PHOTOS: Record<number, { src: string; alt: string }> = {
   1: {
-    src: "/garthe-rate.jpeg",
+    src: "/onboarding/identity.jpg",
     alt: "Athlète concentré en salle minimaliste, lumière à contre-jour",
   },
   2: {
-    src: "/fenetre-anabolique.jpeg",
+    src: "/onboarding/timezone.jpg",
     alt: "Horloge analogique éditoriale, accents or",
   },
   3: {
-    src: "/imc-mort.jpeg",
+    src: "/onboarding/measurements.jpg",
     alt: "Mètre ruban enroulé sur fond charcoal, lumière dorée latérale",
   },
   4: {
-    src: "/garthe-rate.jpeg",
+    src: "/onboarding/activity.jpg",
     alt: "Athlète en action, salle minimaliste",
   },
   5: {
-    src: "/garthe-rate.jpeg",
+    src: "/onboarding/goals.jpg",
     alt: "Athlète concentré sur son objectif, contre-jour",
   },
   6: {
-    src: "/fenetre-anabolique.jpeg",
+    src: "/onboarding/generate.jpg",
     alt: "Horloge éditoriale, calibration en cours",
   },
 };

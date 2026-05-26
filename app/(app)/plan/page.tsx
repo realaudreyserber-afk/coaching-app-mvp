@@ -15,6 +15,8 @@ import { groupSupplementsByMeal } from "@/lib/features/plans/group-supplements";
 import { MealCard } from "@/components/plan/meal-card";
 import { MacroBar } from "@/components/plan/macro-bar";
 import { ExerciseCard } from "@/components/plan/exercise-card";
+import { getExercisePosterUrl } from "@/lib/features/plans/exercise-images";
+import { getRecipeForMealName } from "@/lib/features/plans/meal-images";
 
 export default function PlanPage() {
   const { user, loading } = useAuth();
@@ -156,17 +158,22 @@ export default function PlanPage() {
               return (
                 <>
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {grouped.meals.map((meal, idx) => (
-                      <MealCard
-                        key={idx}
-                        meal={{
-                          name: meal.name,
-                          description: meal.description,
-                          approxKcal: meal.approx_kcal,
-                          supplements: meal.supplements,
-                        }}
-                      />
-                    ))}
+                    {grouped.meals.map((meal, idx) => {
+                       const recipe = getRecipeForMealName(meal.name, meal.description);
+                       return (
+                         <MealCard
+                           key={idx}
+                           meal={{
+                             name: meal.name,
+                             description: meal.description || recipe?.description,
+                             approxKcal: meal.approx_kcal,
+                             supplements: meal.supplements,
+                             photoUrl: recipe?.photoUrl,
+                             macros: recipe?.macros,
+                           }}
+                         />
+                       );
+                     })}
                   </div>
 
                   {grouped.orphans.length > 0 && (
@@ -233,6 +240,7 @@ export default function PlanPage() {
                         sets: ex.sets,
                         reps: ex.reps,
                         restSeconds: ex.rest_seconds,
+                        posterUrl: getExercisePosterUrl(ex.name),
                       }}
                     />
                   ))}

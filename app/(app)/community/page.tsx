@@ -15,19 +15,19 @@ const DISCORD_INVITE_URL = "https://discord.gg/aT7vUUvawj";
 // Mock data Phase 1 — sera remplacé par query Firestore users top 100 by points
 // (cf MIGRATION_BRIEF.md section 3.8). Tous prénoms fictifs.
 const MOCK_PODIUM: PodiumUser[] = [
-  { rank: 1, name: "Elena S.", initials: "ES", tier: "Or", points: 18420, stat: "Régularité 99 %" },
-  { rank: 2, name: "Marco R.", initials: "MR", tier: "Argent", points: 14650, stat: "Régularité 98 %" },
-  { rank: 3, name: "Anya K.", initials: "AK", tier: "Bronze", points: 14210, stat: "Régularité 97 %" },
+  { rank: 1, name: "Elena S.", initials: "ES", tier: "Or", points: 18420, stat: "Régularité 99 %", avatarUrl: "/avatars/elena.jpg" },
+  { rank: 2, name: "Marco R.", initials: "MR", tier: "Argent", points: 14650, stat: "Régularité 98 %", avatarUrl: "/avatars/marco.jpg" },
+  { rank: 3, name: "Anya K.", initials: "AK", tier: "Bronze", points: 14210, stat: "Régularité 97 %", avatarUrl: "/avatars/anya.jpg" },
 ];
 
 const MOCK_RANKINGS: RankingUser[] = [
-  { rank: 4, name: "David L.", initials: "DL", consistencyPct: 99, points: 15420 },
-  { rank: 5, name: "Sarah M.", initials: "SM", consistencyPct: 98, points: 15420 },
+  { rank: 4, name: "David L.", initials: "DL", consistencyPct: 99, points: 15420, avatarUrl: "/avatars/david.jpg" },
+  { rank: 5, name: "Sarah M.", initials: "SM", consistencyPct: 98, points: 15420, avatarUrl: "/avatars/sarah.jpg" },
   { rank: 6, name: "Martin C.", initials: "MC", consistencyPct: 98, points: 12380 },
   { rank: 7, name: "Élise L.", initials: "EL", consistencyPct: 98, points: 14650 },
   { rank: 8, name: "Sarah H.", initials: "SH", consistencyPct: 98, points: 14480 },
   { rank: 9, name: "David H.", initials: "DH", consistencyPct: 97, points: 14200 },
-  { rank: 10, name: "Anya K.", initials: "AK", consistencyPct: 97, points: 14210 },
+  { rank: 10, name: "Anya K.", initials: "AK", consistencyPct: 97, points: 14210, avatarUrl: "/avatars/anya.jpg" },
 ];
 
 const MOCK_CHALLENGES = [

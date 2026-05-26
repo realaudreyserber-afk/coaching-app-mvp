@@ -1,0 +1,705 @@
+/* ════════════════════════════════════════════════════════════════
+   NoDream — Cyberpunk Tactical layer on top of Humbolo TIME
+   Gold from Humbolo, matrix green + cyan as tech accents
+   ════════════════════════════════════════════════════════════════ */
+
+/* Fonts (Outfit, JetBrains Mono, Major Mono Display, Noto Serif) are loaded
+   via next/font in app/layout.tsx. Material Symbols Outlined is loaded via
+   a <link> tag in the same file. */
+
+:root {
+  /* ── Humbolo TIME base ─────────────────────────────────── */
+  --ink-900: #06030f;
+  --ink-850: #0a0508;
+  --ink-800: #0c0816;
+  --ink-700: #150a10;
+  --ink-600: #1a1428;
+
+  --gold-500: #d4af37;
+  --gold-400: #ffd700;
+  --gold-300: #fff8e7;
+  --gold-600: #b8962e;
+  --gold-700: #8a6f1f;
+
+  --pink-500: #ff2a6d;
+  --pink-400: #ff8c00;
+
+  --fg-1: #f8f8f8;
+  --fg-2: rgba(240, 240, 240, 0.92);
+  --fg-3: rgba(240, 240, 240, 0.65);
+  --fg-4: #a0a0a0;
+  --fg-5: rgba(255, 255, 255, 0.45);
+  --fg-6: rgba(255, 255, 255, 0.25);
+
+  --glass-bg:     rgba(255, 255, 255, 0.02);
+  --glass-bg-2:   rgba(255, 255, 255, 0.04);
+  --glass-bg-3:   rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-border-soft: rgba(255, 255, 255, 0.06);
+  --glass-border-strong: rgba(255, 255, 255, 0.18);
+
+  --gold-tint-08: rgba(212, 175, 55, 0.08);
+  --gold-tint-15: rgba(212, 175, 55, 0.15);
+  --gold-tint-25: rgba(212, 175, 55, 0.25);
+  --gold-tint-35: rgba(212, 175, 55, 0.35);
+
+  --pink-tint-10: rgba(255, 42, 109, 0.10);
+  --pink-tint-20: rgba(255, 42, 109, 0.20);
+  --pink-tint-35: rgba(255, 42, 109, 0.35);
+
+  /* ── CYBERPUNK EXTENSION ────────────────────────────────── */
+  /* Matrix tech green */
+  --matrix-500: #00ff66;
+  --matrix-400: #6dff9c;
+  --matrix-600: #00cc52;
+  --matrix-700: #008a37;
+  --matrix-tint-10: rgba(0, 255, 102, 0.10);
+  --matrix-tint-20: rgba(0, 255, 102, 0.20);
+  --matrix-tint-35: rgba(0, 255, 102, 0.35);
+
+  /* HUD cyan */
+  --cyan-500: #00e5ff;
+  --cyan-400: #7df9ff;
+  --cyan-tint-15: rgba(0, 229, 255, 0.15);
+
+  /* Red alert */
+  --alert-500: #ff2a2a;
+  --alert-tint-15: rgba(255, 42, 42, 0.15);
+
+  /* Palette role swaps (overridden via Tweaks) */
+  --accent-tech: var(--matrix-500);
+  --accent-tech-dim: var(--matrix-700);
+  --accent-tech-tint: var(--matrix-tint-10);
+  --accent-tech-tint-strong: var(--matrix-tint-20);
+
+  /* ── TYPE ───────────────────────────────────────────────── */
+  /* next/font sets --font-outfit, --font-jetbrains, etc. We alias them to the
+     names used by the Tactical OS prototype so component code remains identical. */
+  --font-sans: var(--font-outfit, 'Outfit'), system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-noto-serif, 'Noto Serif'), Georgia, serif;
+  --font-mono: var(--font-jetbrains, 'JetBrains Mono'), ui-monospace, monospace;
+  --font-display: var(--font-major-mono, 'Major Mono Display'), 'JetBrains Mono', monospace;
+  --font-icon: 'Material Symbols Outlined';
+
+  --type-display:   clamp(2.4rem, 10vw, 4.5rem);
+  --type-h1:        clamp(1.8rem, 4vw, 2.8rem);
+  --type-h2:        clamp(1.4rem, 3vw, 2rem);
+  --type-h3:        1.25rem;
+  --type-h4:        1.05rem;
+  --type-body:      0.95rem;
+  --type-body-sm:   0.85rem;
+  --type-meta:      0.72rem;
+  --type-eyebrow:   0.62rem;
+  --type-tiny:      0.62rem;
+
+  --tracking-eyebrow: 0.18em;
+  --tracking-luxe:    0.3em;
+  --tracking-wide:    0.5em;
+  --tracking-tight:   -0.02em;
+  --tracking-display: -0.04em;
+
+  --weight-light:   300;
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;
+  --weight-bold:    700;
+  --weight-heavy:   800;
+  --weight-black:   900;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+  --radius-pill: 50px;
+
+  --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --glow-gold-soft: 0 0 12px rgba(212, 175, 55, 0.25);
+  --glow-gold: 0 0 16px rgba(212, 175, 55, 0.40);
+  --glow-gold-strong: 0 0 28px rgba(212, 175, 55, 0.55);
+  --glow-tech: 0 0 12px rgba(0, 255, 102, 0.45);
+  --glow-tech-strong: 0 0 24px rgba(0, 255, 102, 0.65);
+
+  --grad-gold: linear-gradient(135deg, #d4af37, #ffd700);
+  --grad-gold-tech: linear-gradient(135deg, var(--gold-500), var(--accent-tech));
+  --grad-text-hero: linear-gradient(135deg, #fff 0%, #d4af37 100%);
+
+  --ease-brut: cubic-bezier(0.22, 0.68, 0, 1.4);
+  --ease-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── ALT PALETTES (set on body[data-palette]) ────────────────── */
+body[data-palette="matrix"] {
+  --accent-tech: var(--matrix-500);
+  --accent-tech-dim: var(--matrix-700);
+  --accent-tech-tint: var(--matrix-tint-10);
+  --accent-tech-tint-strong: var(--matrix-tint-20);
+  --glow-tech: 0 0 12px rgba(0, 255, 102, 0.45);
+  --glow-tech-strong: 0 0 24px rgba(0, 255, 102, 0.65);
+}
+body[data-palette="cyan"] {
+  --accent-tech: #00e5ff;
+  --accent-tech-dim: #006e80;
+  --accent-tech-tint: rgba(0, 229, 255, 0.10);
+  --accent-tech-tint-strong: rgba(0, 229, 255, 0.20);
+  --glow-tech: 0 0 12px rgba(0, 229, 255, 0.45);
+  --glow-tech-strong: 0 0 24px rgba(0, 229, 255, 0.65);
+}
+body[data-palette="magenta"] {
+  --accent-tech: #ff2a6d;
+  --accent-tech-dim: #8a0c38;
+  --accent-tech-tint: rgba(255, 42, 109, 0.10);
+  --accent-tech-tint-strong: rgba(255, 42, 109, 0.20);
+  --glow-tech: 0 0 12px rgba(255, 42, 109, 0.55);
+  --glow-tech-strong: 0 0 24px rgba(255, 42, 109, 0.65);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RESET + BASE
+   ════════════════════════════════════════════════════════════════ */
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--ink-900);
+  color: var(--fg-1);
+  font-weight: var(--weight-regular);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Subtle starfield via radial gradients */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1px 1px at 23% 14%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 67% 32%, rgba(212,175,55,0.4), transparent),
+    radial-gradient(1px 1px at 41% 78%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 89% 62%, rgba(0,255,102,0.3), transparent),
+    radial-gradient(1px 1px at 12% 92%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(2px 2px at 78% 8%, rgba(212,175,55,0.5), transparent),
+    radial-gradient(1px 1px at 55% 45%, rgba(255,255,255,0.3), transparent);
+  background-size: 600px 600px;
+  opacity: 0.7;
+}
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 3px,
+    transparent 4px
+  );
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MATRIX RAIN — canvas overlay
+   ════════════════════════════════════════════════════════════════ */
+
+.matrix-rain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+}
+
+/* Scan line keyframe for silhouettes */
+@keyframes scan-line {
+  0% { background-position: 0% -100%; }
+  100% { background-position: 0% 200%; }
+}
+
+/* Silhouette responsive */
+@media (max-width: 1200px) {
+  .silhouette-male, .silhouette-female { opacity: 0.35 !important; }
+}
+@media (max-width: 880px) {
+  .silhouette-male, .silhouette-female { display: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ════════════════════════════════════════════════════════════════ */
+
+h1, h2, h3, h4 { margin: 0; color: var(--fg-1); font-family: var(--font-sans); }
+h1 { font-size: var(--type-h1); font-weight: var(--weight-black); letter-spacing: var(--tracking-display); line-height: 1.05; }
+h2 { font-size: var(--type-h2); font-weight: var(--weight-heavy); letter-spacing: var(--tracking-tight); line-height: 1.1; }
+h3 { font-size: var(--type-h3); font-weight: var(--weight-heavy); letter-spacing: var(--tracking-tight); }
+h4 { font-size: var(--type-h4); font-weight: var(--weight-bold); letter-spacing: -0.01em; }
+p { margin: 0; font-size: var(--type-body); color: var(--fg-3); line-height: 1.6; }
+
+.mono { font-family: var(--font-mono); }
+.display-mono { font-family: var(--font-display); letter-spacing: 0.04em; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--type-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--gold-500);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+.eyebrow-tech { color: var(--accent-tech); }
+.eyebrow-pink { color: var(--pink-500); }
+.eyebrow-dim { color: var(--fg-5); }
+
+/* Big stat numerals */
+.stat-num {
+  font-family: var(--font-sans);
+  font-size: 2.4rem;
+  font-weight: var(--weight-black);
+  letter-spacing: var(--tracking-display);
+  line-height: 1;
+  color: var(--gold-400);
+}
+.stat-num.tech { color: var(--accent-tech); text-shadow: var(--glow-tech); }
+.stat-num.gold {
+  background: var(--grad-gold);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.4));
+}
+
+/* Glow text */
+.glow-gold {
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.6), 0 0 24px rgba(212, 175, 55, 0.3);
+  color: var(--gold-400);
+}
+.glow-tech {
+  text-shadow: 0 0 8px var(--accent-tech), 0 0 18px var(--accent-tech-tint-strong);
+  color: var(--accent-tech);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CYBERPUNK UI PRIMITIVES
+   ════════════════════════════════════════════════════════════════ */
+
+/* Tactical card — angled corners via clip-path */
+.hud-card {
+  position: relative;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.hud-card.gold {
+  border-color: var(--gold-tint-25);
+  box-shadow: var(--glow-gold-soft), inset 0 1px 0 rgba(212,175,55,0.08);
+}
+.hud-card.tech {
+  border-color: var(--accent-tech-tint-strong);
+  box-shadow: 0 0 16px var(--accent-tech-tint);
+}
+
+/* Bracketed corners — tactical chrome */
+.bracket {
+  position: relative;
+}
+.bracket::before,
+.bracket::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--accent-tech);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+.bracket::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+.bracket::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+.bracket-gold::before, .bracket-gold::after { border-color: var(--gold-500); }
+.bracket-4 {
+  position: relative;
+}
+.bracket-4::before, .bracket-4::after {
+  content: ''; position: absolute; width: 12px; height: 12px;
+  border: 2px solid var(--gold-500); pointer-events: none;
+}
+.bracket-4::before {
+  top: -1px; left: -1px;
+  border-right: 0; border-bottom: 0;
+  box-shadow: calc(100% + 2px - 12px) 0 0 -2px var(--gold-500),
+              calc(100% + 2px - 12px) 0 0 0 transparent;
+}
+
+/* Use a wrapper trick instead for 4 corners */
+.corners {
+  position: relative;
+}
+.corners > .c {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--gold-500);
+  pointer-events: none;
+}
+.corners > .c.tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.corners > .c.tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; }
+.corners > .c.bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; }
+.corners > .c.br { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+.corners.tech > .c { border-color: var(--accent-tech); }
+
+/* Clipped angled box (cyberpunk chamfer) */
+.clip-chamfer {
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+}
+.clip-chamfer-sm {
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+
+/* Buttons */
+.btn {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+  font-size: var(--type-body-sm);
+  letter-spacing: var(--tracking-luxe);
+  text-transform: uppercase;
+  padding: 0.75rem 1.5rem;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s var(--ease-soft);
+  background: transparent;
+  color: var(--fg-1);
+  position: relative;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--gold-500), var(--gold-400));
+  color: #1a0c00;
+  font-weight: var(--weight-black);
+  box-shadow: var(--glow-gold), inset 0 1px 0 rgba(255,255,255,0.3);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.btn-primary:hover {
+  box-shadow: var(--glow-gold-strong), inset 0 1px 0 rgba(255,255,255,0.4);
+  transform: translateY(-1px);
+}
+
+.btn-tech {
+  background: var(--accent-tech-tint);
+  color: var(--accent-tech);
+  border: 1px solid var(--accent-tech);
+  box-shadow: 0 0 12px var(--accent-tech-tint-strong), inset 0 0 12px rgba(0,0,0,0.4);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.btn-tech:hover {
+  background: var(--accent-tech-tint-strong);
+  box-shadow: 0 0 18px var(--accent-tech), inset 0 0 12px rgba(0,0,0,0.4);
+}
+
+.btn-ghost {
+  background: var(--glass-bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--glass-border);
+}
+.btn-ghost:hover { background: var(--glass-bg-3); border-color: var(--gold-tint-25); color: var(--gold-500); }
+
+/* Status dot */
+.status-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent-tech);
+  box-shadow: 0 0 8px var(--accent-tech);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.status-dot.gold { background: var(--gold-400); box-shadow: 0 0 8px var(--gold-400); }
+.status-dot.red { background: var(--alert-500); box-shadow: 0 0 8px var(--alert-500); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Data bar */
+.databar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.databar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-700), var(--gold-400));
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.6);
+  border-radius: 2px;
+  transition: width 0.8s var(--ease-smooth);
+  position: relative;
+}
+.databar-fill.tech {
+  background: linear-gradient(90deg, var(--accent-tech-dim), var(--accent-tech));
+  box-shadow: 0 0 8px var(--accent-tech);
+}
+.databar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: bar-shine 2.5s ease-in-out infinite;
+}
+@keyframes bar-shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Glitch text effect */
+.glitch {
+  position: relative;
+  display: inline-block;
+}
+.glitch::before, .glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+.glitch::before {
+  color: var(--accent-tech);
+  animation: glitch-1 3s infinite linear alternate-reverse;
+  text-shadow: 1px 0 var(--accent-tech);
+  clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+  opacity: 0.7;
+}
+.glitch::after {
+  color: var(--pink-500);
+  animation: glitch-2 2.5s infinite linear alternate-reverse;
+  text-shadow: -1px 0 var(--pink-500);
+  clip-path: polygon(0 67%, 100% 67%, 100% 100%, 0 100%);
+  opacity: 0.7;
+}
+@keyframes glitch-1 {
+  0%, 90%, 100% { transform: translate(0); }
+  92% { transform: translate(-2px, 1px); }
+  94% { transform: translate(2px, -1px); }
+  96% { transform: translate(-1px, 2px); }
+}
+@keyframes glitch-2 {
+  0%, 88%, 100% { transform: translate(0); }
+  90% { transform: translate(2px, -1px); }
+  92% { transform: translate(-2px, 1px); }
+  94% { transform: translate(1px, -2px); }
+}
+
+/* Entry animations — opacity stays at 1 so content is always visible */
+@keyframes brutIn {
+  0% { transform: translateY(14px) scale(0.88); }
+  60% { transform: translateY(-4px) scale(1.07); }
+  85% { transform: translateY(1px) scale(0.97); }
+  100% { transform: translateY(0) scale(1); }
+}
+.brut-in { animation: brutIn 0.6s var(--ease-brut) forwards; }
+.brut-in-1 { animation-delay: 0.06s; }
+.brut-in-2 { animation-delay: 0.12s; }
+.brut-in-3 { animation-delay: 0.18s; }
+.brut-in-4 { animation-delay: 0.24s; }
+.brut-in-5 { animation-delay: 0.30s; }
+
+/* Boot type effect */
+@keyframes type-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.cursor::after {
+  content: '▮';
+  margin-left: 4px;
+  color: var(--accent-tech);
+  animation: type-cursor 1s steps(1) infinite;
+}
+
+/* HUD line — animated underline */
+.hud-underline {
+  position: relative;
+  padding-bottom: 6px;
+}
+.hud-underline::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: 0;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--gold-500), transparent);
+}
+
+/* Grid background tile */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(212, 175, 55, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 175, 55, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gold-tint-25); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-500); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE — tablet & phone (≤768px)
+   ════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  :root {
+    --type-display: clamp(2rem, 12vw, 3rem);
+    --type-h1: clamp(1.4rem, 7vw, 2rem);
+    --type-h2: clamp(1.2rem, 5.5vw, 1.6rem);
+    --type-h3: 1.05rem;
+    --type-h4: 0.95rem;
+    --type-body: 0.9rem;
+    --type-body-sm: 0.8rem;
+  }
+
+  /* Top bar */
+  header[role], header {
+    padding: 10px 14px !important;
+    gap: 8px !important;
+    flex-wrap: wrap;
+  }
+  /* Hide tactical readout (status / sector / clock) on mobile */
+  .top-tactical-readout { display: none !important; }
+  /* Compact icon row */
+  .top-icon-row > button:not(.top-icon-primary):not(.top-icon-logout) {
+    display: none !important;
+  }
+  .top-logout-text { display: none !important; }
+
+  /* Main padding shrink */
+  main > div[style*="padding: 32px 32px 48px"],
+  main > div[style*="padding: 24px 32px"] {
+    padding: 16px 12px 32px !important;
+  }
+  main > div > div[style*="padding: 32px"],
+  main > div > div[style*="padding: 28px"] {
+    padding: 16px !important;
+  }
+
+  /* Bottom nav: shrink padding */
+  nav[role], nav {
+    padding: 8px 8px env(safe-area-inset-bottom, 8px) !important;
+    gap: 3px !important;
+  }
+  nav button {
+    padding: 6px 2px !important;
+  }
+  nav button span.material-symbols-outlined {
+    font-size: 18px !important;
+  }
+  /* Hide nav code badge on mobile */
+  nav button > span:last-child[style*="position: absolute"] {
+    display: none !important;
+  }
+
+  /* Grid responsive — collapse all React inline grids via class */
+  .mob-stack { grid-template-columns: 1fr !important; }
+  .mob-stack-2 { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Coach screen layout */
+  .coach-layout {
+    padding: 8px !important;
+    height: calc(100vh - 130px) !important;
+    gap: 8px !important;
+  }
+  .coach-sidebar { display: none !important; }
+
+  /* All cards: shrink padding */
+  .hud-card { padding: 14px !important; }
+
+  /* Corner brackets — smaller on mobile */
+  .corners > .c { width: 8px; height: 8px; }
+
+  /* Scanlines a tad lighter on mobile so content reads */
+  body::after { opacity: 0.18 !important; }
+
+  /* Tweaks panel respects viewport */
+  .twk-panel { width: calc(100vw - 24px) !important; max-width: 280px; }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --type-h1: clamp(1.3rem, 6.5vw, 1.8rem);
+    --type-h2: 1.15rem;
+  }
+  nav button span:nth-child(2) {
+    font-size: 8px !important;
+    letter-spacing: 0.12em !important;
+  }
+  /* Hide nav labels on phones, keep icons only */
+  .mob-hide-label { display: none !important; }
+}

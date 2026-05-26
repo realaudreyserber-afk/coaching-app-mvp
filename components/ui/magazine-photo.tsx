@@ -27,8 +27,9 @@ export function MagazinePhoto({
   className = "",
   ...imageProps
 }: MagazinePhotoProps) {
+  const hasPosition = /\b(absolute|relative|fixed|static|sticky)\b/.test(wrapperClassName);
   return (
-    <div className={`relative overflow-hidden ${wrapperClassName}`}>
+    <div className={`${hasPosition ? "" : "relative"} overflow-hidden ${wrapperClassName}`}>
       <Image
         alt={alt}
         className={`${grayscale ? "grayscale" : ""} object-cover ${className}`}

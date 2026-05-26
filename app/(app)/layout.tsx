@@ -5,8 +5,8 @@ import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/firebase/hooks";
 
-import TopBar from "@/components/navigation/top-bar";
-import BottomNav from "@/components/navigation/bottom-nav";
+import { TacticalHeader } from "@/components/nodream/tactical-header";
+import { TacticalBottomNav } from "@/components/nodream/tactical-bottom-nav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, hasProfile } = useAuth();
@@ -60,15 +60,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         Aller au contenu principal
       </a>
-      {!isOnboarding && <TopBar />}
+      {!isOnboarding && <TacticalHeader />}
       <main
         id="main-content"
         tabIndex={-1}
-        className={`flex-1 flex flex-col ${!isOnboarding ? "pb-20" : ""}`}
+        className={`flex-1 flex flex-col relative z-10 ${!isOnboarding ? "pb-20" : ""}`}
       >
         {children}
       </main>
-      {!isOnboarding && <BottomNav />}
+      {!isOnboarding && <TacticalBottomNav />}
     </div>
   );
 }
