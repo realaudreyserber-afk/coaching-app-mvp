@@ -18,7 +18,8 @@ type FlagKey =
   | 'voice_log' | 'form_check' | 'micro_tasks' | 'recipe_ocr' | 'micronutrients'
   | 'bloodwork_upload' | 'referral' | 'streak' | 'smart_notifs'
   | 'stripe_portal_advanced' | 'admin_dashboard' | 'ab_framework'
-  | 'gdpr_self_service' | 'health_connect' | 'healthkit';
+  | 'gdpr_self_service' | 'health_connect' | 'healthkit'
+  | 'session_live' | 'coach_audio';
 
 let remoteCache: Record<string, boolean> | null = null;
 let remoteCachedAt = 0;
@@ -108,4 +109,6 @@ export const flags = {
   gdprSelfService: () => resolveSync('gdpr_self_service'),
   healthConnect: () => resolveSync('health_connect'),
   healthkit: () => resolveSync('healthkit'),
+  sessionLive: () => resolveSync('session_live'),
+  coachAudio: () => resolveSync('coach_audio'),
 };

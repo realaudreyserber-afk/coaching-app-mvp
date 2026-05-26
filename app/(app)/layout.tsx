@@ -52,6 +52,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // Focus mode: hide BottomNav during live session — the user is mid-workout.
+  // Header stays (so they can see ORACLE.IA status + abort).
+  const isLiveSession = pathname?.startsWith("/session/live");
+  const hideChrome = isOnboarding;
+  const hideBottomNav = isOnboarding || isLiveSession;
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <a
@@ -60,15 +66,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         Aller au contenu principal
       </a>
-      {!isOnboarding && <TacticalHeader />}
+      {!hideChrome && <TacticalHeader />}
       <main
         id="main-content"
         tabIndex={-1}
-        className={`flex-1 flex flex-col relative z-10 ${!isOnboarding ? "pb-20" : ""}`}
+        className={`flex-1 flex flex-col relative z-10 ${!hideBottomNav ? "pb-20" : ""}`}
       >
         {children}
       </main>
-      {!isOnboarding && <TacticalBottomNav />}
+      {!hideBottomNav && <TacticalBottomNav />}
     </div>
   );
 }

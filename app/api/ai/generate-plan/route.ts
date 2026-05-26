@@ -3,7 +3,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { withAuth } from '@/lib/firebase/auth-middleware';
 import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText, parseLLMJson } from '@/lib/vertex/client';
-import { PLAN_GENERATOR_SYSTEM_PROMPT } from '@/lib/vertex/prompts/plan-generator';
+import { buildPlanGeneratorSystemPrompt } from '@/lib/vertex/prompts/plan-generator';
 import { PlanSchema } from '@/lib/vertex/schemas';
 import { PLAN_RESPONSE_SCHEMA } from '@/lib/vertex/response-schemas';
 import { checkUserBaseline } from '@/lib/vertex/safety';
@@ -75,8 +75,18 @@ export async function POST(req: NextRequest) {
         await userRef.update({ profile_path: profilePath });
       }
 
-      // Customize system instructions based on profile paths and fasting
-      let systemInstruction = PLAN_GENERATOR_SYSTEM_PROMPT;
+      // Customize system instructions based on profile paths and fasting.
+      // The exercise library + training methods knowledge is injected
+      // level-aware: beginners don't see "avance" exercises in the menu.
+      const trainingHistory = (userContext.profile as Record<string, unknown> | undefined)
+        ?.training_history;
+      const userLevel: "debutant" | "intermediaire" | "avance" =
+        trainingHistory === "beginner"
+          ? "debutant"
+          : trainingHistory === "advanced"
+            ? "avance"
+            : "intermediaire";
+      let systemInstruction = buildPlanGeneratorSystemPrompt(userLevel);
       if (flags.profilePaths()) {
         const pathInstructions = PROFILE_PATH_PLAN_INSTRUCTIONS[profilePath];
         if (pathInstructions) {
