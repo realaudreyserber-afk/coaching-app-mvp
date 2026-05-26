@@ -90,20 +90,19 @@ export async function POST(req: NextRequest) {
     (userData.profile?.training_history === "advanced" && "avance") ||
     "intermediaire";
 
-  // 4. Build ExerciseSlots with block_code A1/A2/B1/... derived from order
-  const exerciseSlots: ExerciseSlot[] = trainingBlock.exercises.map(
-    (ex, idx) => ({
-      block_code: buildBlockCode(idx),
-      exercise_id: slugify(ex.name),
-      exercise_name: ex.name,
-      load_type: inferLoadType(ex.name),
-      target_sets: ex.sets,
-      target_reps_range: ex.reps,
-      target_rpe: 8, // default; coach will personalize in V2
-      rest_seconds: ex.rest_seconds,
-      sets_logged: [],
-    }),
-  );
+  // 4. Build ExerciseSlots with block_code derived from superset_group when
+  // declared by the plan (Wave 7 #8), or from paires-de-2 fallback otherwise.
+  const exerciseSlots: ExerciseSlot[] = trainingBlock.exercises.map((ex, idx, all) => ({
+    block_code: buildBlockCode(idx, all),
+    exercise_id: slugify(ex.name),
+    exercise_name: ex.name,
+    load_type: inferLoadType(ex.name),
+    target_sets: ex.sets,
+    target_reps_range: ex.reps,
+    target_rpe: 8, // default; coach will personalize in V2
+    rest_seconds: ex.rest_seconds,
+    sets_logged: [],
+  }));
 
   // 5. Inject last_performance from prior completed sessions (lookback 90d)
   await injectLastPerformance(uid, exerciseSlots);
@@ -154,11 +153,49 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Derive block_code from index. Convention: A1/A2 = first pair (superset block A),
- * B1/B2 = second pair, etc. Solo exos get A1 / B1 / C1 alone.
- * For V1 we group by pairs of 2 — coach can override in V2.
+ * Derive block_code from the exercise list.
+ *
+ * Wave 7 #8 : when the coach declared `superset_group` on the exercises
+ * (string id like "A", "B"…), all exos sharing the same group get the same
+ * letter with an incrementing slot (e.g. "A1", "A2", "A3"). Solo exos (no
+ * group declared) get their own unique letter.
+ *
+ * Fallback when NO superset_group is set anywhere in the block: paires-de-2
+ * naive grouping (idx 0/1 = A1/A2, idx 2/3 = B1/B2, etc.) — kept for plans
+ * generated before Wave 7 #8 landed.
  */
-function buildBlockCode(idx: number): string {
+function buildBlockCode(idx: number, all: ReadonlyArray<{ superset_group?: string }>): string {
+  const hasAnySupersetGroup = all.some((e) => typeof e.superset_group === "string" && e.superset_group);
+
+  if (hasAnySupersetGroup) {
+    // Map declared group → letter (A, B, C…) in order of first appearance.
+    // Solo exos (undefined group) each get their own letter.
+    const groupLetters = new Map<string, string>(); // group_id → letter
+    const soloLetters = new Map<number, string>(); // idx → letter
+    let nextLetterCode = "A".charCodeAt(0);
+    for (let i = 0; i < all.length; i++) {
+      const g = all[i].superset_group;
+      if (g) {
+        if (!groupLetters.has(g)) {
+          groupLetters.set(g, String.fromCharCode(nextLetterCode++));
+        }
+      } else {
+        soloLetters.set(i, String.fromCharCode(nextLetterCode++));
+      }
+    }
+    const me = all[idx];
+    const letter = me.superset_group ? groupLetters.get(me.superset_group)! : soloLetters.get(idx)!;
+    // Slot = position within the same group (1-indexed)
+    let slot = 1;
+    for (let i = 0; i < idx; i++) {
+      const other = all[i];
+      if (me.superset_group && other.superset_group === me.superset_group) slot++;
+      else if (!me.superset_group && i === idx) break;
+    }
+    return `${letter}${slot}`;
+  }
+
+  // Legacy paires-de-2 fallback
   const blockLetter = String.fromCharCode("A".charCodeAt(0) + Math.floor(idx / 2));
   const slot = (idx % 2) + 1;
   return `${blockLetter}${slot}`;

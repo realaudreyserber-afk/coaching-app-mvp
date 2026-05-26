@@ -1,0 +1,57 @@
+# Wave 7 #10 — CI tests for Firestore Security Rules.
+#
+# Runs on every PR + push to main. Boots the Firebase emulator (Java required)
+# then executes the 24 rules-unit-tests in test/rules/.
+#
+# This is the safety net that catches rules regressions BEFORE they hit prod
+# (e.g. the C1/C2 issues caught in the Wave 6 code review).
+#
+# Trigger : on pull_request OR push to main when firestore.rules or
+# test/rules/** is touched.
+
+name: Firestore Rules Tests
+
+on:
+  pull_request:
+    paths:
+      - 'firestore.rules'
+      - 'test/rules/**'
+      - 'vitest.rules.config.ts'
+      - '.github/workflows/rules-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'test/rules/**'
+
+jobs:
+  rules-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java (required by Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@latest
+
+      - name: Run rules tests against Firestore emulator
+        # `firebase emulators:exec` starts the emulator, runs the command,
+        # then shuts it down — no need to manage the process manually.
+        run: firebase emulators:exec --only firestore --project linsociable-coaching-test "npm run test:rules"

@@ -21,6 +21,36 @@ import type {
   RagHit,
 } from "./types";
 
+// ─────────────────────────────────────────────────────────────
+// Wave 7 #6 — Module-level LRU cache for query embeddings.
+// Same user often repeats the same question across a session
+// ("alternative au squat") so caching saves ~50% of Vertex calls.
+// 500 entries × 15 min TTL = ~2 MB RAM cost on Vercel cold start.
+// ─────────────────────────────────────────────────────────────
+
+const EMBED_CACHE = new Map<string, { vector: number[]; created_at: number }>();
+const EMBED_CACHE_MAX = 500;
+const EMBED_CACHE_TTL_MS = 15 * 60 * 1000;
+
+async function embedQueryCached(query: string): Promise<number[]> {
+  const key = query.trim().toLowerCase();
+  const cached = EMBED_CACHE.get(key);
+  if (cached && Date.now() - cached.created_at < EMBED_CACHE_TTL_MS) {
+    // LRU touch : delete + re-add so the entry moves to the end of the Map
+    EMBED_CACHE.delete(key);
+    EMBED_CACHE.set(key, cached);
+    return cached.vector;
+  }
+  const vector = await embedText(query, "RETRIEVAL_QUERY");
+  if (EMBED_CACHE.size >= EMBED_CACHE_MAX) {
+    // Evict oldest (insertion order = LRU after the touch above)
+    const firstKey = EMBED_CACHE.keys().next().value;
+    if (firstKey) EMBED_CACHE.delete(firstKey);
+  }
+  EMBED_CACHE.set(key, { vector, created_at: Date.now() });
+  return vector;
+}
+
 let loaded = false;
 
 function ensureLoaded(): void {
@@ -92,7 +122,7 @@ export async function retrieveExercises(
 ): Promise<RagHit<ExercisePayload>[]> {
   ensureLoaded();
   if (!getIndex("exercises")) return [];
-  const qVec = await embedText(query, "RETRIEVAL_QUERY");
+  const qVec = await embedQueryCached(query);
   return search<ExercisePayload>("exercises", qVec, {
     topK,
     filter: (payload) =>
@@ -112,7 +142,7 @@ export async function retrieveMethods(
 ): Promise<RagHit<MethodPayload>[]> {
   ensureLoaded();
   if (!getIndex("methods")) return [];
-  const qVec = await embedText(query, "RETRIEVAL_QUERY");
+  const qVec = await embedQueryCached(query);
   return search<MethodPayload>("methods", qVec, { topK });
 }
 

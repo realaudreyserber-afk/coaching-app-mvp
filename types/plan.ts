@@ -9,6 +9,14 @@ export interface PlanExercise {
   sets: number;
   reps: string;
   rest_seconds: number;
+  /**
+   * Wave 7 #8 — Optional superset grouping. Exercises with the same string id
+   * (e.g. "A", "B", "C") are performed back-to-back without rest, then the
+   * `rest_seconds` of the LAST member applies between rounds.
+   * Used by /api/sessions/start to compute block_code A1/A2/B1/B2 instead
+   * of the naive paires-de-2 fallback.
+   */
+  superset_group?: string;
 }
 
 export interface PlanTrainingSession {

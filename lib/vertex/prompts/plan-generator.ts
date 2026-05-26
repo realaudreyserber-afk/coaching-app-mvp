@@ -100,7 +100,8 @@ Structure du JSON attendu :
             "name": string,
             "sets": number,
             "reps": string, // ex: "8-12" ou "jusqu'à l'échec"
-            "rest_seconds": number
+            "rest_seconds": number,
+            "superset_group": string // OPTIONAL. Ex: "A" pour grouper bi/triceps en superset. Tous les exos qui partagent la même string sont enchaînés sans repos. Solo exo : champ omis.
           }
         ]
       }

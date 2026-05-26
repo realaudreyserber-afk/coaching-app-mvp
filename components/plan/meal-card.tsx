@@ -3,35 +3,27 @@
 import * as React from "react";
 import Image from "next/image";
 import { Pill } from "lucide-react";
-import { StatPill } from "@/components/ui/stat-pill";
+import { HudCard, Tag } from "@/components/nodream";
 
 /**
- * Meal Card — affiche un repas avec photo (ou placeholder gold), nom, macros,
- * compléments associés et bouton "Ajouter" optionnel.
- *
- * Stitch refs : plan-d.jpg, plan-m.jpg, recipe-d.jpg
+ * Meal Card — NoDream Tactical OS.
+ * Glass HudCard avec accent gold, corners brackets, photo full-bleed
+ * recouverte par overlay, badge kcal en stat-num gold, macros en mono tag,
+ * compléments en mono chamfered tech.
  */
 
 export interface MealCardData {
-  /** Nom du repas (ex: "Petit-déjeuner: Bol Avoine Doré aux Baies") */
   name: string;
-  /** Description courte (ingrédients) */
   description?: string;
-  /** Calories approximatives */
   approxKcal?: number;
-  /** Macros en grammes */
   macros?: { p?: number; c?: number; f?: number };
-  /** URL de la photo (placeholder gold-on-zinc si absent) */
   photoUrl?: string;
-  /** Compléments à prendre avec ce repas */
   supplements?: Array<{ name: string; dosage: string }>;
 }
 
 interface MealCardProps {
   meal: MealCardData;
-  /** Callback du bouton CTA */
   onAdd?: () => void;
-  /** Label du bouton (default "Ajouter") */
   ctaLabel?: string;
   className?: string;
 }
@@ -43,11 +35,20 @@ export function MealCard({
   className = "",
 }: MealCardProps) {
   return (
-    <article
-      className={`group relative overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 transition-all hover:border-amber-500/40 ${className}`}
+    <HudCard
+      accent="gold"
+      chamfer="sm"
+      className={`group overflow-hidden ${className}`}
+      style={{ padding: 0, display: "flex", flexDirection: "column" }}
     >
       {/* Photo or placeholder */}
-      <div className="relative aspect-[4/3] bg-zinc-800 overflow-hidden">
+      <div
+        className="relative aspect-[4/3] overflow-hidden"
+        style={{
+          background: "var(--ink-900)",
+          borderBottom: "1px solid var(--gold-tint-15)",
+        }}
+      >
         {meal.photoUrl ? (
           <Image
             src={meal.photoUrl}
@@ -55,18 +56,34 @@ export function MealCard({
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105"
+            style={{ filter: "grayscale(0.2) contrast(1.05)" }}
           />
         ) : (
           <MealPhotoPlaceholder name={meal.name} />
         )}
-        {/* Subtle gold gradient at bottom for kcal badge readability */}
+        {/* Bottom gradient + kcal badge */}
         {meal.approxKcal !== undefined && (
           <>
             <div
               aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent"
+              className="absolute inset-x-0 bottom-0 h-16"
+              style={{ background: "linear-gradient(to top, var(--ink-900), transparent)" }}
             />
-            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-zinc-950/80 text-amber-400 text-xs font-semibold tabular-nums border border-amber-500/30">
+            <span
+              className="absolute bottom-2 right-2 mono"
+              style={{
+                padding: "3px 9px",
+                background: "rgba(6, 3, 15, 0.85)",
+                color: "var(--gold-400)",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.05em",
+                border: "1px solid var(--gold-tint-35)",
+                boxShadow: "var(--glow-gold-soft)",
+                clipPath:
+                  "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+              }}
+            >
               ~{meal.approxKcal} kcal
             </span>
           </>
@@ -74,49 +91,116 @@ export function MealCard({
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
-        <h3 className="text-base font-serif font-bold text-zinc-50 leading-tight">
-          {meal.name}
-        </h3>
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
+        <div>
+          <span
+            className="mono"
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.3em",
+              color: "var(--gold-500)",
+              opacity: 0.75,
+              textTransform: "uppercase",
+            }}
+          >
+            [REPAS]
+          </span>
+          <h3
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontWeight: 900,
+              fontSize: 15,
+              letterSpacing: "-0.01em",
+              color: "var(--fg-1)",
+              lineHeight: 1.25,
+              margin: "4px 0 0 0",
+            }}
+          >
+            {meal.name}
+          </h3>
+        </div>
 
         {meal.description && (
-          <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+          <p
+            className="line-clamp-3"
+            style={{
+              fontSize: 11,
+              color: "var(--fg-4)",
+              lineHeight: 1.5,
+              margin: 0,
+            }}
+          >
             {meal.description}
           </p>
         )}
 
         {/* Macros */}
         {meal.macros && (
-          <div className="flex flex-wrap gap-1.5">
-            {meal.macros.p !== undefined && (
-              <StatPill label="P" value={meal.macros.p} unit="g" />
-            )}
-            {meal.macros.c !== undefined && (
-              <StatPill label="G" value={meal.macros.c} unit="g" />
-            )}
-            {meal.macros.f !== undefined && (
-              <StatPill label="L" value={meal.macros.f} unit="g" />
-            )}
+          <div className="grid grid-cols-3 gap-1.5">
+            {([
+              { letter: "P", val: meal.macros.p },
+              { letter: "C", val: meal.macros.c },
+              { letter: "F", val: meal.macros.f },
+            ]).filter((m) => m.val !== undefined).map((m) => (
+              <div
+                key={m.letter}
+                className="text-center"
+                style={{
+                  padding: 6,
+                  background: "var(--glass-bg-2)",
+                  border: "1px solid var(--glass-border)",
+                  clipPath:
+                    "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                }}
+              >
+                <span className="eyebrow" style={{ color: "var(--fg-4)", fontSize: 8 }}>
+                  {m.letter}
+                </span>
+                <div
+                  className="mono"
+                  style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginTop: 2 }}
+                >
+                  {m.val}
+                  <span style={{ fontSize: 8, color: "var(--fg-5)", marginLeft: 1 }}>g</span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
         {/* Supplements list */}
         {meal.supplements && meal.supplements.length > 0 && (
-          <div className="pt-2 border-t border-zinc-800 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-500">
+          <div className="pt-2 space-y-1.5" style={{ borderTop: "1px solid var(--glass-border)" }}>
+            <span
+              className="mono flex items-center gap-1.5"
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.25em",
+                color: "var(--accent-tech)",
+                textTransform: "uppercase",
+                fontWeight: 700,
+              }}
+            >
               <Pill className="h-3 w-3" aria-hidden="true" />
-              <span>
-                Complément{meal.supplements.length > 1 ? "s" : ""} avec ce repas
-              </span>
-            </div>
-            <ul className="space-y-1">
+              [SUPP-{meal.supplements.length}]
+            </span>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {meal.supplements.map((sup, idx) => (
                 <li
                   key={idx}
-                  className="flex justify-between items-center text-xs"
+                  className="flex justify-between items-center"
+                  style={{ padding: "4px 0", fontSize: 11 }}
                 >
-                  <span className="text-zinc-200 font-medium">{sup.name}</span>
-                  <span className="text-amber-400 font-semibold tabular-nums">
+                  <span style={{ color: "var(--fg-2)", fontWeight: 500 }}>{sup.name}</span>
+                  <span
+                    className="mono"
+                    style={{
+                      color: "var(--accent-tech)",
+                      fontWeight: 700,
+                      fontSize: 10,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
                     {sup.dosage}
                   </span>
                 </li>
@@ -131,31 +215,56 @@ export function MealCard({
             type="button"
             onClick={onAdd}
             aria-label={`${ctaLabel} : ${meal.name}`}
-            className="w-full mt-2 h-9 rounded-md bg-amber-500 text-zinc-950 text-sm font-semibold hover:bg-amber-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
+            className="btn btn-primary mono mt-auto"
+            style={{
+              width: "100%",
+              fontSize: 11,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+            }}
           >
             {ctaLabel}
           </button>
         )}
       </div>
-    </article>
+    </HudCard>
   );
 }
 
-/**
- * Placeholder visuel pour les repas sans photo : gradient gold sur fond zinc
- * avec l'initiale du nom du repas en serif large.
- */
+// Silence the unused-import linter — Tag stays available for future variants
+void Tag;
+
 function MealPhotoPlaceholder({ name }: { name: string }) {
   const initial = name.replace(/^[^:]*:\s*/, "").charAt(0).toUpperCase() || "N";
   return (
     <div
       aria-hidden="true"
-      className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-800 via-zinc-900 to-zinc-950"
+      className="absolute inset-0 flex items-center justify-center"
+      style={{
+        background:
+          "linear-gradient(135deg, var(--ink-900) 0%, var(--glass-bg-2) 50%, var(--gold-tint-08) 100%)",
+      }}
     >
-      <span className="font-serif text-6xl font-bold text-amber-500/30 select-none">
+      <span
+        style={{
+          fontFamily: "var(--font-sans)",
+          fontSize: 60,
+          fontWeight: 900,
+          color: "var(--gold-400)",
+          opacity: 0.25,
+          textShadow: "0 0 30px var(--gold-tint-25)",
+          userSelect: "none",
+        }}
+      >
         {initial}
       </span>
-      <div className="absolute inset-x-4 bottom-4 h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+      <div
+        className="absolute inset-x-4 bottom-4 h-px"
+        style={{
+          background:
+            "linear-gradient(to right, transparent, var(--gold-tint-35), transparent)",
+        }}
+      />
     </div>
   );
 }

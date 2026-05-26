@@ -340,6 +340,36 @@ export default function LiveSessionPage() {
   };
 
   const [showAbortModal, setShowAbortModal] = useState(false);
+  const abortCancelBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Wave 7 #9 a11y : ESC closes the modal + autofocus on "Annuler" + focus trap
+  useEffect(() => {
+    if (!showAbortModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowAbortModal(false);
+      }
+      if (e.key === "Tab") {
+        // Naive focus trap : only 2 focusable buttons, ping-pong between them
+        const focusables = document.querySelectorAll<HTMLElement>("[data-abort-modal-focusable]");
+        if (focusables.length < 2) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    // Autofocus on "Annuler" (defensive default — user can still hit ESC)
+    setTimeout(() => abortCancelBtnRef.current?.focus(), 50);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showAbortModal]);
 
   const handleAbort = async () => {
     setShowAbortModal(true);
@@ -886,6 +916,8 @@ export default function LiveSessionPage() {
             </p>
             <div className="flex gap-3">
               <button
+                ref={abortCancelBtnRef}
+                data-abort-modal-focusable
                 onClick={() => setShowAbortModal(false)}
                 className="btn btn-ghost mono flex-1"
                 style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase" }}
@@ -893,6 +925,7 @@ export default function LiveSessionPage() {
                 Annuler
               </button>
               <button
+                data-abort-modal-focusable
                 onClick={confirmAbort}
                 className="mono cursor-pointer flex-1"
                 style={{
