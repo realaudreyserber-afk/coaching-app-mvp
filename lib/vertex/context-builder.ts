@@ -178,6 +178,18 @@ export interface SubscriptionContext {
   current_period_end?: string;
 }
 
+// Wave 6B — persistent coach memory
+export interface CoachStateContext {
+  last_intervention_at?: string;
+  has_unread_intervention?: boolean;
+  topics_discussed?: string[];
+  pending_followups?: Array<{ topic: string; due_at: string; done?: boolean }>;
+  response_style?: 'short' | 'verbose' | 'data_driven' | 'mixed';
+  welcome_sent?: boolean;
+  plan_debrief_sent?: boolean;
+  personality_notes?: string;
+}
+
 // ---------------------------------------------------------------------------
 
 export interface UserContext {
@@ -199,6 +211,8 @@ export interface UserContext {
   body_scan_recent?: BodyScanRecent;
   wearables_today?: WearablesToday;
   subscription?: SubscriptionContext;
+  // Wave 6B
+  coach_state?: CoachStateContext;
 }
 
 // =====================================================================
@@ -438,6 +452,36 @@ function wearablesBlock(ctx: UserContext): string {
   return `\n[WEARABLE JOUR EN COURS · ${w.source ?? 'inconnu'}] ${fields.join(' · ')}\n`;
 }
 
+function coachStateBlock(ctx: UserContext): string {
+  const s = ctx.coach_state;
+  if (!s) return '';
+  const lastDate = s.last_intervention_at ? s.last_intervention_at.slice(0, 16).replace('T', ' ') : 'jamais';
+  const topics = (s.topics_discussed ?? []).slice(-10).join(', ') || '(aucun)';
+  const followups = (s.pending_followups ?? [])
+    .filter((f) => !f.done)
+    .slice(0, 5)
+    .map((f) => `  - ${f.topic} (à reprendre vers ${f.due_at.slice(0, 10)})`)
+    .join('\n');
+  const styleHint =
+    s.response_style === 'short'
+      ? "L'utilisateur préfère des réponses courtes et directes. Évite les longs développements."
+      : s.response_style === 'verbose'
+        ? "L'utilisateur aime des explications détaillées et le contexte scientifique."
+        : s.response_style === 'data_driven'
+          ? "L'utilisateur valorise les chiffres et les références scientifiques précises."
+          : "Style de réponse mixte — adapte selon la complexité de la question.";
+  return `
+[MÉMOIRE COACH — état persistant]
+- Dernière intervention : ${lastDate}
+- Sujets déjà abordés : ${topics}
+- Style préféré : ${s.response_style ?? 'mixed'} — ${styleHint}
+${followups ? `Followups en attente :\n${followups}` : ''}
+${s.personality_notes ? `Notes perso : ${s.personality_notes}` : ''}
+
+Ne ré-explique pas les sujets déjà couverts sauf si l'utilisateur le demande. Ouvre par référence à la dernière intervention si pertinent.
+`;
+}
+
 function subscriptionBlock(ctx: UserContext): string {
   const s = ctx.subscription;
   if (!s) return '';
@@ -468,6 +512,7 @@ export interface EnrichOptions {
   includeBodyScan?: boolean;
   includeWearables?: boolean;
   includeSubscription?: boolean;
+  includeCoachState?: boolean;
 }
 
 const DEFAULT_OPTS: Required<EnrichOptions> = {
@@ -486,6 +531,7 @@ const DEFAULT_OPTS: Required<EnrichOptions> = {
   includeBodyScan: true,
   includeWearables: true,
   includeSubscription: true,
+  includeCoachState: true,
 };
 
 /**
@@ -503,6 +549,7 @@ export function buildEnrichedSystemPrompt(
   if (o.includeProfile) parts.push(profileBlock(ctx));
   if (o.includeActivePlan) parts.push(activePlanBlock(ctx));
   if (o.includeSubscription) parts.push(subscriptionBlock(ctx));
+  if (o.includeCoachState) parts.push(coachStateBlock(ctx));
   if (o.includeProfilePath) parts.push(profilePathBlock(ctx));
   if (o.includeGlp1) parts.push(glp1Block(ctx));
   if (o.includeFasting) parts.push(fastingBlock(ctx));
@@ -539,6 +586,7 @@ export interface BuildContextInput {
   bodyScanRecent?: BodyScanRecent;
   wearablesToday?: WearablesToday;
   subscription?: SubscriptionContext;
+  coachState?: CoachStateContext;
 }
 
 export function buildUserContext(input: BuildContextInput): UserContext {
@@ -583,5 +631,6 @@ export function buildUserContext(input: BuildContextInput): UserContext {
     body_scan_recent: input.bodyScanRecent,
     wearables_today: input.wearablesToday,
     subscription: sub,
+    coach_state: input.coachState,
   };
 }

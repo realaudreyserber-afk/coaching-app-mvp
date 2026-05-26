@@ -29,11 +29,15 @@ interface ChatMessage {
  * so the user never sees the raw JSON appear mid-stream.
  */
 function stripCoachSaveTag(content: string): string {
-  // Closed tag → remove the whole block, including the markers.
-  let out = content.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
-  // Unclosed opening tag still streaming → hide from there to end.
-  const openIdx = out.indexOf('<COACH_SAVE>');
-  if (openIdx !== -1) out = out.slice(0, openIdx);
+  // Closed tags → remove the whole block, including the markers.
+  let out = content
+    .replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '')
+    .replace(/<COACH_PLAN_PATCH>[\s\S]*?<\/COACH_PLAN_PATCH>/g, '');
+  // Unclosed opening tags still streaming → hide from there to end.
+  const openSave = out.indexOf('<COACH_SAVE>');
+  const openPatch = out.indexOf('<COACH_PLAN_PATCH>');
+  const open = [openSave, openPatch].filter((i) => i !== -1).sort((a, b) => a - b)[0];
+  if (open !== undefined) out = out.slice(0, open);
   return out.trimEnd();
 }
 
@@ -81,6 +85,55 @@ async function persistCoachSaveBlock(
   }
 }
 
+/**
+ * Wave 6A : parse any <COACH_PLAN_PATCH>{...}</COACH_PLAN_PATCH> block and
+ * POST it to /api/coach/apply-patch. The server whitelists + range-validates
+ * + applies in a Firestore transaction (with plan history archive).
+ *
+ * Silently no-ops if no tag / malformed JSON. Always after the stream
+ * completes (after <COACH_SAVE> processing) so chat history persisted matches
+ * what was applied.
+ */
+async function persistCoachPlanPatchBlock(
+  fullContent: string,
+  getFreshToken: () => Promise<string | null>,
+): Promise<void> {
+  const match = fullContent.match(/<COACH_PLAN_PATCH>([\s\S]*?)<\/COACH_PLAN_PATCH>/);
+  if (!match) return;
+  let patch: unknown;
+  try {
+    patch = JSON.parse(match[1].trim());
+  } catch (err) {
+    console.warn('[coach-plan-patch] invalid JSON in tag:', err);
+    return;
+  }
+  if (!patch || typeof patch !== 'object') return;
+  if (Array.isArray(patch) && patch.length === 0) return;
+  if (!Array.isArray(patch) && Object.keys(patch as Record<string, unknown>).length === 0) return;
+
+  const token = await getFreshToken();
+  if (!token) {
+    console.warn('[coach-plan-patch] no token, skipping persist');
+    return;
+  }
+
+  const res = await fetch('/api/coach/apply-patch', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ patch, reason: 'coach_chat_emit' }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.warn('[coach-plan-patch] API rejected:', res.status, body);
+  } else {
+    const data = await res.json().catch(() => ({}));
+    console.log('[coach-plan-patch] applied:', data);
+  }
+}
+
 export default function CoachPage() {
   const router = useRouter();
   const { user, getFreshToken, loading } = useAuth();
@@ -106,6 +159,23 @@ export default function CoachPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, sending]);
+
+  // Wave 6C : mark proactive interventions as read when user opens /coach
+  useEffect(() => {
+    if (loading || !user) return;
+    (async () => {
+      try {
+        const token = await getFreshToken();
+        if (!token) return;
+        await fetch('/api/coach/mark-read', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (e) {
+        console.warn('[coach] mark-read failed:', e);
+      }
+    })();
+  }, [user, loading, getFreshToken]);
 
   // Load last 10 messages from user's chat history in Firestore if available
   useEffect(() => {
@@ -279,6 +349,10 @@ export default function CoachPage() {
       // Stream complete: parse <COACH_SAVE>{...}</COACH_SAVE>, push to API.
       await persistCoachSaveBlock(accumulated, getFreshToken).catch((err) =>
         console.warn('[coach-save] persist failed:', err),
+      );
+      // Wave 6A: same for <COACH_PLAN_PATCH>{...}</COACH_PLAN_PATCH>
+      await persistCoachPlanPatchBlock(accumulated, getFreshToken).catch((err) =>
+        console.warn('[coach-plan-patch] persist failed:', err),
       );
 
       // Backend now persists assistant message via streaming placeholder.

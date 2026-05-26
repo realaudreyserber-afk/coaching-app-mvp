@@ -12,6 +12,7 @@ import { PROFILE_PATH_COACH_INSTRUCTIONS } from '@/lib/features/profile-paths/pr
 import { ProfilePath } from '@/lib/features/profile-paths/schema';
 import { buildEnrichedSystemPrompt, buildUserContext } from '@/lib/vertex/context-builder';
 import { fetchEnrichmentContext, extractPlanKcal } from '@/lib/vertex/context-fetcher';
+import { loadCoachState, markCoachIntervention } from '@/lib/features/coach-state/store';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
 
 export async function POST(req: NextRequest) {
@@ -163,11 +164,10 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
       // checks, body scan, wearables) in parallel — degrades gracefully if any
       // collection is missing. The user doc itself carries last_session_summary
       // + streak (denormalized) so they don't require extra reads.
-      const enrichments = await fetchEnrichmentContext(
-        uid,
-        userData,
-        extractPlanKcal(activePlan),
-      );
+      const [enrichments, coachStateData] = await Promise.all([
+        fetchEnrichmentContext(uid, userData, extractPlanKcal(activePlan)),
+        loadCoachState(uid),
+      ]);
 
       // 5. Build the unified user context (single source of truth for the prompt)
       const ctx = buildUserContext({
@@ -176,7 +176,14 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
         bloodwork,
         ragSources: searchResults,
         ...enrichments,
+        coachState: coachStateData,
       });
+
+      // Mark the intervention (don't await — fire-and-forget on background).
+      // Reactive turn = not "unread" (user is already in the chat).
+      void markCoachIntervention(uid, { markUnread: false }).catch((e) =>
+        console.warn('[coach] mark intervention failed:', e),
+      );
 
       // Decide which optional blocks to include based on feature flags so the
       // prompt stays minimal when a feature is off.

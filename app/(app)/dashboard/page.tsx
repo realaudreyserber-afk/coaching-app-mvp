@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const [dailyTask, setDailyTask] = useState<any>(null);
   const [taskCompleted, setTaskCompleted] = useState(false);
   const [streak, setStreak] = useState<any>(null);
+  // Wave 6C : badge si ORACLE.IA a posté un message proactif non-lu
+  const [coachUnread, setCoachUnread] = useState(false);
 
   const handleCompleteTask = async () => {
     if (!user || !dailyTask) return;
@@ -132,6 +134,17 @@ export default function DashboardPage() {
           // Streak data
           if (streakEnabled && uData.streak) {
             setStreak(uData.streak);
+          }
+
+          // Wave 6C : badge si ORACLE.IA a une intervention proactive non-lue
+          try {
+            const coachStateRef = doc(db, "users", user.uid, "coach_state", "main");
+            const coachStateSnap = await getDoc(coachStateRef);
+            if (coachStateSnap.exists() && coachStateSnap.data()?.has_unread_intervention === true) {
+              setCoachUnread(true);
+            }
+          } catch (e) {
+            console.warn("[dashboard] coach_state read failed:", e);
           }
 
           // Daily Micro-task selection & status
@@ -546,6 +559,20 @@ export default function DashboardPage() {
           className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
         >
           <MessageSquare className="h-4 w-4 text-primary" /> Parler au Coach IA
+          {coachUnread && (
+            <span
+              aria-label="Nouveau message ORACLE.IA"
+              style={{
+                marginLeft: 6,
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--accent-tech)",
+                boxShadow: "0 0 8px var(--accent-tech)",
+                display: "inline-block",
+              }}
+            />
+          )}
         </Button>
         <Button
           variant="outline"

@@ -932,12 +932,39 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
       }
 
       setProgressMsg("Enregistrement du plan dans Firestore...");
-      
+
       // Update local profile complete marker
       await refreshProfileStatus();
-      
+
+      // Wave 6C : déclenche ORACLE.IA en proactif (welcome + plan_generated).
+      // Fire-and-forget — pas bloquant pour la redirection, l'utilisateur verra
+      // les messages la prochaine fois qu'il ouvre /coach + le badge dashboard.
+      setProgressMsg("ORACLE.IA prépare ton briefing...");
+      try {
+        await Promise.all([
+          fetch("/api/coach/proactive", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({ trigger: "welcome" }),
+          }),
+          fetch("/api/coach/proactive", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({ trigger: "plan_generated" }),
+          }),
+        ]);
+      } catch (e) {
+        console.warn("[onboarding] proactive coach trigger failed (non-blocking):", e);
+      }
+
       setProgressMsg("Plan créé avec succès ! Préparation de ton dashboard...");
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
 
       router.push("/dashboard");
 

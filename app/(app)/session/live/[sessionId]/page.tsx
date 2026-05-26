@@ -335,7 +335,21 @@ export default function LiveSessionPage() {
         },
         body: JSON.stringify({}),
       });
-      if (res.ok) router.push("/workout/summary?from=" + sessionId);
+      if (res.ok) {
+        // Wave 6C : fire-and-forget proactive session_finished trigger.
+        // Adds a debrief message to /coach inbox + marks badge on dashboard.
+        // Doesn't block redirect to summary (where the session-debrief
+        // route is also called for the immediate display).
+        void fetch("/api/coach/proactive", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ trigger: "session_finished" }),
+        }).catch((e) => console.warn("[proactive] session_finished failed:", e));
+        router.push("/workout/summary?from=" + sessionId);
+      }
     } catch (e) {
       console.error("[finish] failed:", e);
     }
