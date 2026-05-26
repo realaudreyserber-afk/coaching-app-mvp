@@ -14,7 +14,8 @@
     "verify:env": "node scripts/verify-env.mjs",
     "lint:snake-case": "node scripts/check-snake-case.mjs",
     "build:rag": "node scripts/build-rag-embeddings.mjs",
-    "cleanup:anonymous": "node scripts/cleanup-anonymous-users.mjs"
+    "cleanup:anonymous": "node scripts/cleanup-anonymous-users.mjs",
+    "plan:show": "node scripts/show-active-plan.mjs"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^6.4.1",
