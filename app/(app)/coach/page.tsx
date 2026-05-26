@@ -389,52 +389,109 @@ export default function CoachPage() {
 
         {sending && (
           <div
-            className="flex items-center space-x-2 text-zinc-600 mr-auto bg-white border border-zinc-200 p-3 rounded-2xl rounded-tl-none max-w-[85%] shadow-lg"
+            className="mono flex items-center gap-2 mr-auto p-3 max-w-[85%]"
             role="status"
+            style={{
+              background: 'var(--accent-tech-tint)',
+              border: '1px solid var(--accent-tech)',
+              boxShadow: '0 0 12px var(--accent-tech-tint-strong)',
+              clipPath:
+                'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+              fontSize: 11,
+              letterSpacing: '0.15em',
+              color: 'var(--accent-tech)',
+              textTransform: 'uppercase',
+            }}
           >
-            <Loader2 className="h-4 w-4 animate-spin text-amber-600" aria-hidden="true" />
-            <span className="text-xs font-serif italic">NoDream réfléchit...</span>
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+            <span>ORACLE.IA · analyse en cours</span>
           </div>
         )}
 
         {error && (
           <div
-            className="text-xs text-red-300 bg-red-950/40 border border-red-900 p-3 rounded-xl text-center max-w-[85%] mx-auto"
+            className="mono text-center max-w-[85%] mx-auto"
             role="alert"
+            style={{
+              fontSize: 11,
+              color: 'var(--alert-500)',
+              background: 'var(--alert-tint-15)',
+              border: '1px solid var(--alert-500)',
+              padding: '10px 12px',
+              letterSpacing: '0.1em',
+              clipPath:
+                'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            }}
           >
+            <span style={{ fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+              [ERR-COMM]
+            </span>
             {error}
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input box */}
+      {/* Input box — terminal prompt */}
       <form
         onSubmit={handleSendMessage}
-        className="absolute bottom-0 left-0 right-0 p-4 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 flex items-center space-x-2 z-30"
+        className="absolute bottom-0 left-0 right-0 p-3 flex items-center space-x-2 z-30"
         aria-label="Envoyer un message au coach"
+        style={{
+          background: 'rgba(6, 3, 15, 0.95)',
+          backdropFilter: 'blur(20px)',
+          borderTop: '1px solid var(--gold-tint-15)',
+        }}
       >
         <label htmlFor="coach-message-input" className="sr-only">
           Message à envoyer au coach
         </label>
+        <span
+          className="mono"
+          style={{
+            color: 'var(--accent-tech)',
+            fontSize: 14,
+            paddingLeft: 4,
+            textShadow: '0 0 6px var(--accent-tech)',
+          }}
+          aria-hidden="true"
+        >
+          &gt;
+        </span>
         <input
           id="coach-message-input"
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          placeholder="Pose ta question (ex: pates crues vs cuites ?)"
+          placeholder="Saisis ta requête..."
           disabled={sending}
-          className="flex-1 h-11 px-4 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm"
+          className="mono flex-1 h-11 px-3 text-sm focus:outline-none"
+          style={{
+            background: 'var(--glass-bg-2)',
+            border: '1px solid var(--glass-border)',
+            color: 'var(--fg-1)',
+            letterSpacing: '0.02em',
+            clipPath:
+              'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = 'var(--accent-tech)';
+            e.currentTarget.style.boxShadow = '0 0 12px var(--accent-tech-tint-strong)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = 'var(--glass-border)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
         />
-        <Button
+        <button
           type="submit"
-          size="icon"
           disabled={sending || !inputMessage.trim()}
           aria-label="Envoyer le message"
-          className="h-11 w-11 rounded-full flex-shrink-0"
+          className="btn btn-primary flex-shrink-0"
+          style={{ height: 44, padding: '0 18px' }}
         >
-          <Send className="h-4.5 w-4.5" aria-hidden="true" />
-        </Button>
+          <Send className="h-4 w-4" aria-hidden="true" />
+        </button>
       </form>
     </div>
   );

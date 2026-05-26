@@ -6,8 +6,6 @@ import React, { useEffect, useState } from "react";
 import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PlanDoc } from "@/types/plan";
 import { Flame, Dumbbell, ShieldCheck, Apple, Calendar, Scale, ChevronDown, ChevronUp, Plus, Trash2, Pill } from "lucide-react";
@@ -17,6 +15,7 @@ import { MacroBar } from "@/components/plan/macro-bar";
 import { ExerciseCard } from "@/components/plan/exercise-card";
 import { getExercisePosterUrl } from "@/lib/features/plans/exercise-images";
 import { getRecipeForMealName } from "@/lib/features/plans/meal-images";
+import { HudCard, PanelHeader, Tag } from "@/components/nodream";
 
 export default function PlanPage() {
   const { user, loading } = useAuth();
@@ -55,55 +54,128 @@ export default function PlanPage() {
 
   if (!plan) {
     return (
-      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
-        <Card className="max-w-md w-full border-border">
-          <CardHeader className="space-y-2">
-            <span className="text-4xl">📋</span>
-            <CardTitle className="text-2xl font-serif">Aucun plan actif</CardTitle>
-            <CardDescription>
-              Tu dois d'abord compléter ton onboarding pour que le coach IA génère ton plan personnalisé.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => router.push("/onboarding")} className="w-full h-11">
-              Démarrer l'onboarding
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 text-center">
+        <HudCard accent="gold" chamfer="sm" className="max-w-md w-full" style={{ padding: '1.5rem' }}>
+          <PanelHeader
+            code="PLAN-INTROUVABLE"
+            title="Aucun plan actif"
+            accent="gold"
+          />
+          <p
+            style={{
+              fontSize: 'var(--type-body-sm)',
+              color: 'var(--fg-3)',
+              lineHeight: 1.5,
+              margin: '0 0 16px 0',
+            }}
+          >
+            Tu dois d&apos;abord compléter ton onboarding pour qu&apos;ORACLE.IA calibre ton plan personnalisé.
+          </p>
+          <button
+            onClick={() => router.push("/onboarding")}
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+          >
+            Démarrer l&apos;onboarding
+          </button>
+        </HudCard>
       </div>
     );
   }
 
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
-      <div>
-        <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">Ton plan de transformation</h2>
-        <p className="text-sm text-muted-foreground">
-          Calibré par l'IA le {plan.date_start ? new Date(plan.date_start).toLocaleDateString("fr-FR") : "récemment"}.
+      {/* Tactical header */}
+      <div className="space-y-2">
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.3em',
+            color: 'var(--accent-tech)',
+            opacity: 0.85,
+          }}
+        >
+          [PLAN-TRANSFO] · ACTIF
+        </span>
+        <h2
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontWeight: 900,
+            fontSize: 'var(--type-h1)',
+            letterSpacing: 'var(--tracking-display)',
+            lineHeight: 1.05,
+            color: 'var(--fg-1)',
+            marginTop: 4,
+          }}
+        >
+          Plan de <span style={{ color: 'var(--gold-400)' }}>transformation</span>
+        </h2>
+        <p
+          className="mono"
+          style={{
+            marginTop: 6,
+            fontSize: 'var(--type-meta)',
+            letterSpacing: '0.18em',
+            color: 'var(--fg-4)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Calibré · {plan.date_start ? new Date(plan.date_start).toLocaleDateString("fr-FR") : "récent"}
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg border border-border max-w-md">
+      {/* Tactical Tabs */}
+      <div
+        className="grid grid-cols-2 gap-1 max-w-md"
+        style={{
+          padding: 4,
+          background: 'var(--glass-bg-2)',
+          border: '1px solid var(--glass-border)',
+          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+        }}
+        role="tablist"
+        aria-label="Sélecteur Nutrition / Entraînement"
+      >
         <button
           onClick={() => setActiveTab("nutrition")}
-          className={`py-2 px-3 rounded-md text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-            activeTab === "nutrition"
-              ? "bg-card text-primary shadow-xs"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          role="tab"
+          aria-selected={activeTab === "nutrition"}
+          className="mono flex items-center justify-center gap-2 py-2 px-3 transition-all"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            background: activeTab === "nutrition" ? 'var(--gold-tint-15)' : 'transparent',
+            color: activeTab === "nutrition" ? 'var(--gold-400)' : 'var(--fg-4)',
+            border: activeTab === "nutrition" ? '1px solid var(--gold-tint-35)' : '1px solid transparent',
+            boxShadow: activeTab === "nutrition" ? 'var(--glow-gold-soft)' : 'none',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            cursor: 'pointer',
+          }}
         >
-          <Apple className="h-4 w-4" /> Nutrition
+          <Apple className="h-3.5 w-3.5" aria-hidden="true" /> 01 · Nutrition
         </button>
         <button
           onClick={() => setActiveTab("training")}
-          className={`py-2 px-3 rounded-md text-xs font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-            activeTab === "training"
-              ? "bg-card text-primary shadow-xs"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          role="tab"
+          aria-selected={activeTab === "training"}
+          className="mono flex items-center justify-center gap-2 py-2 px-3 transition-all"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            background: activeTab === "training" ? 'var(--accent-tech-tint)' : 'transparent',
+            color: activeTab === "training" ? 'var(--accent-tech)' : 'var(--fg-4)',
+            border: activeTab === "training" ? '1px solid var(--accent-tech)' : '1px solid transparent',
+            boxShadow: activeTab === "training" ? '0 0 12px var(--accent-tech-tint-strong)' : 'none',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            cursor: 'pointer',
+          }}
         >
-          <Dumbbell className="h-4 w-4" /> Entraînement
+          <Dumbbell className="h-3.5 w-3.5" aria-hidden="true" /> 02 · Entraînement
         </button>
       </div>
 
@@ -112,47 +184,91 @@ export default function PlanPage() {
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           {/* LEFT: cible + calculateur (sticky on desktop) */}
           <div className="space-y-6 lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
-            <Card className="border border-zinc-800 bg-zinc-900 shadow-xs">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-base font-serif font-semibold flex items-center gap-2 text-zinc-50">
-                  <Flame className="h-4 w-4 text-amber-500" aria-hidden="true" /> Objectif du jour
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-5">
-                {/* Kcal cible — gros chiffre centré */}
-                <div className="text-center py-3 px-2 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                  <span className="text-[10px] uppercase text-amber-400 block tracking-widest font-semibold">
-                    Cible quotidienne
+            <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+              <PanelHeader
+                code="CIBLE-ENERG"
+                title={
+                  <span className="flex items-center gap-2">
+                    <Flame className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+                    Cible énergétique
                   </span>
-                  <div className="mt-1 flex items-baseline justify-center gap-1">
-                    <span className="text-3xl font-bold text-amber-400 font-serif tabular-nums">
-                      {plan.kcal}
-                    </span>
-                    <span className="text-sm text-amber-400/80">kcal</span>
-                  </div>
-                </div>
+                }
+                accent="gold"
+              />
 
-                {/* Macros cibles (consommation jour à venir Phase 2) */}
-                <div className="space-y-3">
-                  <MacroBar label="Protéines" value={plan.macros.p} />
-                  <MacroBar label="Glucides" value={plan.macros.c} />
-                  <MacroBar label="Lipides" value={plan.macros.f} />
+              {/* Kcal cible — gros chiffre tactical */}
+              <div
+                style={{
+                  textAlign: 'center',
+                  padding: '14px 12px',
+                  background: 'var(--gold-tint-08)',
+                  border: '1px solid var(--gold-tint-25)',
+                  boxShadow: 'var(--glow-gold-soft)',
+                  clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                }}
+              >
+                <span className="eyebrow">Quotidien</span>
+                <div className="mt-1 flex items-baseline justify-center gap-2">
+                  <span className="stat-num gold" style={{ fontSize: '2.6rem', lineHeight: 1 }}>
+                    {plan.kcal}
+                  </span>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', letterSpacing: '0.1em' }}>
+                    kcal
+                  </span>
                 </div>
-                <p className="text-[10px] text-zinc-500 leading-relaxed">
-                  Valeurs cibles du plan. La consommation réelle s&apos;affichera ici
-                  une fois ton bilan du jour validé.
-                </p>
-              </CardContent>
-            </Card>
+              </div>
+
+              {/* Macros cibles */}
+              <div className="space-y-3 mt-4">
+                <MacroBar label="Protéines" value={plan.macros.p} />
+                <MacroBar label="Glucides" value={plan.macros.c} />
+                <MacroBar label="Lipides" value={plan.macros.f} />
+              </div>
+              <p
+                className="mono mt-3"
+                style={{
+                  fontSize: 9,
+                  color: 'var(--fg-5)',
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  lineHeight: 1.5,
+                  margin: '12px 0 0 0',
+                }}
+              >
+                Valeurs cibles · consommation réelle après bilan du jour
+              </p>
+            </HudCard>
 
             <MealCalculator planKcal={plan.kcal} planMacros={plan.macros} />
           </div>
 
           {/* RIGHT: repas (grille de cartes sur desktop) */}
           <div className="space-y-4 lg:col-span-2">
-            <h3 className="text-lg lg:text-xl font-serif font-semibold text-zinc-50 px-1">
-              Suggestions de repas
-            </h3>
+            <div className="px-1 space-y-1">
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.3em',
+                  color: 'var(--gold-500)',
+                  opacity: 0.85,
+                }}
+              >
+                [REPAS-{(plan.meals_template?.length ?? 0).toString().padStart(2, '0')}]
+              </span>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontWeight: 900,
+                  fontSize: '1.25rem',
+                  letterSpacing: '-0.01em',
+                  color: 'var(--fg-1)',
+                  margin: 0,
+                }}
+              >
+                Suggestions opérationnelles
+              </h3>
+            </div>
             {(() => {
               const grouped = groupSupplementsByMeal(plan.meals_template, plan.supplements);
               return (
@@ -177,30 +293,69 @@ export default function PlanPage() {
                   </div>
 
                   {grouped.orphans.length > 0 && (
-                    <Card className="border border-zinc-800 bg-zinc-900">
-                      <CardHeader className="p-4 pb-2">
-                        <CardTitle className="text-sm font-serif font-bold text-zinc-50 flex items-center gap-1.5">
-                          <Pill className="h-4 w-4 text-amber-500" aria-hidden="true" />
-                          Compléments hors repas
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0">
-                        <ul className="space-y-1.5 text-xs">
-                          {grouped.orphans.map((sup, idx) => (
-                            <li
-                              key={idx}
-                              className="flex justify-between items-start py-2 border-b border-zinc-800 last:border-0"
+                    <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+                      <PanelHeader
+                        code="SUPP-ORPHELINS"
+                        title={
+                          <span className="flex items-center gap-2">
+                            <Pill className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+                            Compléments hors repas
+                          </span>
+                        }
+                        accent="tech"
+                      />
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                        {grouped.orphans.map((sup, idx) => (
+                          <li
+                            key={idx}
+                            className="flex justify-between items-start"
+                            style={{
+                              padding: '10px 0',
+                              borderBottom: idx < grouped.orphans.length - 1
+                                ? '1px solid var(--glass-border)'
+                                : 'none',
+                            }}
+                          >
+                            <div>
+                              <strong
+                                style={{
+                                  fontSize: 13,
+                                  color: 'var(--fg-1)',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {sup.name}
+                              </strong>
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: 9,
+                                  letterSpacing: '0.15em',
+                                  color: 'var(--fg-5)',
+                                  textTransform: 'uppercase',
+                                  display: 'block',
+                                  marginTop: 2,
+                                }}
+                              >
+                                {sup.timing}
+                              </span>
+                            </div>
+                            <span
+                              className="mono"
+                              style={{
+                                fontSize: 12,
+                                color: 'var(--accent-tech)',
+                                fontWeight: 700,
+                                letterSpacing: '0.05em',
+                                whiteSpace: 'nowrap',
+                              }}
                             >
-                              <div>
-                                <strong className="text-zinc-100">{sup.name}</strong>
-                                <span className="text-zinc-400 block text-[10px] mt-0.5">{sup.timing}</span>
-                              </div>
-                              <span className="font-semibold text-amber-400 tabular-nums">{sup.dosage}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
+                              {sup.dosage}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </HudCard>
                   )}
                 </>
               );
@@ -214,22 +369,65 @@ export default function PlanPage() {
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           {/* LEFT: programme (col-span-2) */}
           <div className="space-y-6 lg:col-span-2">
-            <h3 className="text-lg lg:text-xl font-serif font-semibold text-zinc-50 px-1">
-              Programme sportif
-            </h3>
+            <div className="px-1 space-y-1">
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.3em',
+                  color: 'var(--gold-500)',
+                  opacity: 0.85,
+                }}
+              >
+                [PROG-{(plan.training?.sessions?.length ?? 0).toString().padStart(2, '0')}]
+              </span>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-sans)',
+                  fontWeight: 900,
+                  fontSize: '1.25rem',
+                  letterSpacing: '-0.01em',
+                  color: 'var(--fg-1)',
+                  margin: 0,
+                }}
+              >
+                Programme sportif
+              </h3>
+            </div>
             {plan.training.sessions.map((session, sIdx) => (
               <section key={sIdx} className="space-y-3">
-                <div className="flex items-baseline justify-between px-1">
-                  <h4 className="text-base font-serif font-bold text-zinc-50">
-                    {session.name}
-                  </h4>
-                  <span className="text-xs text-zinc-400">
-                    <span className="text-amber-400 font-semibold tabular-nums">
-                      {session.frequency_weekly}×
-                    </span>{" "}
-                    / semaine
-                  </span>
-                </div>
+                <HudCard accent="gold" chamfer="sm" style={{ padding: '0.85rem 1rem' }}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 9,
+                          letterSpacing: '0.3em',
+                          color: 'var(--gold-500)',
+                          opacity: 0.75,
+                        }}
+                      >
+                        [SES-{(sIdx + 1).toString().padStart(2, '0')}]
+                      </span>
+                      <h4
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 16,
+                          fontWeight: 900,
+                          letterSpacing: '-0.01em',
+                          color: 'var(--fg-1)',
+                          margin: 0,
+                        }}
+                      >
+                        {session.name}
+                      </h4>
+                    </div>
+                    <Tag accent="gold">
+                      <span className="tabular-nums">{session.frequency_weekly}×</span> / sem
+                    </Tag>
+                  </div>
+                </HudCard>
                 <div className="grid gap-4 md:grid-cols-2">
                   {session.exercises.map((ex, eIdx) => (
                     <ExerciseCard
@@ -252,28 +450,88 @@ export default function PlanPage() {
           {/* RIGHT: cardio (col-span-1, sticky) */}
           {plan.cardio && (
             <div className="lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
-              <Card className="border border-border bg-card">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-primary" /> Travail Cardiovasculaire
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 text-xs space-y-2">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-muted p-2 rounded-md text-center">
-                      <span className="text-[10px] text-muted-foreground block">Type</span>
-                      <strong className="text-foreground">{plan.cardio.type}</strong>
-                    </div>
-                    <div className="bg-muted p-2 rounded-md text-center">
-                      <span className="text-[10px] text-muted-foreground block">Intensité</span>
-                      <strong className="text-primary capitalize">{plan.cardio.intensity}</strong>
+              <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+                <PanelHeader
+                  code="CARDIO-VASC"
+                  title={
+                    <span className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+                      Travail cardio
+                    </span>
+                  }
+                  accent="tech"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div
+                    style={{
+                      padding: 10,
+                      textAlign: 'center',
+                      background: 'var(--glass-bg-2)',
+                      border: '1px solid var(--glass-border)',
+                      clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                    }}
+                  >
+                    <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>Type</span>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--fg-1)',
+                        fontWeight: 700,
+                        marginTop: 4,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {plan.cardio.type}
                     </div>
                   </div>
-                  <p className="text-center text-muted-foreground mt-2">
-                    Fais {plan.cardio.frequency_weekly} session(s) de {plan.cardio.duration_minutes} minutes par semaine.
-                  </p>
-                </CardContent>
-              </Card>
+                  <div
+                    style={{
+                      padding: 10,
+                      textAlign: 'center',
+                      background: 'var(--accent-tech-tint)',
+                      border: '1px solid var(--accent-tech)',
+                      clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                      boxShadow: '0 0 10px var(--accent-tech-tint-strong)',
+                    }}
+                  >
+                    <span className="eyebrow" style={{ color: 'var(--accent-tech)' }}>Intensité</span>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--accent-tech)',
+                        fontWeight: 700,
+                        marginTop: 4,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {plan.cardio.intensity}
+                    </div>
+                  </div>
+                </div>
+                <p
+                  className="mono"
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--fg-4)',
+                    letterSpacing: '0.15em',
+                    textTransform: 'uppercase',
+                    marginTop: 12,
+                    textAlign: 'center',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <span className="tabular-nums" style={{ color: 'var(--accent-tech)', fontWeight: 700 }}>
+                    {plan.cardio.frequency_weekly}×
+                  </span>
+                  {' · '}
+                  <span className="tabular-nums" style={{ color: 'var(--gold-400)', fontWeight: 700 }}>
+                    {plan.cardio.duration_minutes}min
+                  </span>
+                  {' / semaine'}
+                </p>
+              </HudCard>
             </div>
           )}
         </div>
@@ -281,18 +539,30 @@ export default function PlanPage() {
 
       {/* Justification / Strategy Card */}
       {plan.justification && (
-        <Card className="border border-border bg-orange-light/25 dark:bg-primary/5">
-          <CardHeader className="p-4 pb-1">
-            <CardTitle className="text-base font-serif font-semibold flex items-center gap-2 text-primary">
-              <ShieldCheck className="h-4 w-4 text-primary" /> Justification du Coach
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-1">
-            <p className="text-xs leading-relaxed text-foreground font-serif italic">
-              {plan.justification}
-            </p>
-          </CardContent>
-        </Card>
+        <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="ORACLE.IA · STRATÉGIE"
+            title={
+              <span className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+                Justification du plan
+              </span>
+            }
+            accent="tech"
+          />
+          <p
+            style={{
+              fontFamily: 'var(--font-serif)',
+              fontStyle: 'italic',
+              fontSize: 'var(--type-body)',
+              lineHeight: 1.6,
+              color: 'var(--fg-2)',
+              margin: 0,
+            }}
+          >
+            {plan.justification}
+          </p>
+        </HudCard>
       )}
     </div>
   );
@@ -559,47 +829,122 @@ function MealCalculator({ planKcal, planMacros }: { planKcal: number; planMacros
 
   const totals = getTotals();
 
+  // Input style helper
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--glass-bg-2)',
+    border: '1px solid var(--glass-border)',
+    color: 'var(--fg-1)',
+    fontSize: 12,
+    padding: '0 12px',
+    height: 40,
+    clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+  };
+
   return (
-    <Card className="border border-border bg-card shadow-xs">
+    <HudCard accent="gold" chamfer="sm" style={{ padding: 0 }}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-4 flex items-center justify-between text-left font-serif font-semibold text-foreground cursor-pointer outline-hidden"
+        aria-expanded={isOpen}
+        className="w-full flex items-center justify-between text-left cursor-pointer"
+        style={{
+          padding: '14px 18px',
+          background: 'transparent',
+          border: 0,
+        }}
       >
-        <span className="flex items-center gap-2 text-base">
-          <Scale className="h-4 w-4 text-primary" /> Équivalences & Calories
+        <span className="flex flex-col gap-1">
+          <span
+            className="mono"
+            style={{
+              fontSize: 9,
+              letterSpacing: '0.3em',
+              color: 'var(--gold-500)',
+              opacity: 0.75,
+              textTransform: 'uppercase',
+            }}
+          >
+            [CALC-MACROS]
+          </span>
+          <span className="flex items-center gap-2" style={{ fontSize: 15, fontWeight: 800, color: 'var(--fg-1)' }}>
+            <Scale className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+            Équivalences & calories
+          </span>
         </span>
-        {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        {isOpen
+          ? <ChevronUp className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+          : <ChevronDown className="h-4 w-4" style={{ color: 'var(--fg-4)' }} aria-hidden="true" />}
       </button>
 
       {isOpen && (
-        <CardContent className="p-4 pt-0 border-t border-border/50 space-y-4">
-          <div className="flex gap-2 bg-muted/40 p-1 rounded-md border border-border mt-3">
+        <div
+          className="space-y-4"
+          style={{
+            padding: '12px 18px 18px',
+            borderTop: '1px solid var(--glass-border)',
+          }}
+        >
+          {/* Sub-tabs tactical */}
+          <div
+            className="flex gap-1"
+            style={{
+              padding: 4,
+              background: 'var(--glass-bg-2)',
+              border: '1px solid var(--glass-border)',
+              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            }}
+            role="tablist"
+          >
             <button
               onClick={() => setActiveSubTab("equiv")}
-              className={`flex-1 py-1.5 text-xs font-semibold text-center rounded-md cursor-pointer transition-all ${
-                activeSubTab === "equiv" ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-              }`}
+              role="tab"
+              aria-selected={activeSubTab === "equiv"}
+              className="mono flex-1 py-1.5 text-center transition-all"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                background: activeSubTab === "equiv" ? 'var(--gold-tint-15)' : 'transparent',
+                color: activeSubTab === "equiv" ? 'var(--gold-400)' : 'var(--fg-4)',
+                border: activeSubTab === "equiv" ? '1px solid var(--gold-tint-35)' : '1px solid transparent',
+                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                cursor: 'pointer',
+              }}
             >
-              Cru vs Cuit
+              Cru / Cuit
             </button>
             <button
               onClick={() => setActiveSubTab("calc")}
-              className={`flex-1 py-1.5 text-xs font-semibold text-center rounded-md cursor-pointer transition-all ${
-                activeSubTab === "calc" ? "bg-card text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
-              }`}
+              role="tab"
+              aria-selected={activeSubTab === "calc"}
+              className="mono flex-1 py-1.5 text-center transition-all"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                background: activeSubTab === "calc" ? 'var(--accent-tech-tint)' : 'transparent',
+                color: activeSubTab === "calc" ? 'var(--accent-tech)' : 'var(--fg-4)',
+                border: activeSubTab === "calc" ? '1px solid var(--accent-tech)' : '1px solid transparent',
+                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                cursor: 'pointer',
+              }}
             >
-              Calculateur de repas
+              Builder de repas
             </button>
           </div>
 
           {activeSubTab === "equiv" && (
             <div className="space-y-4 pt-1">
               <div>
-                <label className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">Aliment</label>
+                <label className="eyebrow" style={{ color: 'var(--fg-4)', display: 'block', marginBottom: 6 }}>
+                  Aliment
+                </label>
                 <select
                   value={equivFoodId}
                   onChange={(e) => handleFoodChange(e.target.value)}
-                  className="w-full h-10 rounded-md bg-card border border-border px-3 text-xs"
+                  className="mono w-full"
+                  style={inputStyle}
                 >
                   {FOOD_DATABASE.map(f => (
                     <option key={f.id} value={f.id}>{f.name}</option>
@@ -609,163 +954,306 @@ function MealCalculator({ planKcal, planMacros }: { planKcal: number; planMacros
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">Poids Cru (g)</label>
+                  <label className="eyebrow" style={{ color: 'var(--fg-4)', display: 'block', marginBottom: 6 }}>
+                    Cru (g)
+                  </label>
                   <input
                     type="number"
                     value={equivRawWeight}
                     onChange={(e) => handleRawChange(e.target.value)}
-                    className="w-full h-10 rounded-md bg-card border border-border px-3 text-xs"
+                    className="mono w-full"
+                    style={inputStyle}
                     placeholder="Ex: 100"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase font-semibold text-muted-foreground block mb-1">Poids Cuit (g)</label>
+                  <label className="eyebrow" style={{ color: 'var(--fg-4)', display: 'block', marginBottom: 6 }}>
+                    Cuit (g)
+                  </label>
                   <input
                     type="number"
                     value={equivCookedWeight}
                     disabled={!selectedFood.coeffRawToCooked}
                     onChange={(e) => handleCookedChange(e.target.value)}
-                    className="w-full h-10 rounded-md bg-card border border-border px-3 text-xs disabled:bg-muted/50 disabled:cursor-not-allowed"
+                    className="mono w-full"
+                    style={{
+                      ...inputStyle,
+                      opacity: !selectedFood.coeffRawToCooked ? 0.4 : 1,
+                      cursor: !selectedFood.coeffRawToCooked ? 'not-allowed' : 'text',
+                    }}
                     placeholder={selectedFood.coeffRawToCooked ? "Converti" : "N/A"}
                   />
                 </div>
               </div>
 
-              <div className="bg-muted/30 p-3 rounded-lg border border-border grid grid-cols-4 gap-2 text-center text-xs">
-                <div>
-                  <span className="text-[9px] text-muted-foreground block">Calories</span>
-                  <strong className="text-foreground">{equivMacros.kcal} kcal</strong>
+              {/* Macros readout */}
+              <div
+                className="grid grid-cols-4 gap-2"
+                style={{
+                  padding: 12,
+                  background: 'var(--gold-tint-08)',
+                  border: '1px solid var(--gold-tint-25)',
+                  boxShadow: 'var(--glow-gold-soft)',
+                  clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                }}
+              >
+                <div className="text-center">
+                  <span className="eyebrow">kcal</span>
+                  <div className="stat-num gold" style={{ fontSize: 16, lineHeight: 1.2, marginTop: 4 }}>
+                    {equivMacros.kcal}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[9px] text-muted-foreground block">Protéines</span>
-                  <strong className="text-foreground">{equivMacros.p}g</strong>
+                <div className="text-center">
+                  <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>P</span>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)', marginTop: 4 }}>
+                    {equivMacros.p}<span style={{ fontSize: 9, color: 'var(--fg-5)', marginLeft: 1 }}>g</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[9px] text-muted-foreground block">Glucides</span>
-                  <strong className="text-foreground">{equivMacros.c}g</strong>
+                <div className="text-center">
+                  <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>C</span>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)', marginTop: 4 }}>
+                    {equivMacros.c}<span style={{ fontSize: 9, color: 'var(--fg-5)', marginLeft: 1 }}>g</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[9px] text-muted-foreground block">Lipides</span>
-                  <strong className="text-foreground">{equivMacros.f}g</strong>
+                <div className="text-center">
+                  <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>F</span>
+                  <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)', marginTop: 4 }}>
+                    {equivMacros.f}<span style={{ fontSize: 9, color: 'var(--fg-5)', marginLeft: 1 }}>g</span>
+                  </div>
                 </div>
               </div>
-              <span className="text-[10px] text-muted-foreground italic block text-center">
-                * Les valeurs nutritionnelles correspondent au poids cru calculé.
-              </span>
+              <p
+                className="mono"
+                style={{
+                  fontSize: 9,
+                  color: 'var(--fg-5)',
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  textAlign: 'center',
+                  margin: 0,
+                }}
+              >
+                * Valeurs sur poids cru
+              </p>
             </div>
           )}
 
           {activeSubTab === "calc" && (
             <div className="space-y-4 pt-1">
               {items.length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground font-serif">
-                  Aucun aliment dans ce repas. Clique sur "Ajouter" pour commencer.
+                <div
+                  className="mono text-center"
+                  style={{
+                    padding: '24px 12px',
+                    fontSize: 10,
+                    letterSpacing: '0.2em',
+                    color: 'var(--fg-5)',
+                    textTransform: 'uppercase',
+                    background: 'var(--glass-bg-2)',
+                    border: '1px dashed var(--glass-border)',
+                    clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                  }}
+                >
+                  Aucun aliment chargé · clic [+] pour démarrer
                 </div>
               ) : (
                 <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                  {items.map(item => (
-                    <div key={item.id} className="p-3 bg-muted/30 rounded-lg border border-border/80 flex flex-col gap-2 relative">
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        className="absolute top-2 right-2 text-muted-foreground hover:text-red-500 cursor-pointer"
+                  {items.map(item => {
+                    const food = FOOD_DATABASE.find(f => f.id === item.foodId);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-col gap-2 relative"
+                        style={{
+                          padding: 10,
+                          background: 'var(--glass-bg-2)',
+                          border: '1px solid var(--glass-border)',
+                          clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                        }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          aria-label="Supprimer cet aliment"
+                          className="absolute"
+                          style={{
+                            top: 6,
+                            right: 6,
+                            color: 'var(--fg-5)',
+                            background: 'transparent',
+                            border: 0,
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--alert-500)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fg-5)'; }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                         <select
                           value={item.foodId}
                           onChange={(e) => updateItem(item.id, { foodId: e.target.value })}
-                          className="flex-1 h-9 rounded-md bg-card border border-border px-2 text-xs"
+                          className="mono"
+                          style={{ ...inputStyle, height: 36, fontSize: 11 }}
                         >
                           {FOOD_DATABASE.map(f => (
                             <option key={f.id} value={f.id}>{f.name}</option>
                           ))}
                         </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-center gap-1 bg-card border border-border rounded-md px-2 h-9">
-                          <input
-                            type="number"
-                            value={item.weight || ""}
-                            onChange={(e) => updateItem(item.id, { weight: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-transparent border-0 outline-hidden text-xs text-center"
-                            placeholder="Quantité"
-                          />
-                          <span className="text-[10px] text-muted-foreground">
-                            {FOOD_DATABASE.find(f => f.id === item.foodId)?.unit || "g"}
-                          </span>
-                        </div>
-                        {FOOD_DATABASE.find(f => f.id === item.foodId)?.cooked && (
-                          <div className="flex rounded-md border border-border overflow-hidden h-9">
-                            <button
-                              onClick={() => updateItem(item.id, { isCooked: false })}
-                              className={`flex-1 text-[10px] font-semibold cursor-pointer ${
-                                !item.isCooked ? "bg-primary text-cream" : "bg-card text-muted-foreground"
-                              }`}
-                            >
-                              Cru
-                            </button>
-                            <button
-                              onClick={() => updateItem(item.id, { isCooked: true })}
-                              className={`flex-1 text-[10px] font-semibold cursor-pointer ${
-                                item.isCooked ? "bg-primary text-cream" : "bg-card text-muted-foreground"
-                              }`}
-                            >
-                              Cuit
-                            </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div
+                            className="flex items-center gap-1"
+                            style={{
+                              background: 'var(--ink-900)',
+                              border: '1px solid var(--glass-border)',
+                              padding: '0 8px',
+                              height: 36,
+                              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                            }}
+                          >
+                            <input
+                              type="number"
+                              value={item.weight || ""}
+                              onChange={(e) => updateItem(item.id, { weight: parseFloat(e.target.value) || 0 })}
+                              className="mono w-full bg-transparent border-0 text-center focus:outline-none"
+                              style={{ fontSize: 12, color: 'var(--fg-1)' }}
+                              placeholder="Qté"
+                            />
+                            <span className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', letterSpacing: '0.1em' }}>
+                              {food?.unit || "g"}
+                            </span>
                           </div>
-                        )}
+                          {food?.cooked && (
+                            <div
+                              className="flex overflow-hidden"
+                              style={{
+                                height: 36,
+                                border: '1px solid var(--glass-border)',
+                                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                              }}
+                            >
+                              <button
+                                onClick={() => updateItem(item.id, { isCooked: false })}
+                                className="mono flex-1 cursor-pointer"
+                                style={{
+                                  fontSize: 9,
+                                  letterSpacing: '0.2em',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  background: !item.isCooked ? 'var(--gold-tint-15)' : 'transparent',
+                                  color: !item.isCooked ? 'var(--gold-400)' : 'var(--fg-5)',
+                                  border: 0,
+                                }}
+                              >
+                                Cru
+                              </button>
+                              <button
+                                onClick={() => updateItem(item.id, { isCooked: true })}
+                                className="mono flex-1 cursor-pointer"
+                                style={{
+                                  fontSize: 9,
+                                  letterSpacing: '0.2em',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  background: item.isCooked ? 'var(--gold-tint-15)' : 'transparent',
+                                  color: item.isCooked ? 'var(--gold-400)' : 'var(--fg-5)',
+                                  border: 0,
+                                }}
+                              >
+                                Cuit
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
-              <Button onClick={addItem} variant="outline" className="w-full h-9 text-xs flex items-center justify-center gap-1">
-                <Plus className="h-3 w-3" /> Ajouter un aliment
-              </Button>
+              <button
+                onClick={addItem}
+                className="btn btn-ghost mono flex items-center justify-center gap-1"
+                style={{
+                  width: '100%',
+                  fontSize: 10,
+                  letterSpacing: '0.2em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                <Plus className="h-3 w-3" aria-hidden="true" /> Ajouter
+              </button>
 
               {items.length > 0 && (
-                <div className="bg-primary/5 p-4 rounded-lg border border-primary/20 space-y-3">
-                  <div className="flex justify-between items-center text-xs font-serif">
-                    <span className="font-semibold text-secondary">Total du repas :</span>
+                <div
+                  className="space-y-3"
+                  style={{
+                    padding: 12,
+                    background: 'var(--accent-tech-tint)',
+                    border: '1px solid var(--accent-tech)',
+                    boxShadow: '0 0 12px var(--accent-tech-tint-strong)',
+                    clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+                  }}
+                >
+                  <div className="flex justify-between items-center">
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: '0.2em',
+                        color: 'var(--accent-tech)',
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Total repas
+                    </span>
                     <div className="text-right">
-                      <span className="font-bold text-primary text-sm block">{totals.kcal} kcal</span>
-                      <span className="text-[9px] text-muted-foreground block mt-0.5">
-                        ({Math.round((totals.kcal / planKcal) * 100)}% de ta cible journalière)
+                      <span
+                        className="stat-num tech"
+                        style={{ fontSize: 22, lineHeight: 1 }}
+                      >
+                        {totals.kcal}
                       </span>
+                      <span className="mono" style={{ fontSize: 9, color: 'var(--fg-4)', marginLeft: 4 }}>
+                        kcal
+                      </span>
+                      <div className="mono" style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--fg-4)', marginTop: 2 }}>
+                        ({Math.round((totals.kcal / planKcal) * 100)}% cible)
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-semibold">
-                    <div className="bg-card p-1.5 rounded border border-border">
-                      <span className="text-[8px] text-muted-foreground block">Protéines</span>
-                      <span className="text-foreground">{totals.p} g</span>
-                      <span className="text-[8px] text-primary/80 block mt-0.5">
-                        ({Math.round((totals.p / planMacros.p) * 100)}%)
-                      </span>
-                    </div>
-                    <div className="bg-card p-1.5 rounded border border-border">
-                      <span className="text-[8px] text-muted-foreground block">Glucides</span>
-                      <span className="text-foreground">{totals.c} g</span>
-                      <span className="text-[8px] text-primary/80 block mt-0.5">
-                        ({Math.round((totals.c / planMacros.c) * 100)}%)
-                      </span>
-                    </div>
-                    <div className="bg-card p-1.5 rounded border border-border">
-                      <span className="text-[8px] text-muted-foreground block">Lipides</span>
-                      <span className="text-foreground">{totals.f} g</span>
-                      <span className="text-[8px] text-primary/80 block mt-0.5">
-                        ({Math.round((totals.f / planMacros.f) * 100)}%)
-                      </span>
-                    </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { letter: 'P', val: totals.p, target: planMacros.p },
+                      { letter: 'C', val: totals.c, target: planMacros.c },
+                      { letter: 'F', val: totals.f, target: planMacros.f },
+                    ]).map((macro) => (
+                      <div
+                        key={macro.letter}
+                        className="text-center"
+                        style={{
+                          padding: 6,
+                          background: 'var(--ink-900)',
+                          border: '1px solid var(--glass-border)',
+                          clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                        }}
+                      >
+                        <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>{macro.letter}</span>
+                        <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>
+                          {macro.val}<span style={{ fontSize: 8, color: 'var(--fg-5)' }}>g</span>
+                        </div>
+                        <div className="mono" style={{ fontSize: 8, color: 'var(--accent-tech)', marginTop: 1 }}>
+                          {Math.round((macro.val / macro.target) * 100)}%
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           )}
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </HudCard>
   );
 }
 

@@ -8,11 +8,99 @@ import { useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserSettings, UserProfile } from "@/types/user";
 import { User, Settings as SettingsIcon, ShieldAlert, Download, LogOut, Save, Check, ShieldCheck } from "lucide-react";
 import { flags } from "@/lib/features/flags";
+import { HudCard, PanelHeader, Tag } from "@/components/nodream";
+
+// ---------- Tactical UI helpers (inline styles to avoid a new component file) ----------
+const inputBase: React.CSSProperties = {
+  background: 'var(--glass-bg-2)',
+  border: '1px solid var(--glass-border)',
+  color: 'var(--fg-1)',
+  fontSize: 12,
+  padding: '0 12px',
+  height: 40,
+  width: '100%',
+  clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 9,
+  letterSpacing: '0.18em',
+  color: 'var(--fg-4)',
+  textTransform: 'uppercase',
+  fontWeight: 700,
+  display: 'block',
+  marginBottom: 6,
+};
+
+interface ToggleProps {
+  id: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  desc?: string;
+  accent?: 'gold' | 'tech';
+}
+
+function TacticalToggle({ id, checked, onChange, label, desc, accent = 'gold' }: ToggleProps) {
+  const onColor = accent === 'tech' ? 'var(--accent-tech)' : 'var(--gold-500)';
+  const onGlow = accent === 'tech' ? '0 0 10px var(--accent-tech-tint-strong)' : 'var(--glow-gold-soft)';
+  return (
+    <div className="flex items-center justify-between py-1">
+      <div>
+        <span id={`${id}-label`} className="mono" style={{ ...labelStyle, marginBottom: 2 }}>
+          {label}
+        </span>
+        {desc && (
+          <span id={`${id}-desc`} className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.05em' }}>
+            {desc}
+          </span>
+        )}
+      </div>
+      <label className="relative inline-flex items-center cursor-pointer" htmlFor={id}>
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          aria-checked={checked}
+          aria-labelledby={`${id}-label`}
+          aria-describedby={desc ? `${id}-desc` : undefined}
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only peer"
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-block',
+            position: 'relative',
+            width: 40,
+            height: 20,
+            background: checked ? onColor : 'var(--glass-bg-2)',
+            border: `1px solid ${checked ? onColor : 'var(--glass-border)'}`,
+            boxShadow: checked ? onGlow : 'none',
+            transition: 'all 150ms ease',
+            clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+          }}
+        >
+          <span
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: checked ? 22 : 2,
+              width: 14,
+              height: 14,
+              background: checked ? 'var(--ink-900)' : 'var(--fg-3)',
+              transition: 'left 150ms ease',
+            }}
+          />
+        </span>
+      </label>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { user, logout, getFreshToken } = useAuth();
@@ -21,12 +109,12 @@ export default function SettingsPage() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  
+
   // Profile settings
   const [name, setName] = useState("");
   const [height, setHeight] = useState("");
   const [activityLevel, setActivityLevel] = useState<UserProfile["activity_level"]>("sedentary");
-  
+
   // App preferences settings
   const [notifications, setNotifications] = useState(true);
   const [units, setUnits] = useState<UserSettings["units"]>("metric");
@@ -206,7 +294,7 @@ export default function SettingsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `linsociable_data_${user.uid}.json`;
+      a.download = `nodream_data_${user.uid}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -258,19 +346,63 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
-      {/* Title */}
-      <div>
-        <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">Réglages</h2>
-        <p className="text-sm text-muted-foreground">
-          Gère ton profil, tes préférences et la confidentialité de tes données.
+      {/* Tactical header */}
+      <div className="space-y-2">
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.3em',
+            color: 'var(--accent-tech)',
+            opacity: 0.85,
+          }}
+        >
+          [OPS-CONFIG · v1]
+        </span>
+        <h2
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontWeight: 900,
+            fontSize: 'var(--type-h1)',
+            letterSpacing: 'var(--tracking-display)',
+            lineHeight: 1.05,
+            color: 'var(--fg-1)',
+            marginTop: 4,
+          }}
+        >
+          Réglages <span style={{ color: 'var(--gold-400)' }}>opérationnels</span>
+        </h2>
+        <p
+          className="mono"
+          style={{
+            marginTop: 6,
+            fontSize: 'var(--type-meta)',
+            letterSpacing: '0.18em',
+            color: 'var(--fg-4)',
+            textTransform: 'uppercase',
+          }}
+        >
+          Profil · préférences · confidentialité
         </p>
       </div>
 
       {errorMsg && (
         <div
           role="alert"
-          className="p-3 bg-red-950/40 text-red-300 text-xs rounded-lg border border-red-900 font-serif"
+          className="mono"
+          style={{
+            padding: '10px 14px',
+            background: 'var(--alert-tint-15)',
+            border: '1px solid var(--alert-500)',
+            color: 'var(--alert-500)',
+            fontSize: 11,
+            letterSpacing: '0.1em',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          }}
         >
+          <span style={{ fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+            [ERR-CONFIG]
+          </span>
           {errorMsg}
         </div>
       )}
@@ -279,51 +411,76 @@ export default function SettingsPage() {
         <div
           role="status"
           aria-live="polite"
-          className="p-3 bg-emerald-950/40 text-emerald-300 text-xs rounded-lg border border-emerald-900 flex items-center gap-2 font-serif"
+          className="mono flex items-center gap-2"
+          style={{
+            padding: '10px 14px',
+            background: 'var(--accent-tech-tint)',
+            border: '1px solid var(--accent-tech)',
+            color: 'var(--accent-tech)',
+            fontSize: 11,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+            boxShadow: '0 0 10px var(--accent-tech-tint-strong)',
+          }}
         >
-          <Check className="h-4 w-4" aria-hidden="true" /> Modifications enregistrées avec succès.
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>[ACK] Modifications enregistrées</span>
         </div>
       )}
 
       {/* Main Settings Form */}
       <form onSubmit={handleSaveSettings} className="grid gap-4 lg:grid-cols-2 lg:gap-6">
         {/* Profile Card */}
-        <Card className="border border-border bg-card shadow-xs">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-              <User className="h-4 w-4 text-primary" /> Profil personnel
-            </CardTitle>
-            <CardDescription className="text-xs">Tes informations métaboliques de base</CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-4 text-xs">
-            <div className="space-y-1">
-              <label htmlFor="settings-prenom-pseudo" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Prénom / Pseudo</label>
-              <input id="settings-prenom-pseudo"
+        <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="PROFIL-PERSO"
+            title={
+              <span className="flex items-center gap-2">
+                <User className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+                Profil personnel
+              </span>
+            }
+            accent="gold"
+          />
+          <p className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.1em', marginBottom: 12 }}>
+            Données métaboliques de base
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="settings-prenom-pseudo" style={labelStyle}>Prénom / Pseudo</label>
+              <input
+                id="settings-prenom-pseudo"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="mono"
+                style={inputBase}
                 required
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label htmlFor="settings-taille-cm" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Taille (cm)</label>
-                <input id="settings-taille-cm"
+              <div>
+                <label htmlFor="settings-taille-cm" style={labelStyle}>Taille (cm)</label>
+                <input
+                  id="settings-taille-cm"
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
-                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="mono"
+                  style={inputBase}
                   required
                 />
               </div>
-              <div className="space-y-1">
-                <label htmlFor="settings-activite" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Activité</label>
-                <select id="settings-activite"
+              <div>
+                <label htmlFor="settings-activite" style={labelStyle}>Activité</label>
+                <select
+                  id="settings-activite"
                   value={activityLevel}
                   onChange={(e: any) => setActivityLevel(e.target.value)}
-                  className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
+                  className="mono"
+                  style={inputBase}
                 >
                   <option value="sedentary">Sédentaire</option>
                   <option value="lightly_active">Légèrement actif</option>
@@ -332,50 +489,46 @@ export default function SettingsPage() {
                 </select>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </HudCard>
 
         {/* GLP-1 Medication Card */}
         {featureGlp1 && (
-          <Card className="border border-border bg-card shadow-xs">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-primary" /> Traitement GLP-1
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Renseigne ton traitement (Semaglutide, Tirzepatide) pour adapter ton plan
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4 text-xs">
-              <div className="flex items-center justify-between py-1">
-                <div>
-                  <span id="settings-glp1-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Traitement Actif</span>
-                  <span id="settings-glp1-toggle-desc" className="text-muted-foreground text-[10px]">Indique si tu es sous traitement actuellement</span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    aria-checked={glp1Active}
-                    aria-labelledby="settings-glp1-toggle-label"
-                    aria-describedby="settings-glp1-toggle-desc"
-                    checked={glp1Active}
-                    onChange={(e) => setGlp1Active(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
-                </label>
-              </div>
+          <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+            <PanelHeader
+              code="MED-GLP1"
+              title={
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+                  Traitement GLP-1
+                </span>
+              }
+              accent="gold"
+            />
+            <p className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.1em', marginBottom: 12 }}>
+              Sémaglutide / Tirzepatide / Liraglutide — adapte le plan
+            </p>
+            <div className="space-y-4">
+              <TacticalToggle
+                id="settings-glp1-toggle"
+                checked={glp1Active}
+                onChange={setGlp1Active}
+                label="Traitement actif"
+                desc="Indique si tu es sous traitement actuellement"
+                accent="gold"
+              />
 
               {glp1Active && (
-                <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
+                <div className="space-y-4 pt-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="settings-molecule" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Molécule</label>
-                      <select id="settings-molecule"
+                    <div>
+                      <label htmlFor="settings-molecule" style={labelStyle}>Molécule</label>
+                      <select
+                        id="settings-molecule"
                         value={glp1Molecule}
                         onChange={(e: any) => setGlp1Molecule(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
+                        className="mono"
+                        style={inputBase}
                       >
                         <option value="semaglutide">Sémaglutide (Ozempic/Wegovy)</option>
                         <option value="tirzepatide">Tirzépatide (Mounjaro/Zepbound)</option>
@@ -383,12 +536,14 @@ export default function SettingsPage() {
                         <option value="other">Autre / Générique</option>
                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <label htmlFor="settings-frequence" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fréquence</label>
-                      <select id="settings-frequence"
+                    <div>
+                      <label htmlFor="settings-frequence" style={labelStyle}>Fréquence</label>
+                      <select
+                        id="settings-frequence"
                         value={glp1Frequency}
                         onChange={(e: any) => setGlp1Frequency(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
+                        className="mono"
+                        style={inputBase}
                       >
                         <option value="weekly">Hebdomadaire</option>
                         <option value="daily">Quotidien</option>
@@ -398,34 +553,50 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="settings-dose-ex-0-5mg" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Dose (ex: 0.5mg)</label>
-                      <input id="settings-dose-ex-0-5mg"
+                    <div>
+                      <label htmlFor="settings-dose-ex-0-5mg" style={labelStyle}>Dose (ex: 0.5mg)</label>
+                      <input
+                        id="settings-dose-ex-0-5mg"
                         type="text"
                         placeholder="ex: 0.5mg"
                         value={glp1Dose}
                         onChange={(e) => setGlp1Dose(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="mono"
+                        style={inputBase}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label htmlFor="settings-date-de-debut" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Date de début</label>
-                      <input id="settings-date-de-debut"
+                    <div>
+                      <label htmlFor="settings-date-de-debut" style={labelStyle}>Date de début</label>
+                      <input
+                        id="settings-date-de-debut"
                         type="date"
                         value={glp1StartDate}
                         onChange={(e) => setGlp1StartDate(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="mono"
+                        style={inputBase}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Effets Secondaires ressentis</label>
+                    <label style={labelStyle}>Effets secondaires ressentis</label>
                     <div className="grid grid-cols-2 gap-2">
                       {['nausée', 'fatigue', 'constipation', 'diarrhée', 'hypoglycémie', 'maux de tête'].map((effect) => {
                         const isChecked = glp1SideEffects.includes(effect);
                         return (
-                          <label key={effect} className="flex items-center space-x-2 cursor-pointer p-1">
+                          <label
+                            key={effect}
+                            className="mono flex items-center gap-2 cursor-pointer"
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: 11,
+                              color: isChecked ? 'var(--gold-400)' : 'var(--fg-3)',
+                              background: isChecked ? 'var(--gold-tint-08)' : 'transparent',
+                              border: `1px solid ${isChecked ? 'var(--gold-tint-25)' : 'var(--glass-border)'}`,
+                              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                              textTransform: 'capitalize',
+                            }}
+                          >
                             <input
                               type="checkbox"
                               checked={isChecked}
@@ -436,62 +607,72 @@ export default function SettingsPage() {
                                   setGlp1SideEffects(prev => prev.filter(x => x !== effect));
                                 }
                               }}
-                              className="accent-primary"
+                              style={{ accentColor: 'var(--gold-500)' }}
                             />
-                            <span className="capitalize">{effect}</span>
+                            <span>{effect}</span>
                           </label>
                         );
                       })}
                     </div>
                   </div>
 
-                  <div className="text-[10px] text-muted-foreground leading-relaxed bg-primary/5 p-2.5 rounded border border-primary/10">
-                    <span className="font-bold text-primary">Clause médicale : </span>
-                    Cette option adapte ton plan nutritionnel en augmentant l'apport en protéines pour minimiser la perte musculaire, mais ne constitue en aucun cas une ordonnance ou un avis médical. Consulte ton médecin pour adapter tes doses.
+                  <div
+                    className="mono"
+                    style={{
+                      padding: 10,
+                      background: 'var(--gold-tint-08)',
+                      border: '1px solid var(--gold-tint-25)',
+                      fontSize: 10,
+                      color: 'var(--fg-3)',
+                      lineHeight: 1.5,
+                      letterSpacing: '0.04em',
+                      clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                    }}
+                  >
+                    <span style={{ color: 'var(--gold-400)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                      [CLAUSE-MED]
+                    </span>
+                    {' '}
+                    Cette option adapte ton plan en augmentant l&apos;apport protéique. Ce n&apos;est pas un avis médical. Consulte ton médecin.
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
         )}
 
         {/* Fasting Protocol Card */}
         {featureFasting && (
-          <Card className="border border-border bg-card shadow-xs">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-                <SettingsIcon className="h-4 w-4 text-primary" /> Jeûne Intermittent
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Configure tes fenêtres de jeûne pour adapter le coaching et le dashboard
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-4 text-xs">
-              <div className="flex items-center justify-between py-1">
-                <div>
-                  <span id="settings-fasting-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jeûne Actif</span>
-                  <span id="settings-fasting-toggle-desc" className="text-muted-foreground text-[10px]">Active le suivi des fenêtres de jeûne</span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    aria-checked={fastingActive}
-                    aria-labelledby="settings-fasting-toggle-label"
-                    aria-describedby="settings-fasting-toggle-desc"
-                    checked={fastingActive}
-                    onChange={(e) => setFastingActive(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
-                </label>
-              </div>
+          <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+            <PanelHeader
+              code="JEUNE-IF"
+              title={
+                <span className="flex items-center gap-2">
+                  <SettingsIcon className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+                  Jeûne intermittent
+                </span>
+              }
+              accent="gold"
+            />
+            <p className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.1em', marginBottom: 12 }}>
+              Fenêtres synchro coach + dashboard
+            </p>
+            <div className="space-y-4">
+              <TacticalToggle
+                id="settings-fasting-toggle"
+                checked={fastingActive}
+                onChange={setFastingActive}
+                label="Jeûne actif"
+                desc="Suivi des fenêtres + ORACLE.IA"
+                accent="gold"
+              />
 
               {fastingActive && (
-                <div className="space-y-4 pt-3 border-t border-border/50 animate-[fadeIn_0.2s_ease-out]">
-                  <div className="space-y-1">
-                    <label htmlFor="settings-protocole" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Protocole</label>
-                    <select id="settings-protocole"
+                <div className="space-y-4 pt-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
+                  <div>
+                    <label htmlFor="settings-protocole" style={labelStyle}>Protocole</label>
+                    <select
+                      id="settings-protocole"
                       value={fastingType}
                       onChange={(e: any) => {
                         const val = e.target.value;
@@ -510,39 +691,44 @@ export default function SettingsPage() {
                           setFastingEnd("18:00");
                         }
                       }}
-                      className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
+                      className="mono"
+                      style={inputBase}
                     >
-                      <option value="16:8">16:8 (16h Jeûne / 8h Repas)</option>
-                      <option value="18:6">18:6 (18h Jeûne / 6h Repas)</option>
-                      <option value="20:4">20:4 (20h Jeûne / 4h Repas)</option>
-                      <option value="OMAD">OMAD (One Meal A Day - 23:1)</option>
+                      <option value="16:8">16:8 (16h jeûne / 8h repas)</option>
+                      <option value="18:6">18:6 (18h jeûne / 6h repas)</option>
+                      <option value="20:4">20:4 (20h jeûne / 4h repas)</option>
+                      <option value="OMAD">OMAD (23:1)</option>
                       <option value="custom">Personnalisé</option>
                     </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label htmlFor="settings-debut-repas-fenetre" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Début Repas (Fenêtre)</label>
-                      <input id="settings-debut-repas-fenetre"
+                    <div>
+                      <label htmlFor="settings-debut-repas-fenetre" style={labelStyle}>Début fenêtre</label>
+                      <input
+                        id="settings-debut-repas-fenetre"
                         type="time"
                         value={fastingStart}
                         onChange={(e) => setFastingStart(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="mono"
+                        style={inputBase}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label htmlFor="settings-fin-repas-fenetre" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Fin Repas (Fenêtre)</label>
-                      <input id="settings-fin-repas-fenetre"
+                    <div>
+                      <label htmlFor="settings-fin-repas-fenetre" style={labelStyle}>Fin fenêtre</label>
+                      <input
+                        id="settings-fin-repas-fenetre"
                         type="time"
                         value={fastingEnd}
                         onChange={(e) => setFastingEnd(e.target.value)}
-                        className="w-full bg-muted border border-border text-foreground py-2 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="mono"
+                        style={inputBase}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Jours d'activation</label>
+                    <label style={labelStyle}>Jours d&apos;activation</label>
                     <div className="flex flex-wrap gap-2">
                       {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((dayName, idx) => {
                         const isChecked = fastingDays.includes(idx);
@@ -557,11 +743,19 @@ export default function SettingsPage() {
                                 setFastingDays(prev => [...prev, idx].sort());
                               }
                             }}
-                            className={`px-3 py-1.5 rounded-md text-[10px] font-bold border transition-colors ${
-                              isChecked
-                                ? "bg-primary border-primary text-white"
-                                : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
-                            }`}
+                            className="mono cursor-pointer transition-all"
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: '0.2em',
+                              textTransform: 'uppercase',
+                              background: isChecked ? 'var(--gold-tint-15)' : 'var(--glass-bg-2)',
+                              color: isChecked ? 'var(--gold-400)' : 'var(--fg-5)',
+                              border: `1px solid ${isChecked ? 'var(--gold-tint-35)' : 'var(--glass-border)'}`,
+                              boxShadow: isChecked ? 'var(--glow-gold-soft)' : 'none',
+                              clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                            }}
                           >
                             {dayName}
                           </button>
@@ -571,176 +765,272 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </HudCard>
         )}
 
         {/* Preferences Card */}
-        <Card className="border border-border bg-card shadow-xs">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-              <SettingsIcon className="h-4 w-4 text-primary" /> Préférences de l'application
-            </CardTitle>
-            <CardDescription className="text-xs">Configure ton expérience utilisateur</CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-4 text-xs">
-            <div className="flex items-center justify-between py-1">
+        <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="PREF-APP"
+            title={
+              <span className="flex items-center gap-2">
+                <SettingsIcon className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+                Préférences app
+              </span>
+            }
+            accent="gold"
+          />
+          <div className="space-y-4">
+            <TacticalToggle
+              id="settings-notifications-toggle"
+              checked={notifications}
+              onChange={setNotifications}
+              label="Notifications"
+              desc="Rappels quotidiens de bilans"
+              accent="tech"
+            />
+
+            <div
+              className="flex items-center justify-between py-1"
+              style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 12 }}
+            >
               <div>
-                <span id="settings-notifications-toggle-label" className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Notifications</span>
-                <span id="settings-notifications-toggle-desc" className="text-muted-foreground text-[10px]">Rappels quotidiens de bilans</span>
+                <span className="mono" style={{ ...labelStyle, marginBottom: 2 }}>Système de mesure</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.05em' }}>
+                  Métrique ou impérial
+                </span>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  aria-checked={notifications}
-                  aria-labelledby="settings-notifications-toggle-label"
-                  aria-describedby="settings-notifications-toggle-desc"
-                  checked={notifications}
-                  onChange={(e) => setNotifications(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary" aria-hidden="true" />
-              </label>
+              <div
+                className="inline-flex"
+                style={{
+                  padding: 2,
+                  background: 'var(--glass-bg-2)',
+                  border: '1px solid var(--glass-border)',
+                  clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                }}
+              >
+                {[
+                  { val: 'metric', label: 'Métrique' },
+                  { val: 'imperial', label: 'Impérial' },
+                ].map((opt) => {
+                  const active = units === opt.val;
+                  return (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setUnits(opt.val as UserSettings["units"])}
+                      className="mono cursor-pointer"
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: '0.2em',
+                        textTransform: 'uppercase',
+                        background: active ? 'var(--gold-tint-15)' : 'transparent',
+                        color: active ? 'var(--gold-400)' : 'var(--fg-5)',
+                        border: 'none',
+                        clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="flex items-center justify-between py-1 border-t border-border/50 pt-3">
+            <div
+              className="flex items-center justify-between py-1"
+              style={{ borderTop: '1px solid var(--glass-border)', paddingTop: 12 }}
+            >
               <div>
-                <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Système de mesure</span>
-                <span className="text-muted-foreground text-[10px]">Unités métriques ou impériales</span>
-              </div>
-              <div className="inline-flex rounded-md p-0.5 bg-muted border border-border">
-                <button
-                  type="button"
-                  onClick={() => setUnits("metric")}
-                  className={`px-2.5 py-1 text-[9px] font-bold rounded-sm uppercase transition-all ${
-                    units === "metric" ? "bg-card text-primary shadow-xs" : "text-muted-foreground"
-                  }`}
-                >
-                  Métrique
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUnits("imperial")}
-                  className={`px-2.5 py-1 text-[9px] font-bold rounded-sm uppercase transition-all ${
-                    units === "imperial" ? "bg-card text-primary shadow-xs" : "text-muted-foreground"
-                  }`}
-                >
-                  Impérial
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between py-1 border-t border-border/50 pt-3">
-              <div>
-                <span className="font-semibold text-foreground uppercase tracking-wider block text-[10px]">Langue</span>
-                <span className="text-muted-foreground text-[10px]">Langue d'affichage</span>
+                <span className="mono" style={{ ...labelStyle, marginBottom: 2 }}>Langue</span>
+                <span className="mono" style={{ fontSize: 10, color: 'var(--fg-5)', letterSpacing: '0.05em' }}>
+                  Affichage
+                </span>
               </div>
               <select
                 value={language}
                 onChange={(e: any) => setLanguage(e.target.value)}
-                className="bg-muted border border-border text-foreground py-1 px-2 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-serif"
+                className="mono"
+                style={{ ...inputBase, height: 32, width: 'auto' }}
               >
                 <option value="fr">Français (tu)</option>
                 <option value="en">English</option>
               </select>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </HudCard>
 
         {/* Save button */}
-        <Button
+        <button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 h-11 lg:col-span-2"
+          className="btn btn-primary lg:col-span-2"
+          style={{ width: '100%', height: 44 }}
           disabled={saving}
         >
-          <Save className="h-4 w-4" />
+          <Save className="h-4 w-4" aria-hidden="true" />
           {saving ? "Sauvegarde..." : "Enregistrer les modifications"}
-        </Button>
+        </button>
       </form>
 
       {/* GDPR Card */}
-      <Card className="border border-border bg-card shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-base font-serif font-semibold flex items-center gap-2 text-foreground">
-            <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-500" /> Confidentialité & RGPD
-          </CardTitle>
-          <CardDescription className="text-xs">Exporte tes données ou supprime définitivement ton compte.</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 space-y-4 text-xs">
-          <div className="space-y-2">
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              En conformité avec le RGPD, tu as le droit de récupérer l'intégralité des données collectées par l'application ou de demander la suppression complète de ton compte.
-            </p>
-            
-            <div className="flex gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleExportData}
-                disabled={exporting}
-                className="flex-1 flex items-center justify-center gap-1.5 h-10 text-[10px] font-bold"
-              >
-                <Download className="h-3.5 w-3.5 text-primary" />
-                {exporting ? "Exportation..." : "Exporter les données"}
-              </Button>
-              
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setConfirmDelete(!confirmDelete)}
-                className="flex-1 flex items-center justify-center gap-1.5 h-10 text-[10px] font-bold"
-              >
-                <ShieldAlert className="h-3.5 w-3.5" />
-                Détruire le compte
-              </Button>
-            </div>
+      <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+        <PanelHeader
+          code="RGPD · CONFID"
+          title={
+            <span className="flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+              Confidentialité &amp; RGPD
+            </span>
+          }
+          accent="tech"
+          right={<Tag accent="tech">EU · FR-67</Tag>}
+        />
+        <div className="space-y-4">
+          <p className="mono" style={{ fontSize: 11, color: 'var(--fg-3)', letterSpacing: '0.04em', lineHeight: 1.6, margin: 0 }}>
+            Tu peux récupérer l&apos;intégralité des données collectées ou demander la suppression définitive du compte.
+          </p>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={handleExportData}
+              disabled={exporting}
+              className="btn btn-ghost mono flex-1"
+              style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase' }}
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              {exporting ? "Exportation..." : "Exporter"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(!confirmDelete)}
+              className="mono flex-1 cursor-pointer"
+              style={{
+                padding: '0 18px',
+                height: 40,
+                fontSize: 10,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                background: 'var(--alert-tint-15)',
+                color: 'var(--alert-500)',
+                border: '1px solid var(--alert-500)',
+                clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+              Détruire compte
+            </button>
           </div>
 
           {/* Delete confirmation section */}
           {confirmDelete && (
-            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 rounded-lg space-y-3 mt-3">
-              <span className="font-bold text-red-700 dark:text-red-400 block text-[10px] uppercase tracking-wider">⚠️ Action irréversible</span>
-              <p className="text-[10px] text-red-600 dark:text-red-400 leading-relaxed">
-                Toutes tes collections de bilans quotidiens, hebdomadaires, plans, et photos de progrès stockés seront supprimés de manière permanente.
+            <div
+              className="space-y-3"
+              style={{
+                padding: 12,
+                background: 'var(--alert-tint-15)',
+                border: '1px solid var(--alert-500)',
+                clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+              }}
+            >
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.25em',
+                  color: 'var(--alert-500)',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  display: 'block',
+                }}
+              >
+                [WARN · IRRÉVERSIBLE]
+              </span>
+              <p
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--fg-3)',
+                  lineHeight: 1.6,
+                  margin: 0,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                Toutes les collections (check-ins, plans, photos de progrès) seront purgées de manière permanente.
               </p>
               <div className="space-y-2">
-                <label htmlFor="settings-saisis-supprimer-pour-confirmer" className="text-[9px] uppercase font-semibold text-muted-foreground block">Saisis "SUPPRIMER" pour confirmer :</label>
-                <input id="settings-saisis-supprimer-pour-confirmer"
+                <label htmlFor="settings-saisis-supprimer-pour-confirmer" style={labelStyle}>
+                  Saisis &quot;SUPPRIMER&quot; pour confirmer
+                </label>
+                <input
+                  id="settings-saisis-supprimer-pour-confirmer"
                   type="text"
                   value={deleteInput}
                   onChange={(e) => setDeleteInput(e.target.value)}
                   placeholder="SUPPRIMER"
-                  className="w-full bg-card border border-red-300 dark:border-red-900 text-foreground py-1.5 px-2 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono uppercase"
+                  className="mono"
+                  style={{
+                    ...inputBase,
+                    border: '1px solid var(--alert-500)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.15em',
+                  }}
                 />
-                <Button
+                <button
                   type="button"
-                  variant="destructive"
                   onClick={handleDeleteAccount}
                   disabled={deleteInput !== "SUPPRIMER" || deleting}
-                  className="w-full h-9 text-[10px]"
+                  className="mono cursor-pointer"
+                  style={{
+                    width: '100%',
+                    height: 36,
+                    fontSize: 10,
+                    letterSpacing: '0.25em',
+                    textTransform: 'uppercase',
+                    fontWeight: 700,
+                    background: deleteInput === "SUPPRIMER" ? 'var(--alert-500)' : 'var(--alert-tint-15)',
+                    color: deleteInput === "SUPPRIMER" ? 'var(--ink-900)' : 'var(--fg-5)',
+                    border: '1px solid var(--alert-500)',
+                    opacity: deleting ? 0.5 : 1,
+                    clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+                  }}
                 >
                   {deleting ? "Destruction en cours..." : "Supprimer définitivement"}
-                </Button>
+                </button>
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </HudCard>
 
-      {/* Logout Card */}
-      <Button
+      {/* Logout */}
+      <button
         type="button"
-        variant="outline"
         onClick={async () => {
           await logout();
           router.push("/login");
         }}
-        className="w-full flex items-center justify-center gap-2 h-11 border-border/80 text-muted-foreground hover:text-foreground"
+        className="btn btn-ghost mono"
+        style={{
+          width: '100%',
+          height: 44,
+          fontSize: 11,
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+        }}
       >
-        <LogOut className="h-4 w-4" />
-        Se déconnecter
-      </Button>
+        <LogOut className="h-4 w-4" aria-hidden="true" />
+        Déconnexion
+      </button>
     </div>
   );
 }

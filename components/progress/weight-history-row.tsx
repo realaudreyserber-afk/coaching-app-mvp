@@ -2,18 +2,13 @@ import * as React from "react";
 import { Calendar } from "lucide-react";
 
 /**
- * Weight History Row — une ligne de l'historique des pesées quotidiennes.
- * Affiche la date FR + le poids + le delta par rapport à la pesée précédente.
- *
- * Stitch ref : progress-d.jpg (sidebar droite "Historique Journalier")
+ * Weight History Row — NoDream Tactical OS.
+ * Ligne mono avec date FR + poids tabular-nums + delta tech/gold.
  */
 
 interface WeightHistoryRowProps {
-  /** Timestamp ISO de la pesée */
   createdAt: string;
-  /** Poids en kg */
   weight: number;
-  /** Delta par rapport à la pesée précédente (en kg). Undefined si pas de précédente. */
   delta?: number;
   className?: string;
 }
@@ -33,21 +28,44 @@ export function WeightHistoryRow({
 
   return (
     <li
-      className={`flex justify-between items-center px-4 py-3 hover:bg-zinc-800/40 transition-colors text-xs ${className}`}
+      className={`flex justify-between items-center transition-colors ${className}`}
+      style={{
+        padding: '10px 4px',
+        borderBottom: '1px solid var(--glass-border)',
+        fontSize: 12,
+      }}
     >
       <div className="flex items-center gap-2">
-        <Calendar className="h-3.5 w-3.5 text-zinc-500" aria-hidden="true" />
+        <Calendar
+          className="h-3 w-3"
+          style={{ color: 'var(--fg-5)' }}
+          aria-hidden="true"
+        />
         <time
           dateTime={createdAt}
-          className="font-medium text-zinc-100"
+          className="mono"
+          style={{
+            color: 'var(--fg-2)',
+            fontSize: 11,
+            letterSpacing: '0.04em',
+            textTransform: 'capitalize',
+          }}
         >
           {dateLabel}
         </time>
       </div>
       <div className="flex items-center gap-3">
-        <span className="font-bold text-zinc-50 text-sm tabular-nums">
-          {weight.toFixed(1)}{" "}
-          <span className="text-xs font-normal text-zinc-400">kg</span>
+        <span
+          className="mono tabular-nums"
+          style={{
+            color: 'var(--fg-1)',
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: '0.02em',
+          }}
+        >
+          {weight.toFixed(1)}
+          <span style={{ fontSize: 9, color: 'var(--fg-5)', marginLeft: 3 }}>kg</span>
         </span>
         <DeltaBadge delta={delta} />
       </div>
@@ -59,7 +77,12 @@ function DeltaBadge({ delta }: { delta?: number }) {
   if (delta === undefined) {
     return (
       <span
-        className="text-[10px] text-zinc-500 tabular-nums w-12 text-right"
+        className="mono tabular-nums text-right"
+        style={{
+          fontSize: 10,
+          color: 'var(--fg-5)',
+          width: 48,
+        }}
         aria-label="Pas de pesée précédente"
       >
         —
@@ -69,7 +92,12 @@ function DeltaBadge({ delta }: { delta?: number }) {
   if (delta === 0) {
     return (
       <span
-        className="text-[10px] text-zinc-500 tabular-nums w-12 text-right"
+        className="mono tabular-nums text-right"
+        style={{
+          fontSize: 10,
+          color: 'var(--fg-5)',
+          width: 48,
+        }}
         aria-label="Variation nulle"
       >
         0
@@ -79,9 +107,14 @@ function DeltaBadge({ delta }: { delta?: number }) {
   const isLoss = delta < 0;
   return (
     <span
-      className={`text-[10px] font-bold tabular-nums w-12 text-right ${
-        isLoss ? "text-emerald-400" : "text-amber-400"
-      }`}
+      className="mono tabular-nums text-right"
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: '0.04em',
+        color: isLoss ? 'var(--accent-tech)' : 'var(--gold-400)',
+        width: 48,
+      }}
       aria-label={`Variation ${isLoss ? "perte" : "prise"} de ${Math.abs(delta).toFixed(1)} kg`}
     >
       {delta > 0 ? "+" : ""}
