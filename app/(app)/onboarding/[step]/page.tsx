@@ -22,7 +22,7 @@ import {
   Step11Generate,
 } from "@/components/onboarding/steps";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 8;
 
 /**
  * Mapping étape → photo éditoriale N&B (assets dans /public).
@@ -44,14 +44,22 @@ const STEP_PHOTOS: Record<number, { src: string; alt: string }> = {
     alt: "Mètre ruban enroulé sur fond charcoal, lumière dorée latérale",
   },
   4: {
+    src: "/onboarding/measurements.jpg",
+    alt: "Estimation visuelle du taux de masse grasse",
+  },
+  5: {
     src: "/onboarding/activity.jpg",
     alt: "Athlète en action, salle minimaliste",
   },
-  5: {
+  6: {
+    src: "/onboarding/activity.jpg",
+    alt: "Salle de musculation tactique, racks et haltères",
+  },
+  7: {
     src: "/onboarding/goals.jpg",
     alt: "Athlète concentré sur son objectif, contre-jour",
   },
-  6: {
+  8: {
     src: "/onboarding/generate.jpg",
     alt: "Horloge éditoriale, calibration en cours",
   },
@@ -95,8 +103,8 @@ export default function OnboardingStepPage() {
           return;
         }
 
-        // Validate step index bounds (reduced wizard: 5 essentiels + 1 generate = 6)
-        if (isNaN(stepNum) || stepNum < 1 || stepNum > 6) {
+        // Validate step index bounds (7 essentiels + 1 generate = 8)
+        if (isNaN(stepNum) || stepNum < 1 || stepNum > 8) {
           router.push(`/onboarding/${currentFirestoreStep}`);
           return;
         }
@@ -153,9 +161,11 @@ export default function OnboardingStepPage() {
     );
   }
 
-  // Reduced wizard — 5 essentiels + 1 generate.
-  // Body fat, lifestyle, medical, fitness details, nutrition habits sont collectés
-  // par le coach en conversation post-wizard (cf. lib/vertex/prompts/coach.ts §6-§7).
+  // Wizard 7 essentiels + 1 generate = 8 steps.
+  // BF% (Step4) is critical for Katch-McArdle TDEE on overweight profiles.
+  // Fitness (Step6) drives RAG exo filtering by training_history + environment.
+  // Lifestyle, medical detail, nutrition habits still collected post-wizard
+  // by the coach in conversation (cf. lib/vertex/prompts/coach.ts §6-§7).
   const renderStep = () => {
     switch (stepNum) {
       case 1:
@@ -165,10 +175,14 @@ export default function OnboardingStepPage() {
       case 3:
         return <Step3Measurements userData={userData} onPrev={handlePrev} onNext={handleNext} />;
       case 4:
-        return <Step5Activity userData={userData} onPrev={handlePrev} onNext={handleNext} />;
+        return <Step4BodyFat userData={userData} onPrev={handlePrev} onNext={handleNext} />;
       case 5:
-        return <Step7Goals userData={userData} onPrev={handlePrev} onNext={handleNext} />;
+        return <Step5Activity userData={userData} onPrev={handlePrev} onNext={handleNext} />;
       case 6:
+        return <Step9Fitness userData={userData} onPrev={handlePrev} onNext={handleNext} />;
+      case 7:
+        return <Step7Goals userData={userData} onPrev={handlePrev} onNext={handleNext} />;
+      case 8:
         return <Step11Generate userData={userData} onPrev={handlePrev} />;
       default:
         return null;

@@ -680,16 +680,27 @@ export function Step8Medical({ userData, onPrev, onNext }: StepProps) {
 // STEP 9: SPORT PROFILE (Historique sportif & Matériel)
 // ==========================================
 export function Step9Fitness({ userData, onPrev, onNext }: StepProps) {
-  const [level, setLevel] = useState(userData?.fitness?.experience || "beginner");
-  const [equipment, setEquipment] = useState(userData?.fitness?.equipment || "gym");
+  // Read from profile.training_* (the canonical fields consumed by the RAG +
+  // generate-plan). Legacy `fitness.experience` / `fitness.equipment` paths
+  // were never wired upstream — see lib/features/rag-coach/context.ts.
+  const [level, setLevel] = useState(
+    userData?.profile?.training_history || userData?.fitness?.experience || "beginner",
+  );
+  const [environment, setEnvironment] = useState<
+    "gym" | "home_gym" | "home_bodyweight" | "mixed"
+  >(
+    (userData?.profile?.training_environment as "gym" | "home_gym" | "home_bodyweight" | "mixed") ||
+      (userData?.fitness?.equipment === "home" ? "home_bodyweight" : "gym"),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onNext({
-      fitness: {
-        experience: level,
-        equipment: equipment,
-      }
+      profile: {
+        ...(userData?.profile || {}),
+        training_history: level,
+        training_environment: environment,
+      },
     });
   };
 
@@ -744,29 +755,27 @@ export function Step9Fitness({ userData, onPrev, onNext }: StepProps) {
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Où vas-tu t'entraîner ?</label>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setEquipment("gym")}
-                className={`h-12 rounded-md border text-sm font-medium transition-all ${
-                  equipment === "gym"
-                    ? "border-primary bg-orange-light text-primary dark:bg-primary/20"
-                    : "border-border hover:bg-muted"
-                }`}
-              >
-                Salle de musculation
-              </button>
-              <button
-                type="button"
-                onClick={() => setEquipment("home")}
-                className={`h-12 rounded-md border text-sm font-medium transition-all ${
-                  equipment === "home"
-                    ? "border-primary bg-orange-light text-primary dark:bg-primary/20"
-                    : "border-border hover:bg-muted"
-                }`}
-              >
-                À la maison (poids du corps)
-              </button>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { id: "gym", label: "Salle complète", desc: "Barres, racks, machines, poulies." },
+                { id: "home_gym", label: "Home gym", desc: "Barre + rack + haltères chez toi." },
+                { id: "home_bodyweight", label: "Poids du corps", desc: "PDC + barre de traction / élastiques." },
+                { id: "mixed", label: "Mixte", desc: "Alterne salle et maison selon la semaine." },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setEnvironment(opt.id)}
+                  className={`text-left p-3 rounded-md border transition-all ${
+                    environment === opt.id
+                      ? "border-primary bg-orange-light text-primary dark:bg-primary/20"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <div className="font-medium text-sm">{opt.label}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{opt.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
 

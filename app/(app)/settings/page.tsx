@@ -1082,6 +1082,60 @@ export default function SettingsPage() {
         </div>
       </HudCard>
 
+      {/* Restart onboarding — used to re-collect BF% / training history /
+          environment after the wizard was extended. Plan history is preserved. */}
+      <HudCard accent="tech" chamfer="sm">
+        <PanelHeader code="RECALIBRATION" title="REFAIRE L'ONBOARDING" />
+        <p
+          className="mono"
+          style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.04em', margin: '12px 0' }}
+        >
+          Re-saisis ton BF%, ton niveau d&apos;entraînement et ton environnement pour recalibrer
+          ton plan via Katch-McArdle. L&apos;ancien plan reste archivé (active: false).
+        </p>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const token = await getFreshToken();
+              if (!token) {
+                alert("Session expirée — reconnecte-toi.");
+                return;
+              }
+              const res = await fetch("/api/onboarding/restart", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                alert(`Erreur : ${body?.error || res.statusText}`);
+                return;
+              }
+              const { resumeStep } = await res.json();
+              router.push(`/onboarding/${resumeStep}`);
+            } catch (err) {
+              console.error("[settings] restart onboarding failed:", err);
+              alert("Erreur réseau.");
+            }
+          }}
+          className="mono cursor-pointer"
+          style={{
+            width: '100%',
+            height: 40,
+            fontSize: 10,
+            letterSpacing: '0.25em',
+            textTransform: 'uppercase',
+            fontWeight: 700,
+            background: 'var(--glass-bg-2)',
+            color: 'var(--accent-tech)',
+            border: '1px solid var(--accent-tech)',
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+          }}
+        >
+          Refaire mon onboarding
+        </button>
+      </HudCard>
+
       {/* Logout */}
       <button
         type="button"
