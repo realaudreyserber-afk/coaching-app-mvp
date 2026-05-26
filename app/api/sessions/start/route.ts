@@ -61,6 +61,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "plan_id required" }, { status: 400 });
   }
 
+  // Wave 11B — Refuse a 2nd in_progress session. The UI guards via the
+  // /session landing page state, but a refresh or another device could
+  // bypass that. Spawning two parallel sessions corrupts the e1RM tracking
+  // (sets land in whichever doc the client refreshed last) and the rate-limit
+  // (6/h) wouldn't catch a legitimate-looking 2nd start.
+  const existingInProgress = await adminDb
+    .collection("users").doc(uid)
+    .collection("workout_sessions")
+    .where("status", "==", "in_progress")
+    .limit(1)
+    .get();
+  if (!existingInProgress.empty) {
+    const existing = existingInProgress.docs[0];
+    return NextResponse.json(
+      {
+        error: "in_progress_session_exists",
+        existing_session_id: existing.id,
+        message: "Termine ou abandonne ta session en cours avant d'en lancer une autre.",
+      },
+      { status: 409 },
+    );
+  }
+
   // 1. Load the plan
   const planRef = adminDb
     .collection("users").doc(uid)
@@ -185,12 +208,15 @@ function buildBlockCode(idx: number, all: ReadonlyArray<{ superset_group?: strin
     }
     const me = all[idx];
     const letter = me.superset_group ? groupLetters.get(me.superset_group)! : soloLetters.get(idx)!;
-    // Slot = position within the same group (1-indexed)
+    // Slot = position within the same group (1-indexed). Solo exos always
+    // get slot 1 since they're alone in their letter. The previous version
+    // had a dead-code branch (`i === idx` inside a `for i < idx` loop) that
+    // never executed — removed in Wave 11B cleanup.
     let slot = 1;
-    for (let i = 0; i < idx; i++) {
-      const other = all[i];
-      if (me.superset_group && other.superset_group === me.superset_group) slot++;
-      else if (!me.superset_group && i === idx) break;
+    if (me.superset_group) {
+      for (let i = 0; i < idx; i++) {
+        if (all[i].superset_group === me.superset_group) slot++;
+      }
     }
     return `${letter}${slot}`;
   }

@@ -54,6 +54,11 @@ export default function LiveSessionPage() {
   const [reps, setReps] = useState(0);
   const [rpe, setRpe] = useState(8);
   const [submitting, setSubmitting] = useState(false);
+  // Wave 11B — useRef guard against double-tap race. React batches setState
+  // so the `submitting` state check + setSubmitting(true) doesn't atomically
+  // prevent a 2nd handler from passing on rapid double-clicks. The ref flips
+  // synchronously and blocks the 2nd entry before any await fires.
+  const submittingRef = useRef(false);
 
   // Rest timer
   const [restRemainingSec, setRestRemainingSec] = useState<number | null>(null);
@@ -91,28 +96,44 @@ export default function LiveSessionPage() {
     return () => unsub();
   }, [user, loading, sessionId]);
 
-  // Init steppers from active exercise + last performance OR default
+  // Wave 11B — Init steppers when the active exercise changes. The previous
+  // implementation guarded on `weight === 0 && reps === 0`, which broke for
+  // bodyweight exos (weight_kg === 0 forever) and caused stale steppers when
+  // navigating between exercises via the queue. Now we reset the steppers
+  // unconditionally on every exercise change.
   useEffect(() => {
     if (!session) return;
     const ex = session.exercises[activeExerciseIdx];
     if (!ex) return;
 
-    // Use last_performance as starting point, fallback to 0
     const last = ex.last_performance;
-    if (last && weight === 0 && reps === 0) {
+    if (last) {
       setWeight(last.weight_kg);
       setReps(last.reps_done);
       setRpe(ex.target_rpe ?? 8);
-    } else if (weight === 0 && reps === 0) {
+    } else {
+      setWeight(0);
       setReps(parseTargetReps(ex.target_reps_range));
       setRpe(ex.target_rpe ?? 8);
     }
-  }, [session, activeExerciseIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.id, activeExerciseIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live clock tick (every 1s)
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Wave 11B — Final blob URL cleanup on unmount. Without this, the last
+  // played coach cue blob stays in memory until the next GC pass.
+  useEffect(() => {
+    const audio = audioElRef.current;
+    return () => {
+      const src = audio?.src;
+      if (src && src.startsWith("blob:")) {
+        try { URL.revokeObjectURL(src); } catch { /* noop */ }
+      }
+    };
   }, []);
 
   // Wave 6 Pile 3 #11 — Screen Wake Lock so the phone doesn't sleep mid-set.
@@ -215,7 +236,13 @@ export default function LiveSessionPage() {
         }
         const blob = await res.blob();
         if (audioElRef.current) {
+          // Wave 11B — revoke previous blob URL to avoid memory leak on
+          // long sessions (60+ sets = 60+ retained blobs otherwise).
+          const prevSrc = audioElRef.current.src;
           audioElRef.current.src = URL.createObjectURL(blob);
+          if (prevSrc && prevSrc.startsWith("blob:")) {
+            try { URL.revokeObjectURL(prevSrc); } catch { /* noop */ }
+          }
           await audioElRef.current.play();
         }
       } catch (e) {
@@ -272,9 +299,11 @@ export default function LiveSessionPage() {
 
   // Submit a set log
   const handleValidateSet = async () => {
-    if (!session || submitting) return;
+    // Wave 11B — ref guard wins the race vs state-based submitting check.
+    if (!session || submittingRef.current) return;
     const ex = session.exercises[activeExerciseIdx];
     if (!ex) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setErr(null);
     try {
@@ -336,6 +365,7 @@ export default function LiveSessionPage() {
       setErr(e?.message ?? "Erreur lors de l'enregistrement");
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
@@ -448,9 +478,26 @@ export default function LiveSessionPage() {
 
   const activeExo = session.exercises[activeExerciseIdx];
   const exoMeta = findExerciseById(activeExo?.exercise_id ?? "");
+  // Wave 11B — Surface the "exo hors-base" condition so the user (and ops
+  // logs) can spot RAG hallucinations. When the coach prescribed a name that
+  // slugify() turned into an id absent from database.json, we still let the
+  // session run (no blocker) but display a warning tag — and log it so we
+  // can correlate with the Wave 10 hallucination guard.
+  const exoMissingFromBase = !!activeExo && !exoMeta;
+  if (exoMissingFromBase && typeof window !== "undefined") {
+    console.warn(
+      "[session/live] exercise not in RAG base — possible coach hallucination:",
+      activeExo.exercise_id,
+      activeExo.exercise_name,
+    );
+  }
   const completionPct = session.metrics.completion_pct;
   const durationSec = Math.floor((nowMs - new Date(session.started_at).getTime()) / 1000);
+  // Wave 11B — Allow "finish anyway" once at least one set is logged across
+  // the whole session (previous `allDone` required every exo fully completed,
+  // trapping users who couldn't finish a programmed block).
   const allDone = session.exercises.every((ex) => ex.sets_logged.length >= ex.target_sets);
+  const anyLogged = session.exercises.some((ex) => ex.sets_logged.length > 0);
 
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-6 space-y-4">
@@ -594,6 +641,28 @@ export default function LiveSessionPage() {
                     </Tag>
                     <Tag accent="tech">Cible : {activeExo.target_reps_range} reps</Tag>
                     <Tag accent="dim">RPE {activeExo.target_rpe}</Tag>
+                    {/* Wave 11B — Warning when the prescribed exo isn't in the
+                        RAG base (likely a coach hallucination). User can still
+                        train, but no cues/safety_notes will appear. */}
+                    {exoMissingFromBase && (
+                      <span
+                        className="mono"
+                        title="Exercice hors bibliothèque NoDream — pas de cues techniques ni de safety_notes pour cet exo. Signale-le si le coach l'a inventé."
+                        style={{
+                          padding: "3px 8px",
+                          fontSize: 9,
+                          letterSpacing: "0.2em",
+                          textTransform: "uppercase",
+                          color: "var(--alert-500)",
+                          background: "var(--alert-tint-15)",
+                          border: "1px solid var(--alert-500)",
+                          fontWeight: 700,
+                          clipPath: "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                        }}
+                      >
+                        ⚠ Hors-base RAG
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -703,10 +772,14 @@ export default function LiveSessionPage() {
                 />
               </div>
 
-              {/* Validate button */}
+              {/* Validate button — Wave 11B: allow reps=0 when the target is
+                  AMRAP (As Many Reps As Possible) or "échec" so the user can
+                  log a 0-rep set with their notes and an RPE. Without this,
+                  AMRAP exos were impossible to log past their first failed
+                  attempt. */}
               <button
                 onClick={handleValidateSet}
-                disabled={submitting || reps === 0}
+                disabled={submitting || (reps === 0 && !isAmrapTarget(activeExo.target_reps_range))}
                 className="btn btn-tech mt-4"
                 style={{ width: "100%", height: 52, fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", fontWeight: 700 }}
               >
@@ -840,8 +913,11 @@ export default function LiveSessionPage() {
             </ul>
           </HudCard>
 
-          {/* Finish button if all done */}
-          {allDone && (
+          {/* Finish button — Wave 11B: green "Terminer" when allDone, otherwise
+              show a lighter "Terminer (incomplet)" once at least one set has
+              been logged, so the user never gets trapped by a programme they
+              can't fully complete (injury, time pressure). */}
+          {allDone ? (
             <button
               onClick={handleFinish}
               className="btn btn-primary"
@@ -850,7 +926,16 @@ export default function LiveSessionPage() {
               <Check className="h-4 w-4" aria-hidden="true" />
               Terminer la séance
             </button>
-          )}
+          ) : anyLogged ? (
+            <button
+              onClick={handleFinish}
+              className="btn btn-ghost mono"
+              style={{ width: "100%", height: 44, fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase" }}
+              title="Termine la séance même si certaines séries ne sont pas loggées"
+            >
+              Terminer (incomplet)
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1182,8 +1267,18 @@ function parseTargetReps(range: string): number {
   // "8-12" → midpoint 10; "5" → 5; "AMRAP" → 0; "30s" → 0
   if (!range) return 0;
   const m = range.match(/(\d+)\s*-\s*(\d+)/);
-  if (m) return Math.round((parseInt(m[1]) + parseInt(m[2])) / 2);
+  if (m) return Math.round((parseInt(m[1], 10) + parseInt(m[2], 10)) / 2);
   const single = range.match(/^(\d+)$/);
-  if (single) return parseInt(single[1]);
+  if (single) return parseInt(single[1], 10);
   return 0;
+}
+
+/**
+ * Wave 11B — Detect open-ended rep targets so the validate button stays
+ * enabled even when reps === 0 (e.g. couldn't perform a single rep).
+ */
+function isAmrapTarget(range: string | undefined): boolean {
+  if (!range) return false;
+  const r = range.toLowerCase();
+  return r.includes("amrap") || r.includes("échec") || r.includes("echec") || r.includes("max");
 }
