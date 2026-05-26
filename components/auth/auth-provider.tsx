@@ -4,8 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -136,6 +136,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let anonymousAttempted = false;
 
+    // Capture the result of any pending signInWithRedirect. This runs once on
+    // mount and resolves silently with null when there's no pending redirect
+    // (most page loads). When a user just came back from accounts.google.com,
+    // the resolved cred lights up onAuthStateChanged with the real Google
+    // user, replacing whatever anonymous session was active.
+    getRedirectResult(auth).catch((err) => {
+      console.error('[auth] getRedirectResult failed:', err);
+    });
+
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
@@ -194,12 +203,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
-      if (isNativePlatform()) {
-        // Fallback for native wrapper or embedded webviews where popups are blocked
-        await signInWithRedirect(auth, provider);
-      } else {
-        await signInWithPopup(auth, provider);
-      }
+      // Always use signInWithRedirect (web + native). signInWithPopup was
+      // unreliable: third-party cookie restrictions on Chrome/Safari, popup
+      // blockers, "popup closed prematurely" race conditions, and intermittent
+      // failures inside embedded webviews. Redirect = single full-page nav to
+      // accounts.google.com then auto-return — works the same everywhere.
+      // void isNativePlatform — kept import in case we re-introduce a native
+      // branch later.
+      void isNativePlatform;
+      await signInWithRedirect(auth, provider);
+      // signInWithRedirect navigates away; nothing more to do here. The
+      // post-redirect handler in the mount effect picks up getRedirectResult().
     } catch (error) {
       console.error("Google login failed:", error);
       setLoading(false);
