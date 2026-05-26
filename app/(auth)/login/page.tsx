@@ -63,7 +63,11 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
+    // Skip the redirect for anonymous users — they explicitly came to /login
+    // to upgrade to a real account (Google / email). Auto-anonymous from
+    // AuthProvider creates a user object as soon as the app mounts, which
+    // would otherwise short-circuit the whole login flow.
+    if (!loading && user && !user.isAnonymous) {
       router.push(hasProfile ? "/dashboard" : "/onboarding");
     }
   }, [user, loading, hasProfile, router]);
