@@ -100,11 +100,32 @@ export interface BloodworkSummary {
   }>;
 }
 
+export interface ActivePlanSummaryExercise {
+  name: string;
+  sets: number;
+  reps: string;
+  rest_seconds: number;
+  superset_group?: string;
+}
+
+export interface ActivePlanSummarySession {
+  name: string;
+  frequency_weekly: number;
+  exercises: ActivePlanSummaryExercise[];
+}
+
 export interface ActivePlanSummary {
   kcal?: number;
   macros?: { p?: number; c?: number; f?: number };
   strategy_nutrition?: string;
   strategy_training?: string;
+  /**
+   * Wave 9 follow-up — sessions + exercises are now injected so the coach
+   * can resolve patch targets like `training.sessions.X.exercises.Y.name`
+   * when the user asks for a substitution. Without this, the coach knows
+   * only the macro shape and can't trigger <COACH_PLAN_PATCH> on exo swaps.
+   */
+  sessions?: ActivePlanSummarySession[];
 }
 
 export interface NotificationContext {
@@ -272,12 +293,34 @@ ${missingBlock}
 function activePlanBlock(ctx: UserContext): string {
   const p = ctx.active_plan;
   if (!p) return '\nAucun plan nutritionnel actif.\n';
+
+  // Wave 9 follow-up — render sessions with explicit indices so the coach
+  // can emit `<COACH_PLAN_PATCH>{"training.sessions.X.exercises.Y.name": "..."}`
+  // with the right X / Y. Without this the coach has no way to address an
+  // exo programmatically and falls back to free-text suggestions.
+  const sessionsBlock =
+    p.sessions && p.sessions.length > 0
+      ? `\nSÉANCES ACTIVES (utilise ces indices EXACTS pour <COACH_PLAN_PATCH>) :\n` +
+        p.sessions
+          .map(
+            (s, x) =>
+              `- training.sessions.${x} → ${s.name} (${s.frequency_weekly}×/sem)\n` +
+              s.exercises
+                .map(
+                  (e, y) =>
+                    `    training.sessions.${x}.exercises.${y} → ${e.name} · ${e.sets}×${e.reps} · repos ${e.rest_seconds}s${e.superset_group ? ` · superset ${e.superset_group}` : ''}`,
+                )
+                .join('\n'),
+          )
+          .join('\n')
+      : '';
+
   return `
 PLAN NUTRITIONNEL ACTIF :
 - Calories : ${p.kcal ?? '?'} kcal/jour
 - Macros : ${p.macros?.p ?? '?'}g P / ${p.macros?.c ?? '?'}g C / ${p.macros?.f ?? '?'}g F
 - Stratégie nutrition : ${p.strategy_nutrition ?? 'non précisée'}
-- Stratégie training : ${p.strategy_training ?? 'non précisée'}
+- Stratégie training : ${p.strategy_training ?? 'non précisée'}${sessionsBlock}
 `;
 }
 
@@ -617,6 +660,23 @@ export function buildUserContext(input: BuildContextInput): UserContext {
           macros: ap.macros,
           strategy_nutrition: ap.strategy_nutrition,
           strategy_training: ap.strategy_training,
+          // Wave 9 follow-up — keep sessions with their original ordering
+          // so the coach can address exos by index in <COACH_PLAN_PATCH>.
+          sessions: Array.isArray(ap.training?.sessions)
+            ? ap.training.sessions.map((s: Record<string, unknown>) => ({
+                name: String(s.name ?? ''),
+                frequency_weekly: Number(s.frequency_weekly ?? 0),
+                exercises: Array.isArray(s.exercises)
+                  ? (s.exercises as Array<Record<string, unknown>>).map((e) => ({
+                      name: String(e.name ?? ''),
+                      sets: Number(e.sets ?? 0),
+                      reps: String(e.reps ?? ''),
+                      rest_seconds: Number(e.rest_seconds ?? 0),
+                      superset_group: e.superset_group as string | undefined,
+                    }))
+                  : [],
+              }))
+            : undefined,
         }
       : undefined,
     glp1: u.medical?.glp1 ?? undefined,
