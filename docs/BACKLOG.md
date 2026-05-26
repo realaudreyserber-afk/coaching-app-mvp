@@ -128,6 +128,7 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 - [x] **Wave 11C** — Unification delete account `/settings` ↔ `/privacy` : POST + confirmText=EFFACER + reauth pour les 2 pages, détection provider (Google popup / password prompt / autre fallback server check), remplacement des 3 alert() restart onboarding par setErrorMsg banner, filename `linsociable-export-` → `nodream-export-` (commit `c4ad481`). (✓ 2026-05-27)
 - [x] **Wave 11D** — Coach streaming AbortController + 90s watchdog. Cleanup au démontage pour éviter "setState on unmounted component" warnings + memory leaks. Détection AbortError pour ne pas perturber l'UI sur navigation. Dashboard insight cache déferré en P2 (commit `b7c11b8`). (✓ 2026-05-27)
 - [x] **Wave 11E** — Polish UX : limit(50) sur /plan/history, limit(180)+limit(104) sur /progress daily/weekly, photo onError fallback "Photo expirée" (Storage signed URLs expiration), runTransaction sur génération code référral (race 2 tabs), fix markdown `**` non rendu → `<strong>` (commit `77904bf`). (✓ 2026-05-27)
+- [x] **Wave 12** — P0 sécurité OAuth Google Fit (cookie session vs `?uid=` spoofable), Bearer header manquant sur /api/user/sync-wearables. Dashboard `currentWeight.toFixed` crash protection via toNum(). Coach loadChatHistory dedup vs send race + cancelled cleanup. 9 pages : emoji 🚧 retiré au profit d'un tag `[BETA]` NoDream tech accent (cohérence avec feedback_no_emojis.md) (commit `b29e288`). (✓ 2026-05-27)
 
 ### Session 2026-05-26
 
