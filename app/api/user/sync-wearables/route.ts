@@ -29,10 +29,13 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // ADR-006 snake_case migration : we read both snake_case (new) and
+      // camelCase (legacy) for backward compat with existing token docs;
+      // we write back only snake_case.
       const tokenData = tokenSnap.data() || {};
-      let accessToken = tokenData.accessToken;
-      const refreshToken = tokenData.refreshToken;
-      let expiresAt = tokenData.expiresAt;
+      let accessToken = tokenData.access_token ?? tokenData.accessToken;
+      const refreshToken = tokenData.refresh_token ?? tokenData.refreshToken;
+      let expiresAt = tokenData.expires_at ?? tokenData.expiresAt;
 
       if (!accessToken || !refreshToken) {
         return NextResponse.json(
@@ -42,24 +45,37 @@ export async function POST(req: NextRequest) {
       }
 
       // 2. Check token expiration (refresh if needed)
-      if (expiresAt <= Date.now() + 60000) { // Refresh if expiring in less than 1 minute
+      // H4 fix : undefined expires_at (legacy doc missing the field) silently
+      // skipped refresh + returned 401 from Google. Force refresh on missing.
+      if (!expiresAt || typeof expiresAt !== 'number' || expiresAt <= Date.now() + 60000) {
         console.log(`Refreshing Google Fit token for user ${uid}...`);
         const refreshed = await refreshGoogleFitAccessToken(refreshToken);
         accessToken = refreshed.accessToken;
         expiresAt = refreshed.expiresAt;
 
-        // Save refreshed tokens
-        await tokenRef.update({
-          accessToken,
-          expiresAt,
-          updatedAt: new Date().toISOString(),
-        });
+        // Save refreshed tokens — snake_case canonical, explicitly delete
+        // the legacy camelCase keys so we don't keep duplicates around (M2).
+        const { FieldValue } = await import('firebase-admin/firestore');
+        await tokenRef.set(
+          {
+            access_token: accessToken,
+            expires_at: expiresAt,
+            refresh_token: refreshToken,
+            updated_at: new Date().toISOString(),
+            accessToken: FieldValue.delete(),
+            refreshToken: FieldValue.delete(),
+            expiresAt: FieldValue.delete(),
+            updatedAt: FieldValue.delete(),
+          },
+          { merge: true },
+        );
       }
 
       // 3. Fetch Google Fit metrics for today
       const metrics = await fetchGoogleFitMetrics(accessToken, new Date());
 
-      // 4. Save synced metrics in Firestore wearable_sync subcollection
+      // 4. Save synced metrics — snake_case (ADR-006). The reader
+      // lib/vertex/context-fetcher.ts already supports both shapes.
       await adminDb
         .collection('users')
         .doc(uid)
@@ -67,8 +83,9 @@ export async function POST(req: NextRequest) {
         .doc(todayStr)
         .set({
           steps: metrics.steps,
-          caloriesBurned: metrics.caloriesBurned,
-          syncedAt: new Date().toISOString(),
+          active_calories_kcal: metrics.caloriesBurned,
+          source: 'google_fit',
+          synced_at: new Date().toISOString(),
         });
 
       return NextResponse.json({

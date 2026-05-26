@@ -115,6 +115,41 @@ export default function LiveSessionPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Wave 6 Pile 3 #11 — Screen Wake Lock so the phone doesn't sleep mid-set.
+  // Released automatically when the component unmounts. Best-effort only —
+  // Safari ≤16.4 doesn't expose the API.
+  // M7 fix : `WakeLockSentinel` may not be in lib.dom.d.ts on older TS targets
+  // — type as any to avoid compile errors across configs.
+  useEffect(() => {
+    let wakeLock: any = null;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        if (typeof navigator !== "undefined" && "wakeLock" in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request("screen");
+          if (cancelled) {
+            await wakeLock?.release();
+            wakeLock = null;
+          }
+        }
+      } catch (e) {
+        // User can deny / battery saver may block; non-blocking
+        console.warn("[session/live] wakeLock request failed:", e);
+      }
+    };
+    void acquire();
+    // Re-acquire on visibility change (iOS releases on backgrounding)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !wakeLock) void acquire();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      void wakeLock?.release();
+    };
+  }, []);
+
   // Rest timer countdown
   useEffect(() => {
     if (restRemainingSec === null) return;
@@ -304,8 +339,14 @@ export default function LiveSessionPage() {
     }
   };
 
+  const [showAbortModal, setShowAbortModal] = useState(false);
+
   const handleAbort = async () => {
-    if (!confirm("Abandonner la session ? Les séries déjà loguées seront conservées.")) return;
+    setShowAbortModal(true);
+  };
+
+  const confirmAbort = async () => {
+    setShowAbortModal(false);
     try {
       const token = await getFreshToken();
       if (!token) return;
@@ -738,7 +779,7 @@ export default function LiveSessionPage() {
               }}
             >
               {audioUnlocked
-                ? "Garde la barre droite. Tu ralentis la descente. 3 secondes excentriques."
+                ? "ORACLE.IA en veille — les consignes audio s'activent à chaque validation de série."
                 : "Active l'audio pour recevoir les consignes ORACLE.IA en temps réel."}
             </p>
           </HudCard>
@@ -807,6 +848,76 @@ export default function LiveSessionPage() {
           ))}
         </ul>
       </HudCard>
+
+      {/* Wave 6 Pile 3 #11 — NoDream-tactical abort modal */}
+      {showAbortModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="abort-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{
+            background: "rgba(6, 3, 15, 0.85)",
+            backdropFilter: "blur(6px)",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAbortModal(false); }}
+        >
+          <HudCard accent="tech" chamfer="sm" style={{ padding: "1.25rem 1.5rem", maxWidth: 460, width: "100%" }}>
+            <PanelHeader
+              code="CONFIRM-ABORT"
+              title={
+                <span id="abort-modal-title" className="flex items-center gap-2">
+                  <Square className="h-4 w-4" style={{ color: "var(--alert-500)" }} aria-hidden="true" />
+                  Abandonner la session ?
+                </span>
+              }
+              accent="tech"
+            />
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--fg-2)",
+                lineHeight: 1.55,
+                margin: "0 0 18px 0",
+              }}
+            >
+              Les séries déjà loggées seront <strong style={{ color: "var(--fg-1)" }}>conservées</strong>.
+              La session sera marquée <em>aborted</em>, le coach ne générera pas de debrief automatique.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAbortModal(false)}
+                className="btn btn-ghost mono flex-1"
+                style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase" }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmAbort}
+                className="mono cursor-pointer flex-1"
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--alert-500)",
+                  color: "var(--ink-900)",
+                  border: "1px solid var(--alert-500)",
+                  fontSize: 10,
+                  letterSpacing: "0.2em",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  clipPath:
+                    "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Square className="h-3 w-3" aria-hidden="true" /> Confirmer l&apos;abandon
+              </button>
+            </div>
+          </HudCard>
+        </div>
+      )}
     </div>
   );
 }

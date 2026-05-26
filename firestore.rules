@@ -1,12 +1,248 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ⚠️ TEMPORARY OPEN RULES — MVP DEV PHASE ONLY ⚠️
-    // Anyone (signed-in or not) can read/write everything.
-    // MUST be tightened back before public launch.
-    // Previous strict rules: see git history before commit "open rules for MVP".
+
+    // ═══════════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════════
+
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+    function isAdmin() {
+      return isAuth() && request.auth.token.admin == true;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // users/{uid} — owner-only read+write on the root profile doc.
+    // Sub-collections have explicit rules below; otherwise default-deny.
+    // ═══════════════════════════════════════════════════════════════
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin();
+
+      // ── Client-writable sub-collections ───────────────────────────
+      // These are written directly from the front-end (check-ins, food
+      // logs, user-typed coach messages, etc.). Server-side reads still
+      // work because admin SDK bypasses rules.
+
+      match /checkins_daily/{date} {
+        allow read, write: if isOwner(uid);
+      }
+      match /checkins_weekly/{week} {
+        allow read, write: if isOwner(uid);
+      }
+      match /food_logs/{logId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /coach_messages/{msgId} {
+        // Client writes user messages, server writes assistant messages
+        // (admin SDK bypasses). Allow both for owner.
+        allow read, write: if isOwner(uid);
+      }
+      match /daily_tasks/{date} {
+        allow read, write: if isOwner(uid);
+      }
+      match /medications/{medId} {
+        // Settings page writes GLP1 protocol directly
+        allow read, write: if isOwner(uid);
+      }
+      match /micronutrients_daily/{date} {
+        // Computed client-side from food_logs + Settings UI for manual entries
+        allow read, write: if isOwner(uid);
+      }
+      match /referrals/{refId} {
+        allow read, write: if isOwner(uid);
+      }
+      match /streak/{streakId} {
+        // Singular per production schema (functions/src/streak-risk-marker.ts
+        // + on-checkin-write.ts). UI also writes on first checkin.
+        allow read, write: if isOwner(uid);
+      }
+      match /alerts/{alertId} {
+        allow read, write: if isOwner(uid);
+      }
+      // Wave 5 + A/B testing : per-user experiment assignment doc.
+      // Writer : lib/features/ab-testing/framework.ts (writeBatch).
+      match /experiments/{experimentId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // ── Read-only client / server-only writes ─────────────────────
+      // These collections are populated by Cloud Functions or API routes
+      // (admin SDK). The client must never write directly — would bypass
+      // validation, rate-limits, audit trails.
+
+      match /coach_state/{stateId} {
+        // /api/coach/proactive + /api/coach/mark-read + /api/coach/apply-patch
+        // are the only writers. Client only reads (dashboard badge).
+        allow read: if isOwner(uid);
+        allow write: if false; // admin SDK bypasses
+      }
+      match /coach_patches/{patchId} {
+        // Audit log written by /api/coach/apply-patch only
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /plans/{planId} {
+        // /api/ai/generate-plan + /api/coach/apply-patch write
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /plans_history/{historyId} {
+        // /api/coach/apply-patch archives here
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /workout_sessions/{sessionId} {
+        // /api/sessions/{start,log-set,finish,abort} write
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /session_debriefs/{debriefId} {
+        // /api/ai/coach-session-debrief caches here
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /ai_cache/{cacheKey} {
+        // /api/ai/coach-progress-analysis caches here
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /insights_daily/{date} {
+        // /api/ai/daily-insight writes
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /tdee_history/{weekKey} {
+        // /api/user/tdee-recalc writes weekly
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /rate_limits/{scope} {
+        // lib/firebase/rate-limit.ts writes
+        allow read: if false; // not useful to client
+        allow write: if false;
+      }
+      match /notification_log/{notifId} {
+        // Cloud Function smart-notifs writes
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /form_checks/{checkId} {
+        // /api/exercise/form-check writes after Vision analysis
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /body_scans/{date} {
+        // /api/scanner/analyze writes
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /bloodwork/{date} {
+        // /api/bloodwork/analyze writes
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /wearable_sync/{date} {
+        // /api/user/sync-wearables writes (server reads Google Fit, writes here)
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+      match /tokens/{provider} {
+        // OAuth refresh tokens (Google Fit) — never expose
+        allow read: if false;
+        allow write: if false;
+      }
+
+      // Default deny for any other future sub-collection under users/{uid}/
+      match /{otherCollection}/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // content/** — public scientific corpus + recipes + foods + exercises
+    // Read: any authenticated user. Write: admin only.
+    // ═══════════════════════════════════════════════════════════════
+
+    match /content/{collection}/{document=**} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Legacy : flat content collections (sources_scientifiques, protocoles_seche)
+    match /sources_scientifiques/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /protocoles_seche/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /recipes/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /foods/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+    match /exercises/{id} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Server-only / admin-only top-level collections
+    // ═══════════════════════════════════════════════════════════════
+
+    // Stripe webhook idempotency log — Cloud Function writes only
+    match /_stripe_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    // RGPD audit log — server writes via /api/user/export + /api/user/delete
+    match /rgpd_audit_log/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // A/B testing exposures — client logs via lib/features/ab-testing/framework.ts
+    // The writer uses auto-id docs but always sets request.resource.data.uid
+    // to the caller's uid. We validate the field, not the doc id (the prior
+    // rev used a doc-id pattern check, but the writer was using auto-id).
+    match /experiment_exposures/{expId} {
+      allow read: if isAdmin();
+      allow create:
+        if isAuth()
+        && request.resource.data.uid is string
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Admin dashboard cohort analytics — server writes only
+    match /admin/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    match /admin_experiments/{id} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    match /cohort_metrics/{id} {
+      allow read: if isAdmin();
+      allow write: if false; // Cloud Function only
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Default deny — anything not explicitly allowed above
+    // ═══════════════════════════════════════════════════════════════
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
