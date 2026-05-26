@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "verify:env": "node scripts/verify-env.mjs",
     "lint:snake-case": "node scripts/check-snake-case.mjs",
-    "build:rag": "node scripts/build-rag-embeddings.mjs"
+    "build:rag": "node scripts/build-rag-embeddings.mjs",
+    "cleanup:anonymous": "node scripts/cleanup-anonymous-users.mjs"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^6.4.1",

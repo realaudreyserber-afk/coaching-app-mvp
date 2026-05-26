@@ -98,7 +98,8 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 - [x] Fix bug `onboarding_completed` flag — guard layout ne checkait `profile !== undefined` au lieu d'un flag dédié, éjectait les users mid-onboarding (commit `882d1dd`) (✓ 2026-05-26)
 - [x] Wave 9 — Onboarding 6→8 steps (BF% + training profile), Katch-McArdle dans plan-generator prompt, endpoint `/api/onboarding/restart`, bouton settings (commit `f2ec516`) (✓ 2026-05-26)
 - [x] UI `/plan/history` — liste tous les plans archivés + active, détection auto formule TDEE (commit `78c2a0c`) (✓ 2026-05-26)
-- [x] **Wave 10** — Fix P0 hallucination RAG coach + auto `<COACH_PLAN_PATCH>` sur substitution. Étendu `ActivePlanSummary` avec `sessions[]`, injecté sessions+exos avec indices dans le prompt système via `activePlanBlock`, ajouté §18.5 règle 7 "patch obligatoire sur substitution d'exo", renforcé §19 règle 1 "interdiction absolue d'inventer un exo hors RAG" (commit à venir) (✓ 2026-05-26)
+- [x] **Wave 10** — Fix P0 hallucination RAG coach + auto `<COACH_PLAN_PATCH>` sur substitution. Étendu `ActivePlanSummary` avec `sessions[]`, injecté sessions+exos avec indices dans le prompt système via `activePlanBlock`, ajouté §18.5 règle 7 "patch obligatoire sur substitution d'exo", renforcé §19 règle 1 "interdiction absolue d'inventer un exo hors RAG" (commit `9b6b6c9`) (✓ 2026-05-26)
+- [x] Script `scripts/cleanup-anonymous-users.mjs` — nettoyer Auth + Firestore des anonymous users sans onboarding fait (dry-run par défaut, `--confirm` pour delete, `--include-incomplete` pour étendre aux users qui ont commencé l'onboarding mais pas fini). Exposé via `npm run cleanup:anonymous`. (commit à venir) (✓ 2026-05-26)
 
 ### Sessions précédentes
 
