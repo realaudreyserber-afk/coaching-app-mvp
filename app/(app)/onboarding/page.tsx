@@ -57,7 +57,11 @@ export default function OnboardingIndexPage() {
         const data = userSnap.data();
         const currentStep = (data?.onboarding_step as number) || 1;
 
-        if (data?.profile !== undefined) {
+        // Only treat onboarding as done when the server-side flag flipped
+        // (set by /api/ai/generate-plan once a plan is persisted). A merely
+        // populated `profile` field means the user is mid-onboarding and
+        // must resume at their last step — NOT be bounced to dashboard.
+        if (data?.onboarding_completed === true) {
           router.replace("/dashboard");
         } else {
           router.replace(`/onboarding/${currentStep}`);

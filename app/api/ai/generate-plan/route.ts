@@ -155,9 +155,16 @@ ${JSON.stringify(userContext, null, 2)}
       const newPlanRef = plansCollectionRef.doc();
       batch.set(newPlanRef, planData);
       
-      // Update users doc with current plan ID
+      // Update users doc with current plan ID + mark onboarding as completed.
+      // The `onboarding_completed` flag is the authoritative marker used by
+      // AuthProvider + (app) layout guard to decide whether to force the user
+      // back to /onboarding or let them in /dashboard. Setting it server-side
+      // here (rather than client-side in step 11) guarantees the flag only
+      // flips when a plan was actually persisted.
       batch.update(userRef, {
         plan_current_id: newPlanRef.id,
+        onboarding_completed: true,
+        onboarding_completed_at: new Date().toISOString(),
       });
 
       await batch.commit();

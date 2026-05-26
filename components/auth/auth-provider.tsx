@@ -38,16 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [hasProfile, setHasProfile] = useState(false);
   const lastSessionUidRef = React.useRef<string | null>(null);
 
-  // Check if profile exists in Firestore users/{uid}
+  // Check if onboarding is fully completed in Firestore users/{uid}.
+  // We rely on `onboarding_completed: true` (set server-side by
+  // /api/ai/generate-plan after a plan has actually been persisted) rather
+  // than `profile !== undefined` — the latter flips to true at step 1, so
+  // any user who abandoned mid-onboarding got incorrectly routed to dashboard.
   const checkProfileExistence = async (uid: string): Promise<boolean> => {
     try {
       const userDocRef = doc(db, "users", uid);
       const userSnap = await getDoc(userDocRef);
-      const exists = userSnap.exists() && userSnap.data()?.profile !== undefined;
+      const exists =
+        userSnap.exists() && userSnap.data()?.onboarding_completed === true;
       setHasProfile(exists);
       return exists;
     } catch (error) {
-      console.error("Error checking user profile in Firestore:", error);
+      console.error("Error checking onboarding completion in Firestore:", error);
       setHasProfile(false);
       return false;
     }
