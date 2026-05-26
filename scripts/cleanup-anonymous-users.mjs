@@ -34,6 +34,9 @@
  *   # 5. Always keep the N most recent anonymous users (paranoid safety)
  *   node scripts/cleanup-anonymous-users.mjs --keep-most-recent=1 --confirm
  *
+ *   # 6. Force-delete specific UIDs (bypasses ALL filters — use after auditing)
+ *   node scripts/cleanup-anonymous-users.mjs --uids=UID1,UID2,UID3 --confirm
+ *
  * Requires:
  *   - GOOGLE_APPLICATION_CREDENTIALS env var pointing to a service account
  *     JSON, OR gcloud auth application-default login active.
@@ -70,13 +73,33 @@ function parseKeepMostRecent() {
 }
 const KEEP_MOST_RECENT = parseKeepMostRecent();
 
+// --uids=UID1,UID2,UID3 : force-delete specific UIDs without going through
+// the classification pipeline. Use after manually auditing the Auth console.
+// Bypasses anonymous-only filter, onboarding_completed protection, and
+// keep-most-recent. Operator is responsible for not deleting their own user.
+function parseUidsList() {
+  const arg = process.argv.find((a) => a.startsWith("--uids="));
+  if (!arg) return null;
+  const list = arg
+    .slice("--uids=".length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : null;
+}
+const FORCE_UIDS = parseUidsList();
+
 console.log("🧹 Anonymous users cleanup");
 console.log(`   project           : ${PROJECT}`);
 console.log(`   mode              : ${CONFIRM ? "DELETE (confirmed)" : "DRY-RUN"}`);
-console.log(
-  `   selection         : ${INCLUDE_INCOMPLETE ? "anonymous + (no-profile OR profile-but-no-onboarding_completed)" : "anonymous + no-profile only"}`,
-);
-console.log(`   keep-most-recent  : ${KEEP_MOST_RECENT}`);
+if (FORCE_UIDS) {
+  console.log(`   selection         : FORCE-DELETE (${FORCE_UIDS.length} explicit UIDs, bypasses all filters)`);
+} else {
+  console.log(
+    `   selection         : ${INCLUDE_INCOMPLETE ? "anonymous + (no-profile OR profile-but-no-onboarding_completed)" : "anonymous + no-profile only"}`,
+  );
+  console.log(`   keep-most-recent  : ${KEEP_MOST_RECENT}`);
+}
 console.log("");
 
 admin.initializeApp({ projectId: PROJECT });
@@ -176,7 +199,50 @@ async function nukeAuthUser(uid) {
   await auth.deleteUser(uid);
 }
 
+async function runForceUids(uids) {
+  console.log(`🎯 Force-delete mode — ${uids.length} UID(s) explicitly provided.`);
+  console.log(`   These will be deleted regardless of provider, onboarding, or recency.`);
+  console.log("");
+  if (!CONFIRM) {
+    console.log("🟡 DRY-RUN — no deletion performed. UIDs that would be deleted:");
+    for (const uid of uids) console.log(`   ${uid}`);
+    console.log("");
+    console.log("Re-run with --confirm to actually delete.");
+    return;
+  }
+  console.log("⚠️  DELETING NOW. No undo.");
+  console.log("");
+  let okFs = 0;
+  let okAuth = 0;
+  let fail = 0;
+  for (const uid of uids) {
+    try {
+      await nukeFirestoreUser(uid);
+      okFs += 1;
+    } catch (err) {
+      console.error(`  ✗ Firestore ${uid}: ${err?.message ?? err}`);
+      fail += 1;
+      continue;
+    }
+    try {
+      await nukeAuthUser(uid);
+      okAuth += 1;
+    } catch (err) {
+      const msg = err?.code === "auth/user-not-found" ? "(already gone)" : (err?.message ?? err);
+      console.error(`  ~ Auth ${uid}: ${msg}`);
+    }
+  }
+  console.log("");
+  console.log(`✅ Done. Firestore: ${okFs}/${uids.length} · Auth: ${okAuth}/${uids.length} · Errors: ${fail}`);
+}
+
 async function main() {
+  // Force-delete path: short-circuit the classification pipeline.
+  if (FORCE_UIDS) {
+    await runForceUids(FORCE_UIDS);
+    return;
+  }
+
   console.log("📋 Listing anonymous Auth users (pages of 1000)...");
   const anonymous = await listAnonymousAuthUsers();
   console.log(`  → ${anonymous.length} anonymous Auth user(s) total`);
