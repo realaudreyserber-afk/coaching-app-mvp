@@ -22,6 +22,29 @@ export const PlanSchema = z.object({
       name: z.string(),
       description: z.string(),
       approx_kcal: z.number(),
+      // Wave 11A — Structured items[] with grammage + macros per ingredient.
+      // Optional for back-compat with plans generated before this extension.
+      items: z
+        .array(
+          z.object({
+            food: z.string(),
+            grams: z.number(),
+            state: z.enum(['cru', 'cuit']).optional(),
+            kcal: z.number(),
+            p: z.number(),
+            c: z.number(),
+            f: z.number(),
+          }),
+        )
+        .optional(),
+      // Total macros per meal (sum of items). Optional for back-compat.
+      macros: z
+        .object({
+          p: z.number(),
+          c: z.number(),
+          f: z.number(),
+        })
+        .optional(),
     })
   ),
   training: z.object({

@@ -1,7 +1,38 @@
+/**
+ * Wave 11A — Structured ingredient row for a meal template.
+ * `state` distinguishes raw vs cooked grammage (Vertex prompt asks for `cru`
+ * by default since most users weigh ingredients before cooking).
+ * Macros (kcal, p, c, f) are per the `grams` quantity, not per 100g.
+ */
+export interface PlanMealItem {
+  food: string;
+  grams: number;
+  state?: 'cru' | 'cuit';
+  kcal: number;
+  p: number;
+  c: number;
+  f: number;
+}
+
 export interface PlanMealTemplate {
   name: string;
   description: string;
   approx_kcal: number;
+  /**
+   * Wave 11A — Detailed list of ingredients with grammage + per-item macros.
+   * Optional for back-compat with plans generated before this extension —
+   * UI components must gracefully degrade to `description` text when absent.
+   */
+  items?: PlanMealItem[];
+  /**
+   * Wave 11A — Total macros for the meal (sum of items[].p/c/f). Optional
+   * for back-compat. When present, prefer over the recipe-database fallback.
+   */
+  macros?: {
+    p: number;
+    c: number;
+    f: number;
+  };
 }
 
 export interface PlanExercise {

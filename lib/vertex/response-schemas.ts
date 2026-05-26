@@ -25,8 +25,34 @@ export const PLAN_RESPONSE_SCHEMA = {
           name: { type: 'string' },
           description: { type: 'string' },
           approx_kcal: { type: 'number' },
+          // Wave 11A — items[] détaillé avec grammage + macros par aliment
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                food: { type: 'string' },
+                grams: { type: 'number' },
+                state: { type: 'string', enum: ['cru', 'cuit'] },
+                kcal: { type: 'number' },
+                p: { type: 'number' },
+                c: { type: 'number' },
+                f: { type: 'number' },
+              },
+              required: ['food', 'grams', 'kcal', 'p', 'c', 'f'],
+            },
+          },
+          macros: {
+            type: 'object',
+            properties: {
+              p: { type: 'number' },
+              c: { type: 'number' },
+              f: { type: 'number' },
+            },
+            required: ['p', 'c', 'f'],
+          },
         },
-        required: ['name', 'description', 'approx_kcal'],
+        required: ['name', 'description', 'approx_kcal', 'items', 'macros'],
       },
     },
     training: {

@@ -77,6 +77,15 @@ DIRECTIVES CRITIQUES :
    - Protéines : Entre 1.6g et 2.2g par kg de **LBM** (si bf_pct dispo) ou de poids corporel total (sinon).
    - Lipides : Entre 0.8g et 1.2g par kg de poids corporel (important pour le système hormonal).
    - Glucides : Le reste des calories nécessaires.
+4bis. **Décomposition des repas — OBLIGATOIRE** : chaque entrée de \`meals_template\` doit lister \`items\` avec :
+   - Le nom EXACT de l'aliment (ex: "Blanc de poulet", "Flocons d'avoine", "Banane", "Huile d'olive", "Œuf entier")
+   - Le \`grams\` (poids cru par défaut, sauf si \`state: "cuit"\` indiqué)
+   - Les macros (\`kcal\`, \`p\`, \`c\`, \`f\`) **pour cette quantité précise** (pas pour 100g) — utilise les tables CIQUAL/USDA standards
+   - Le total \`macros\` du repas = somme exacte des \`items[].p/c/f\`
+   - La somme \`items[].kcal\` doit égaler \`approx_kcal\` ± 10 kcal
+   - **Vise une cohérence stricte** : la somme de tous les \`meals_template[].approx_kcal\` ± collations doit approcher la cible \`kcal\` du plan (tolérance ±100 kcal)
+   - Ne mets pas d'ingrédients vagues type "légumes" ou "féculents" — sois SPÉCIFIQUE ("Brocoli", "Riz basmati")
+   - 3-6 \`items\` par repas selon la complexité ; ne descends pas en dessous de 3 sauf collation pure
 5. **Entraînement & Cardio** : Conçois un programme adapté au niveau d'activité déclaré et au matériel disponible (maison ou salle de sport). **Utilise EXCLUSIVEMENT des exos de la bibliothèque ci-dessous** (le champ \`name\` = \`name_fr\` exact, ou tu casses le rendu UI). Respecte le niveau de l'athlète : interdiction de prescrire un exo "avance" si le profil est débutant.
 6. **Justification scientifique** : Explique brièvement et de manière pédagogique pourquoi ce plan a été conçu ainsi (déficit choisi, répartition des macros, choix de l'entraînement). **Mentionne explicitement quelle formule TDEE tu as utilisée (Katch-McArdle ou Mifflin-St Jeor) et pourquoi** — l'utilisateur doit pouvoir comprendre la précision de l'estimation.
 7. **Suppléments rattachés à un repas** : Chaque entrée du tableau \`supplements\` doit avoir un champ \`timing\` qui correspond **exactement** au \`name\` d'un repas/collation de \`meals_template\` (ex: "Petit-déjeuner", "Collation après-midi", "Dîner"). Si un complément n'a pas de moment-repas évident (créatine quotidienne, magnésium au coucher), crée une collation/moment dédié dans \`meals_template\` (par exemple \`{ "name": "Avant le coucher", "description": "Tisane camomille (optionnel)", "approx_kcal": 0 }\`) pour pouvoir y rattacher le supplément. Le champ \`timing\` ne doit JAMAIS être un texte libre déconnecté ("au réveil", "le matin") s'il existe déjà un repas correspondant. Cela permet à l'app d'afficher chaque complément à l'intérieur du repas concerné.
@@ -96,8 +105,24 @@ Structure du JSON attendu :
   "meals_template": [
     {
       "name": string, // ex: Petit-déjeuner
-      "description": string, // suggestions de repas sains
-      "approx_kcal": number
+      "description": string, // phrase courte (1 ligne) — ex: "Omelette + flocons + fruits rouges"
+      "approx_kcal": number, // doit égaler la somme de items[].kcal ± 10 kcal
+      "items": [ // OBLIGATOIRE — détail aliment par aliment avec grammages
+        {
+          "food": string, // nom exact ex: "Blanc de poulet", "Flocons d'avoine", "Huile d'olive"
+          "grams": number, // grammage cru (sauf si state="cuit")
+          "state": "cru" | "cuit", // défaut "cru" — l'user pèse avant cuisson
+          "kcal": number, // pour cette quantité (pas pour 100g)
+          "p": number,   // protéines en g pour cette quantité
+          "c": number,   // glucides en g pour cette quantité
+          "f": number    // lipides en g pour cette quantité
+        }
+      ],
+      "macros": { // OBLIGATOIRE — total du repas (somme des items)
+        "p": number,
+        "c": number,
+        "f": number
+      }
     }
   ],
   "training": {

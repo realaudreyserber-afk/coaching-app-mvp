@@ -12,6 +12,22 @@ import { HudCard, Tag } from "@/components/nodream";
  * compléments en mono chamfered tech.
  */
 
+/**
+ * Wave 11A — Structured ingredient row passed to MealCard.
+ * Matches PlanMealItem from types/plan.ts but copied here to keep the
+ * component standalone (avoids cyclic imports + lets callers use this
+ * card without depending on the full plan type).
+ */
+export interface MealCardItem {
+  food: string;
+  grams: number;
+  state?: 'cru' | 'cuit';
+  kcal: number;
+  p: number;
+  c: number;
+  f: number;
+}
+
 export interface MealCardData {
   name: string;
   description?: string;
@@ -19,6 +35,13 @@ export interface MealCardData {
   macros?: { p?: number; c?: number; f?: number };
   photoUrl?: string;
   supplements?: Array<{ name: string; dosage: string }>;
+  /**
+   * Wave 11A — Detailed ingredient breakdown from the IA-generated plan.
+   * When present, rendered as a list with grammage + per-item kcal — this
+   * is the format the user explicitly asked for. When absent, falls back
+   * to the free-text `description` (back-compat with old plans).
+   */
+  items?: MealCardItem[];
 }
 
 interface MealCardProps {
@@ -120,18 +143,69 @@ export function MealCard({
           </h3>
         </div>
 
-        {meal.description && (
-          <p
-            className="line-clamp-3"
-            style={{
-              fontSize: 11,
-              color: "var(--fg-4)",
-              lineHeight: 1.5,
-              margin: 0,
-            }}
+        {/* Wave 11A — Show structured items[] when the IA gave us details,
+            fall back to the description text otherwise (legacy plans). */}
+        {meal.items && meal.items.length > 0 ? (
+          <ul
+            style={{ margin: 0, padding: 0, listStyle: "none" }}
+            aria-label="Composition du repas avec grammages"
           >
-            {meal.description}
-          </p>
+            {meal.items.map((item, idx) => (
+              <li
+                key={idx}
+                className="flex justify-between items-baseline gap-2"
+                style={{
+                  padding: "5px 0",
+                  fontSize: 11,
+                  borderBottom:
+                    idx < meal.items!.length - 1
+                      ? "1px dashed var(--glass-border)"
+                      : "none",
+                }}
+              >
+                <span style={{ color: "var(--fg-2)", flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600 }}>{item.food}</span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 9,
+                      color: "var(--fg-5)",
+                      marginLeft: 6,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {item.grams}g
+                    {item.state === "cuit" ? " cuit" : ""}
+                  </span>
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 10,
+                    color: "var(--gold-400)",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {item.kcal} kcal
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          meal.description && (
+            <p
+              style={{
+                fontSize: 11,
+                color: "var(--fg-4)",
+                lineHeight: 1.5,
+                margin: 0,
+              }}
+            >
+              {meal.description}
+            </p>
+          )
         )}
 
         {/* Macros */}
