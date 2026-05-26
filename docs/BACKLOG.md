@@ -61,6 +61,9 @@
 - [ ] **[P1]** Script de migration `anonymous → Google` — quand un user se logge en Google après avoir fait l'onboarding en mode anonymous, son plan/profile/baseline restent orphelins sous l'UID anonymous. Solution : implémenter `linkWithCredential` au moment du Google login, OU script de migration post-hoc qui copie users/{anonymous_uid}/* vers users/{google_uid}/*. (2026-05-27)
 - [ ] **[P2]** Migration `wearable_sync` legacy camelCase → snake_case — script `scripts/migrate-wearable-sync.mjs`. Pas critique tant que peu de users actifs. (2026-05-26)
 - [ ] **[P2]** PWA icons NoDream — régénérer `/public/icons/icon-192.png`, `icon-512.png`, `maskable-*.png` avec le brand NoDream actuel. Les icons actuels sont peut-être legacy. (2026-05-26)
+- [ ] **[P2]** Dashboard insight cache — `aiInsight` POST/api/ai/daily-insight fire à chaque mount du dashboard si checkin existe. Stocker en Firestore `checkin.insight` (TTL 6h) pour éviter les appels LLM redondants. Déferré de Wave 11D. (2026-05-27)
+- [ ] **[P2]** Coach `messagesEndRef.scrollIntoView({behavior:'smooth'})` à chaque chunk = saccadé sur mobile pendant streaming. Throttle ou switch à `behavior:'auto'` pendant streaming, `smooth` à la fin. (2026-05-27)
+- [ ] **[P2]** `app/(app)/coach/page.tsx` h-[calc(100vh-4rem)] — sur iOS Safari avec adresse bar dynamique, `100vh` casse layout. Préférer `100dvh`. (2026-05-27)
 
 ### UX onboarding
 
@@ -107,6 +110,8 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 - **Auto-anonymous sign-in au mount** (`auth-provider.tsx:166`) — empêche `/login` d'être atteignable en mode normal sans détection `user.isAnonymous` ad-hoc dans chaque page d'auth. Patches en place mais l'architecture mériterait un Welcome screen.
 - **Pas de `linkWithCredential` lors du Google login** — quand un user fait l'onboarding en mode anonymous puis se logge Google, ses données (plan, profile, baseline) restent orphelines sous l'UID anonymous. Confirmé sur le compte du dev 2026-05-27.
 - **Empty commits forcent un redeploy Vercel** — `git commit --allow-empty -m "trigger redeploy"` + push relance le webhook. Utile quand Vercel saute un commit, mais consomme du quota Free.
+- **Steppers live page reset à 0 au changement d'exo** (Wave 11B) — la nouvelle logique d'init sur `[activeExerciseIdx]` réinitialise SYSTÉMATIQUEMENT les steppers au switch d'exo (vs l'ancien guard `weight===0 && reps===0`). Si l'user logge un set, navigue, revient, le `last_performance` (mis à jour par onSnapshot) écrase ses valeurs actuelles. Acceptable car le `last_performance` est la cible légitime, mais à reconsidérer si feedback user négatif.
+- **Confirm text delete account devenu "EFFACER" partout** (Wave 11C) — si tu as documenté ailleurs "tape SUPPRIMER", il faut mettre à jour. Le serveur n'accepte que "EFFACER".
 
 ---
 
@@ -118,6 +123,11 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 - [x] Fix `/login` useEffect skippe le redirect si `user.isAnonymous` — sinon le auto-anonymous empêche d'accéder à la page de login (commit `12b7477`). (✓ 2026-05-27)
 - [x] Fix `/login` Loader skippe aussi si `user.isAnonymous` — sinon page bloquée sur "Préparation de ton espace..." même quand le redirect est skippé (commit `531aa63`). (✓ 2026-05-27)
 - [x] 16 programmes Fitadium fetchés et analysés — comparison patterns vs plan IA généré. Pas intégré dans le code, juste référence pour future few-shot prompt. (✓ 2026-05-27)
+- [x] **Wave 11A** — Extension schéma repas avec `items[]` grammage + macros (cause racine "repas sans grammage" demandée par l'user). Étendu Zod schema, Vertex JSON schema, prompt plan-generator, types/plan.ts, MealCard. Back-compat préservée via fallback `description` (commit `bbb55ca`). (✓ 2026-05-27)
+- [x] **Wave 11B** — Bugs critiques /session live : refus 2e session in_progress server-side (409), useRef vs state pour double-tap log-set, revoke blob URLs audio (leak), warning UI "⚠ Hors-base RAG" sur exo hallucinations Wave 10, init steppers robust pour poids du corps, AMRAP autorisé (reps=0 OK si target=AMRAP/échec/max), bouton "Terminer (incomplet)" si anyLogged, cleanup dead code buildBlockCode (commit `168641c`). (✓ 2026-05-27)
+- [x] **Wave 11C** — Unification delete account `/settings` ↔ `/privacy` : POST + confirmText=EFFACER + reauth pour les 2 pages, détection provider (Google popup / password prompt / autre fallback server check), remplacement des 3 alert() restart onboarding par setErrorMsg banner, filename `linsociable-export-` → `nodream-export-` (commit `c4ad481`). (✓ 2026-05-27)
+- [x] **Wave 11D** — Coach streaming AbortController + 90s watchdog. Cleanup au démontage pour éviter "setState on unmounted component" warnings + memory leaks. Détection AbortError pour ne pas perturber l'UI sur navigation. Dashboard insight cache déferré en P2 (commit `b7c11b8`). (✓ 2026-05-27)
+- [x] **Wave 11E** — Polish UX : limit(50) sur /plan/history, limit(180)+limit(104) sur /progress daily/weekly, photo onError fallback "Photo expirée" (Storage signed URLs expiration), runTransaction sur génération code référral (race 2 tabs), fix markdown `**` non rendu → `<strong>` (commit `77904bf`). (✓ 2026-05-27)
 
 ### Session 2026-05-26
 
