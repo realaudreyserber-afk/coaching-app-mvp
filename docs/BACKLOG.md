@@ -15,7 +15,8 @@
 
 ## 🚨 P0 — Bloquants prod
 
-_Aucun pour l'instant._
+- [ ] **Hallucination RAG coach** — coach propose des exos hors-base. Observé 2026-05-26 sur question "remplace shoulder press" → suggestion "Développé Landmine" inexistant. Détail dans section **Code/Coach/Hallucinations RAG** ci-dessous. (2026-05-26)
+- [ ] **Coach ne déclenche pas `<COACH_PLAN_PATCH>`** sur substitution d'exo — observe 2026-05-26 : alternative proposée mais plan actif non modifié. Détail dans section **Code/Coach/Hallucinations RAG** ci-dessous. (2026-05-26)
 
 ---
 
@@ -61,6 +62,12 @@ _Aucun pour l'instant._
 
 - [ ] **[P1]** Vérifier que le coach context envoie bien BF% dans le prompt — `lib/vertex/context-builder.ts:259` doit sortir `BF actuel: 32%` quand `baseline.bf_pct` présent. Vu rapidement OK, mais pas testé end-to-end. (2026-05-26)
 - [ ] **[P2]** Hook coach proactif "BF% manquant" — si après 3 jours d'usage le user n'a toujours pas de `baseline.bf_pct`, le coach propose de l'ajouter via /settings ou par message. (2026-05-26)
+
+#### Hallucinations RAG (P0 — testé en prod, observé)
+
+- [ ] **[P0]** **Renforcer le prompt coach pour interdire les exos hors-RAG** — Cas observé 2026-05-26 : user a demandé un substitut au shoulder press, coach a proposé "Développé Landmine" qui n'est PAS dans la base (293 exos). Le seul exo landmine en base est `rowing_t_bar` (pull horizontal). Solution : ajouter une règle dure dans le prompt système coach `lib/vertex/prompts/coach.ts` : "**INTERDICTION ABSOLUE** de recommander un exo qui n'est pas dans le bloc [EXERCICES PERTINENTS POUR CETTE QUESTION] injecté ce tour. Si le user demande un exo que tu connais mais qui n'est pas listé, dis-lui : 'Cet exo n'est pas dans notre bibliothèque, je te propose [alternative RAG-validée]'". Risques actuels : user track des exos fantômes, pas de cues, pas de safety_notes, le plan-generator les ignore. (2026-05-26)
+
+- [ ] **[P0]** **Trigger `<COACH_PLAN_PATCH>` automatique sur substitution d'exo** — Cas observé 2026-05-26 : user a demandé un substitut suite à douleur épaule, coach a proposé 3 exos mais SANS déclencher `<COACH_PLAN_PATCH>`. Le plan actif garde le shoulder press, le user devra repenser à demander explicitement le patch. Solution : ajouter au prompt coach §18.5 une règle "Si l'utilisateur demande une alternative à un exo de son plan ACTUEL pour cause de douleur/limitation, propose 1-2 exos RAG puis **applique le patch automatiquement** via `<COACH_PLAN_PATCH>{"training.sessions[X].exercises[Y].name": "..."}</COACH_PLAN_PATCH>` (en précisant la session et l'index dans le commentaire). Le user pourra annuler s'il préfère un autre choix.". Nécessite côté apply-patch route de supporter les paths nested `training.sessions[X].exercises[Y].name`. (2026-05-26)
 
 ### Refactor / nettoyage
 
