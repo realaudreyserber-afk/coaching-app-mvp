@@ -1,32 +1,25 @@
 import * as React from "react";
 import { LucideIcon } from "lucide-react";
+import { HudCard } from "@/components/nodream";
 
 /**
- * KPI Card — affichage d'une métrique avec valeur, label, delta optionnel.
- * Utilisé dans Dashboard, Workout Summary, Progress.
- *
- * Stitch ref : dashboard-d.jpg, workout-summary-d.jpg
+ * KPI Card — NoDream Tactical OS look.
+ * Glass hud-card + 4-bracket corners + mono numerals + gold/tech accent.
+ * Used in Dashboard, Workout Summary, Progress.
  */
 
 interface KPICardProps {
-  /** Label en haut (ex: "Poids actuel") */
   label: string;
-  /** Valeur principale (ex: "85.4") */
   value: string | number;
-  /** Unité affichée à côté de la valeur (ex: "kg", "kcal") */
   unit?: string;
-  /** Delta par rapport à la période précédente (ex: -1.2, +120) */
   delta?: number;
-  /** Unité du delta (ex: "kg", "%") */
   deltaUnit?: string;
-  /** Label du delta (ex: "cette semaine") */
   deltaLabel?: string;
-  /** Sens du delta : `down` est bon (perte de gras), `up` est bon (volume training) */
+  /** `down-good` for fat loss, `up-good` for training volume */
   deltaDirection?: "down-good" | "up-good";
-  /** Icône Lucide affichée en haut à droite */
   icon?: LucideIcon;
-  /** Variante visuelle : `default` = card standard, `gold` = bordure gold (KPI critique) */
-  variant?: "default" | "gold";
+  /** `gold` = primary HUD card, `tech` = matrix-green secondary */
+  variant?: "default" | "gold" | "tech";
   className?: string;
 }
 
@@ -42,33 +35,60 @@ export function KPICard({
   variant = "default",
   className = "",
 }: KPICardProps) {
-  const borderClass =
+  const accent: "gold" | "tech" | "none" =
+    variant === "gold" ? "gold" : variant === "tech" ? "tech" : "none";
+
+  const numClass =
     variant === "gold"
-      ? "border-amber-500/60"
-      : "border-zinc-800";
+      ? "stat-num gold"
+      : variant === "tech"
+        ? "stat-num tech"
+        : "stat-num";
+
+  const iconColor = variant === "tech" ? "var(--accent-tech)" : "var(--gold-500)";
 
   return (
-    <div
-      className={`relative p-4 sm:p-5 rounded-lg border ${borderClass} bg-zinc-900 ${className}`}
+    <HudCard
+      accent={accent}
+      corners
+      chamfer="sm"
+      className={`relative ${className}`}
+      style={{ padding: "1rem 1.25rem" }}
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-zinc-400">
+        <span
+          className="eyebrow"
+          style={{ color: iconColor }}
+        >
           {label}
         </span>
         {Icon && (
           <Icon
-            className="h-4 w-4 text-amber-500 flex-shrink-0"
+            className="h-4 w-4 flex-shrink-0"
+            style={{ color: iconColor }}
             aria-hidden="true"
           />
         )}
       </div>
 
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-2xl sm:text-3xl font-bold font-serif text-zinc-50 tabular-nums">
+      <div className="mt-3 flex items-baseline gap-2">
+        <span
+          className={numClass}
+          style={{ fontSize: "2.4rem", lineHeight: 1 }}
+        >
           {value}
         </span>
         {unit && (
-          <span className="text-sm font-medium text-zinc-400">{unit}</span>
+          <span
+            className="mono"
+            style={{
+              fontSize: "0.85rem",
+              color: "var(--fg-3)",
+              letterSpacing: "0.05em",
+            }}
+          >
+            {unit}
+          </span>
         )}
       </div>
 
@@ -80,7 +100,7 @@ export function KPICard({
           direction={deltaDirection}
         />
       )}
-    </div>
+    </HudCard>
   );
 }
 
@@ -101,22 +121,35 @@ function DeltaBadge({ value, unit, label, direction }: DeltaBadgeProps) {
     (direction === "down-good" && isPositive) ||
     (direction === "up-good" && isNegative);
 
-  const colorClass = isGood
-    ? "text-emerald-400"
+  const color = isGood
+    ? "var(--accent-tech)"
     : isBad
-      ? "text-red-400"
-      : "text-zinc-400";
+      ? "var(--alert-500)"
+      : "var(--fg-4)";
 
   const sign = value > 0 ? "+" : "";
 
   return (
-    <p className={`mt-1.5 text-xs ${colorClass}`}>
-      <span className="font-semibold tabular-nums">
+    <p
+      className="mono mt-2"
+      style={{
+        fontSize: "0.7rem",
+        letterSpacing: "0.1em",
+        color,
+      }}
+    >
+      <span style={{ fontWeight: 700 }}>
         {sign}
         {value}
         {unit ?? ""}
       </span>
-      {label && <span className="text-zinc-500 ml-1">{label}</span>}
+      {label && (
+        <span
+          style={{ color: "var(--fg-5)", marginLeft: "0.5em" }}
+        >
+          {label}
+        </span>
+      )}
     </p>
   );
 }

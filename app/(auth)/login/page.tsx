@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader } from "@/components/ui/loader";
+import { HudCard, PanelHeader } from "@/components/nodream";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -112,33 +113,82 @@ export default function LoginPage() {
   const passwordRequired = mode !== "reset";
 
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-cream px-6 py-12 dark:bg-anthracite sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h1 className="text-center text-4xl font-extrabold tracking-tight font-serif text-primary">
+    <div className="flex min-h-screen flex-col justify-center px-6 py-12 sm:px-6 lg:px-8 relative">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center space-y-2">
+        <p
+          className="mono cursor"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.3em',
+            color: 'var(--accent-tech)',
+            textShadow: '0 0 6px var(--accent-tech)',
+          }}
+        >
+          [BOOT-SEQUENCE] · ORACLE.IA · v1.0
+        </p>
+        <h1
+          className="glow-gold"
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontSize: 'clamp(2.4rem, 10vw, 4rem)',
+            fontWeight: 900,
+            letterSpacing: '-0.04em',
+            lineHeight: 1,
+            margin: 0,
+            background: 'linear-gradient(135deg, #fff 0%, #d4af37 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
           NoDream
         </h1>
-        <p className="mt-2 text-center text-sm text-muted-foreground font-serif italic">
-          Pas de rêve. Des résultats.
+        <p
+          className="mono"
+          style={{
+            fontSize: 'var(--type-meta)',
+            letterSpacing: '0.3em',
+            color: 'var(--fg-3)',
+            textTransform: 'uppercase',
+            margin: 0,
+          }}
+        >
+          Pas de rêve · Des résultats
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <Card className="border border-border/80 shadow-md bg-card/50 backdrop-blur-sm">
-          <CardHeader className="space-y-2 text-center">
-            <CardTitle className="text-2xl font-serif font-medium">
-              {mode === "signin"
-                ? "Connecte-toi"
+        <HudCard accent="gold" chamfer="md" style={{ padding: '1.5rem' }}>
+          <PanelHeader
+            code={
+              mode === "signin"
+                ? "AUTH-LOGIN"
                 : mode === "signup"
-                  ? "Crée ton compte"
-                  : "Mot de passe oublié"}
-            </CardTitle>
-            <CardDescription className="text-sm text-muted-foreground leading-relaxed">
-              {mode === "reset"
-                ? "Renseigne ton email, on t'envoie un lien de réinitialisation."
-                : "Pas de fausses promesses ni de restriction extrême. On construit ensemble un plan adapté à ton corps."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+                  ? "AUTH-REGISTER"
+                  : "AUTH-RESET"
+            }
+            title={
+              mode === "signin"
+                ? "Connexion"
+                : mode === "signup"
+                  ? "Création de compte"
+                  : "Mot de passe oublié"
+            }
+            accent="gold"
+          />
+          <p
+            style={{
+              fontSize: 'var(--type-body-sm)',
+              color: 'var(--fg-3)',
+              lineHeight: 1.5,
+              marginBottom: 16,
+            }}
+          >
+            {mode === "reset"
+              ? "Renseigne ton email, on t'envoie un lien de réinitialisation."
+              : "Authentification requise pour accéder à l'OS tactique. Identification militaire chiffrée."}
+          </p>
+          <div className="space-y-4">
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label
@@ -288,8 +338,8 @@ export default function LoginPage() {
                 }
               </span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </HudCard>
       </div>
     </div>
   );

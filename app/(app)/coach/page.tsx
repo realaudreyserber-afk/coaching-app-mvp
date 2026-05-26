@@ -304,24 +304,69 @@ export default function CoachPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-zinc-950 max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20">
+    <div
+      className="flex-1 flex flex-col max-w-3xl mx-auto w-full h-[calc(100vh-4rem)] relative pb-20"
+      style={{ background: 'transparent' }}
+    >
 
-      {/* Header */}
-      <div className="flex items-center space-x-3 p-4 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-md sticky top-0 z-30">
+      {/* Tactical Header — ORACLE.IA terminal */}
+      <div
+        className="flex items-center space-x-3 p-4 sticky top-0 z-30"
+        style={{
+          background: 'rgba(6, 3, 15, 0.92)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid var(--gold-tint-15)',
+        }}
+      >
         <Button
           variant="ghost"
           size="icon"
           onClick={() => router.push('/dashboard')}
           aria-label="Retour au tableau de bord"
-          className="h-11 w-11 text-zinc-100 hover:bg-zinc-800"
+          className="h-11 w-11"
+          style={{ color: 'var(--fg-2)' }}
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-lg font-serif font-bold text-zinc-50">Coach NoDream</h1>
-          <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse" aria-hidden="true" />
-            <span><span className="sr-only">Statut : </span>En ligne</span>
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: '0.3em',
+              color: 'var(--accent-tech)',
+              opacity: 0.85,
+            }}
+          >
+            [ORACLE.IA · TERMINAL-04]
+          </span>
+          <h1
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 18,
+              fontWeight: 900,
+              letterSpacing: '-0.02em',
+              color: 'var(--gold-400)',
+              textShadow: '0 0 12px rgba(212, 175, 55, 0.4)',
+              margin: 0,
+            }}
+          >
+            Coach NoDream
+          </h1>
+          <p
+            className="mono"
+            style={{
+              fontSize: 9,
+              letterSpacing: '0.18em',
+              color: 'var(--fg-4)',
+              textTransform: 'uppercase',
+              margin: '2px 0 0 0',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <span className="status-dot" style={{ marginRight: 6 }} aria-hidden="true" />
+            <span><span className="sr-only">Statut : </span>Active · Streaming</span>
           </p>
         </div>
       </div>

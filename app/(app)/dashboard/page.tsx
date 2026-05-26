@@ -14,6 +14,7 @@ import { Loader } from "@/components/ui/loader";
 import { KPICard } from "@/components/ui/kpi-card";
 import { RadialProgress } from "@/components/ui/radial-progress";
 import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy, Scale, Flame, Award } from "lucide-react";
+import { HudCard, PanelHeader, Tag } from "@/components/nodream";
 import { flags } from "@/lib/features/flags";
 import { getFastingState } from "@/lib/features/fasting/fasting-util";
 import { getDailyTaskForUser } from "@/lib/features/micro-tasks/selector";
@@ -243,23 +244,55 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
-      {/* Greetings Header */}
-      <div>
-        <div className="flex justify-between items-baseline gap-4">
-          <h2 className="text-3xl lg:text-4xl font-bold font-serif text-foreground">
-            Salut {profile?.name || "athlète"} !
-          </h2>
+      {/* Tactical Greeting */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-end gap-4 flex-wrap">
+          <div>
+            <span
+              className="mono"
+              style={{
+                fontSize: 10,
+                letterSpacing: '0.3em',
+                color: 'var(--accent-tech)',
+                opacity: 0.85,
+              }}
+            >
+              [SUJ-{user?.uid?.slice(0, 6).toUpperCase() ?? "------"}] · IDENTIFIÉ
+            </span>
+            <h2
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontWeight: 900,
+                fontSize: 'var(--type-h1)',
+                letterSpacing: 'var(--tracking-display)',
+                lineHeight: 1.05,
+                color: 'var(--fg-1)',
+                marginTop: 4,
+              }}
+            >
+              Humain <span style={{ color: 'var(--gold-400)' }}>{profile?.name || 'athlète'}</span>.
+            </h2>
+            <p
+              className="mono"
+              style={{
+                marginTop: 6,
+                fontSize: 'var(--type-meta)',
+                letterSpacing: '0.18em',
+                color: 'var(--fg-4)',
+                textTransform: 'uppercase',
+              }}
+            >
+              État de la transformation · Aujourd'hui
+            </p>
+          </div>
           {featureStreakActive && streak && streak.current > 0 && (
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full" title="Régularité active">
-              <Award className="h-3.5 w-3.5" aria-hidden="true" />
+            <Tag accent="gold">
+              <Award className="h-3 w-3" aria-hidden="true" />
               <span className="tabular-nums">{streak.current}</span>
               <span>{streak.current === 1 ? 'jour' : 'jours'}</span>
-            </div>
+            </Tag>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Voici l'état de ta transformation aujourd'hui.
-        </p>
       </div>
 
       {/* KPI Row — 3 metrics on desktop, stacked on mobile */}
@@ -310,97 +343,121 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {/* Daily Checkin Status Card */}
       {!todayCheckin ? (
-        <Card className="border border-orange-burnt/30 bg-orange-light/30 dark:bg-primary/5 shadow-sm">
-          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0">
-            <Calendar className="h-8 w-8 text-primary" />
-            <div className="flex-1">
-              <CardTitle className="text-base font-serif font-bold text-primary">Bilan du jour incomplet</CardTitle>
-              <CardDescription className="text-xs">
-                Prends 30 secondes pour enregistrer tes indicateurs et ton poids.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <Button
-              onClick={() => router.push("/checkin/daily")}
-              className="w-full flex items-center justify-center gap-2 h-10 rounded-md"
-            >
-              <Plus className="h-4 w-4" /> Faire mon check-in
-            </Button>
-          </CardContent>
-        </Card>
+        <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="ORDRE-DU-JOUR"
+            title="Bilan incomplet"
+            accent="gold"
+          />
+          <p style={{ fontSize: 'var(--type-body-sm)', color: 'var(--fg-3)', margin: '0 0 12px 0' }}>
+            30 secondes pour enregistrer tes indicateurs et ton poids. Sans données, pas de recalibrage.
+          </p>
+          <button
+            onClick={() => router.push("/checkin/daily")}
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+          >
+            <Plus className="h-4 w-4" /> Exécuter le check-in
+          </button>
+        </HudCard>
       ) : (
-        <Card className="border border-border/80 bg-card shadow-xs">
-          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0 pb-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base font-serif font-semibold">Insight du jour</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <p className="text-sm italic font-serif leading-relaxed text-foreground/90">
-              {aiInsight ? `"${aiInsight}"` : "Ton insight quotidien est en cours de recalibrage..."}
-            </p>
-          </CardContent>
-        </Card>
+        <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="ORACLE.IA · BRIEFING"
+            title={
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} />
+                Insight du jour
+              </span>
+            }
+            accent="tech"
+          />
+          <p
+            style={{
+              fontSize: 'var(--type-body)',
+              fontFamily: 'var(--font-serif)',
+              fontStyle: 'italic',
+              lineHeight: 1.6,
+              color: 'var(--fg-2)',
+              margin: 0,
+            }}
+          >
+            {aiInsight ? `"${aiInsight}"` : "Recalibrage en cours du module narratif..."}
+          </p>
+        </HudCard>
       )}
 
       {/* Fasting Protocol Status Card */}
       {featureFastingActive && fastingState && (
-        <Card className="border border-border bg-card shadow-xs">
-          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0 pb-2">
-            <Clock className="h-5 w-5 text-primary animate-pulse" />
-            <div>
-              <CardTitle className="text-base font-serif font-semibold">Jeûne Intermittent</CardTitle>
-              <CardDescription className="text-[10px]">Statut en temps réel</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="flex items-center justify-between">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                fastingState.isEatingWindow 
-                  ? "bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400" 
-                  : "bg-orange-100 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400"
-              }`}>
-                {fastingState.isEatingWindow ? "Fenêtre Repas active" : "Période de Jeûne active"}
+        <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="JEÛNE-IF"
+            title={
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4" style={{ color: 'var(--gold-400)' }} />
+                Protocole de jeûne
               </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {fastingState.label}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+            }
+            accent="gold"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <Tag accent={fastingState.isEatingWindow ? "tech" : "gold"}>
+              {fastingState.isEatingWindow ? "Fenêtre repas active" : "Période de jeûne active"}
+            </Tag>
+            <span
+              className="mono"
+              style={{
+                fontSize: 11,
+                color: 'var(--fg-4)',
+                letterSpacing: '0.1em',
+              }}
+            >
+              {fastingState.label}
+            </span>
+          </div>
+        </HudCard>
       )}
 
       {/* Daily Micro-task Card */}
       {featureMicroTasksActive && dailyTask && (
-        <Card className="border border-border bg-card shadow-xs">
-          <CardHeader className="p-4 flex flex-row items-center gap-3 space-y-0 pb-2">
-            <CheckSquare className="h-5 w-5 text-primary" />
-            <div>
-              <CardTitle className="text-base font-serif font-semibold">Micro-tâche du jour</CardTitle>
-              <CardDescription className="text-[10px]">Un défi simple et comportemental pour aujourd'hui</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-3">
-            <p className="text-sm text-foreground/90 font-serif leading-relaxed">
+        <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="MIS-MICRO"
+            title={
+              <span className="flex items-center gap-2">
+                <CheckSquare className="h-4 w-4" style={{ color: 'var(--gold-400)' }} />
+                Micro-tâche
+              </span>
+            }
+            accent="gold"
+          />
+          <div className="space-y-3">
+            <p
+              style={{
+                fontSize: 'var(--type-body)',
+                color: 'var(--fg-2)',
+                lineHeight: 1.55,
+                margin: 0,
+              }}
+            >
               {dailyTask.text}
             </p>
             
             {taskCompleted ? (
-              <div className="flex items-center gap-2 text-xs font-semibold text-green-600 dark:text-green-400 bg-green-500/10 p-2 rounded-md border border-green-500/20">
-                <CheckSquare className="h-4 w-4 text-green-600 dark:text-green-400" /> Tâche complétée avec succès !
-              </div>
+              <Tag accent="tech">
+                <CheckSquare className="h-3 w-3" /> Résolue
+              </Tag>
             ) : (
-              <Button 
-                onClick={handleCompleteTask} 
-                variant="outline" 
-                size="sm"
-                className="w-full text-xs h-9 border-primary/20 text-primary hover:bg-primary/5"
+              <button
+                onClick={handleCompleteTask}
+                className="btn btn-tech"
+                style={{ width: '100%' }}
               >
                 Marquer comme résolue
-              </Button>
+              </button>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </HudCard>
       )}
 
       </div>
@@ -418,38 +475,67 @@ export default function DashboardPage() {
         </div>
 
         {/* Progress metrics — radial + steps */}
-        <Card className="border border-border bg-card shadow-xs lg:col-span-1">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-base font-serif font-semibold flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" /> Objectif de Transformation
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 space-y-4">
-            <div className="flex justify-center">
-              <RadialProgress
-                value={progressPercentage}
-                subLabel={progressPercentage >= 100 ? "atteint" : "complet"}
-                size={140}
-                strokeWidth={10}
-              />
-            </div>
+        <HudCard accent="gold" chamfer="sm" className="lg:col-span-1" style={{ padding: '1rem 1.25rem' }}>
+          <PanelHeader
+            code="OBJ-TRANSFO"
+            title={
+              <span className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" style={{ color: 'var(--gold-400)' }} /> Objectif
+              </span>
+            }
+            accent="gold"
+          />
+          <div className="flex justify-center mb-4">
+            <RadialProgress
+              value={progressPercentage}
+              subLabel={progressPercentage >= 100 ? "atteint" : "complet"}
+              size={140}
+              strokeWidth={10}
+            />
+          </div>
 
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-muted p-2 rounded-md">
-                <span className="text-[10px] uppercase text-muted-foreground block">Départ</span>
-                <span className="text-sm font-semibold tabular-nums">{startWeight} kg</span>
-              </div>
-              <div className="bg-primary/10 p-2 rounded-md border border-primary/20">
-                <span className="text-[10px] uppercase text-primary block">Actuel</span>
-                <span className="text-sm font-semibold text-primary tabular-nums">{currentWeight} kg</span>
-              </div>
-              <div className="bg-muted p-2 rounded-md">
-                <span className="text-[10px] uppercase text-muted-foreground block">Objectif</span>
-                <span className="text-sm font-semibold tabular-nums">{targetWeight || "—"} {targetWeight ? "kg" : ""}</span>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div
+              style={{
+                padding: 8,
+                background: 'var(--glass-bg-2)',
+                border: '1px solid var(--glass-border)',
+                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>Départ</span>
+              <div className="mono" style={{ fontSize: 14, color: 'var(--fg-2)', fontWeight: 700, marginTop: 2 }}>
+                {startWeight} <span style={{ fontSize: 9, color: 'var(--fg-5)' }}>kg</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
+            <div
+              style={{
+                padding: 8,
+                background: 'var(--gold-tint-08)',
+                border: '1px solid var(--gold-tint-25)',
+                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              }}
+            >
+              <span className="eyebrow">Actuel</span>
+              <div className="mono" style={{ fontSize: 14, color: 'var(--gold-400)', fontWeight: 700, marginTop: 2 }}>
+                {currentWeight} <span style={{ fontSize: 9, color: 'var(--fg-5)' }}>kg</span>
+              </div>
+            </div>
+            <div
+              style={{
+                padding: 8,
+                background: 'var(--glass-bg-2)',
+                border: '1px solid var(--glass-border)',
+                clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--fg-4)' }}>Objectif</span>
+              <div className="mono" style={{ fontSize: 14, color: 'var(--fg-2)', fontWeight: 700, marginTop: 2 }}>
+                {targetWeight || "—"} {targetWeight && <span style={{ fontSize: 9, color: 'var(--fg-5)' }}>kg</span>}
+              </div>
+            </div>
+          </div>
+        </HudCard>
       </div>
 
       {/* Quick Actions — wider grid on desktop */}
