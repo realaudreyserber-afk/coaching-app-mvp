@@ -150,6 +150,14 @@ export default function CoachPage() {
   const [error, setError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Wave 11D — AbortController kept in a ref so we can cancel the in-flight
+  // SSE stream when the user navigates away (prevents "setState on unmounted
+  // component" warnings + frees the server stream early). Also lets us cancel
+  // on a 2nd submit if the user wants to interrupt the IA.
+  const abortRef = useRef<AbortController | null>(null);
+  // Hard timeout watchdog — if the IA hangs for 90s, we kill the stream and
+  // restore the user input so they can retry.
+  const STREAM_TIMEOUT_MS = 90_000;
 
   // Scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -159,6 +167,15 @@ export default function CoachPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, sending]);
+
+  // Wave 11D — Cleanup any in-flight stream on unmount. Without this, the
+  // reader keeps consuming chunks and the inner setMessages calls trigger
+  // React's "Can't perform a state update on an unmounted component" warning.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   // Wave 6C : mark proactive interventions as read when user opens /coach
   useEffect(() => {
@@ -234,6 +251,10 @@ export default function CoachPage() {
     
     setMessages(prev => [...prev, userMsg]);
 
+    // Wave 11D — Declared at the function scope so the finally block can
+    // always clear it (it's assigned inside try once fetch fires).
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+
     try {
       // Save user message to Firestore
       await addDoc(collection(db, 'users', user.uid, 'coach_messages'), {
@@ -257,6 +278,17 @@ export default function CoachPage() {
         throw new Error('Authentification requise');
       }
 
+      // Wave 11D — abort any prior in-flight stream before starting a new one,
+      // then attach a fresh AbortController whose signal both fetch + the
+      // reader loop respect. A setTimeout watchdog aborts at 90s as a safety
+      // net against server hangs.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      watchdog = setTimeout(() => {
+        controller.abort(new Error('stream_timeout_90s'));
+      }, STREAM_TIMEOUT_MS);
+
       const res = await fetch('/api/ai/coach', {
         method: 'POST',
         headers: {
@@ -264,7 +296,8 @@ export default function CoachPage() {
           'Authorization': `Bearer ${token}`,
           'Accept': 'text/event-stream',
         },
-        body: JSON.stringify({ messages: chatContext })
+        body: JSON.stringify({ messages: chatContext }),
+        signal: controller.signal,
       });
 
       const contentType = res.headers.get('content-type') || '';
@@ -359,12 +392,24 @@ export default function CoachPage() {
       // No client-side write needed.
 
     } catch (err: any) {
-      console.error('Chat error:', err);
-      const msg = (err instanceof Error && err.message) ? err.message : "Bug de connexion. Réessaye dans un instant.";
-      setError(msg);
-      setMessages(prev => prev.slice(0, -1));
-      setInputMessage(userText);
+      // Wave 11D — Distinguish "user navigated away / cancelled" (AbortError)
+      // from real errors. AbortError on unmount must NOT touch state (component
+      // is gone) nor restore inputMessage.
+      const isAbort = err?.name === 'AbortError' || err?.message === 'stream_timeout_90s';
+      if (isAbort && err?.message === 'stream_timeout_90s') {
+        setError("Le coach n'a pas répondu (timeout 90s). Réessaye.");
+        setMessages(prev => prev.slice(0, -1));
+        setInputMessage(userText);
+      } else if (!isAbort) {
+        console.error('Chat error:', err);
+        const msg = (err instanceof Error && err.message) ? err.message : "Bug de connexion. Réessaye dans un instant.";
+        setError(msg);
+        setMessages(prev => prev.slice(0, -1));
+        setInputMessage(userText);
+      }
     } finally {
+      // Wave 11D — clear the watchdog whatever happened.
+      if (watchdog) clearTimeout(watchdog);
       setSending(false);
     }
   };
