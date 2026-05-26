@@ -23,7 +23,8 @@ import { withAuth } from '@/lib/firebase/auth-middleware';
 import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText } from '@/lib/vertex/client';
 import { COACH_SYSTEM_PROMPT } from '@/lib/vertex/prompts/coach';
-import { loadCoachState, patchCoachState, markCoachIntervention } from '@/lib/features/coach-state/store';
+import { loadCoachState } from '@/lib/features/coach-state/store';
+import { DEFAULT_COACH_STATE, MAX_TOPICS_DISCUSSED } from '@/lib/features/coach-state/schema';
 
 export const runtime = 'nodejs';
 
@@ -42,10 +43,12 @@ export async function POST(req: NextRequest) {
   return withAuth(req, async (_authReq, user) => {
     const uid = user.uid;
 
+    // M4 fix : 3/min was too low for the onboarding burst (welcome + plan_generated
+    // in parallel) + a session_finished arriving shortly after. Raise to 5/min.
     const rl = await checkRateLimit(uid, {
       scope: 'coach_proactive',
-      perMinute: 3,
-      perHour: 15,
+      perMinute: 5,
+      perHour: 20,
     });
     if (!rl.ok) {
       return NextResponse.json(
@@ -107,8 +110,12 @@ export async function POST(req: NextRequest) {
 
     const text = await generateText({
       model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `Contexte :\n${JSON.stringify(ctx, null, 2)}` }] }],
-      systemInstruction: `${COACH_SYSTEM_PROMPT.slice(0, 2500)}\n\n${instruction}`,
+      contents: [{ role: 'user', parts: [{ text: `Contexte :\n${JSON.stringify(ctx, null, 2)}` }] },
+      ],
+      // L4 fix : Flash handles the full prompt without issue. Truncating at 2500
+      // chars dropped the safety guidance (BF workflow, kcal floors) which is
+      // critical for plateau_detected and plan_generated commentary.
+      systemInstruction: `${COACH_SYSTEM_PROMPT}\n\n${instruction}`,
       temperature: 0.55,
     });
 
@@ -117,25 +124,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'empty_message' }, { status: 502 });
     }
 
-    // Persist as an assistant message — appears next time user opens /coach
+    // C4 fix : post message + flip state flag atomically in one transaction.
+    // Was previously two awaits — if the message landed but the flag patch
+    // failed, the next call generated a duplicate welcome.
     const now = new Date().toISOString();
-    await userRef.collection('coach_messages').add({
-      role: 'assistant',
-      content: cleaned,
-      timestamp: now,
-      proactive: true,
-      trigger: body.trigger,
-    });
+    const messageRef = userRef.collection('coach_messages').doc();
+    const stateRef = userRef.collection('coach_state').doc('main');
 
-    // Flip idempotency flags + mark unread badge
-    const statePatch: Record<string, unknown> = {};
-    if (body.trigger === 'welcome') statePatch.welcome_sent = true;
-    if (body.trigger === 'plan_generated') statePatch.plan_debrief_sent = true;
-    await patchCoachState(uid, statePatch);
-    await markCoachIntervention(uid, {
-      markUnread: true,
-      topic: `proactive_${body.trigger}`,
-    });
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const stateSnap = await tx.get(stateRef);
+        const existingTopics = (stateSnap.data()?.topics_discussed as string[] | undefined) ?? [];
+        const newTopics = Array.from(
+          new Set([...existingTopics, `proactive_${body.trigger}`]),
+        ).slice(-MAX_TOPICS_DISCUSSED);
+
+        // Persist the assistant message
+        tx.set(messageRef, {
+          role: 'assistant',
+          content: cleaned,
+          timestamp: now,
+          proactive: true,
+          trigger: body.trigger,
+        });
+
+        // Flip idempotency flags + mark unread badge + record intervention
+        const statePatch: Record<string, unknown> = {
+          last_intervention_at: now,
+          has_unread_intervention: true,
+          topics_discussed: newTopics,
+          updated_at: now,
+        };
+        if (!stateSnap.exists) {
+          Object.assign(statePatch, DEFAULT_COACH_STATE, { created_at: now });
+        }
+        if (body.trigger === 'welcome') statePatch.welcome_sent = true;
+        if (body.trigger === 'plan_generated') statePatch.plan_debrief_sent = true;
+        tx.set(stateRef, statePatch, { merge: true });
+      });
+    } catch (err) {
+      console.error('[coach/proactive] tx failed:', err);
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'persist_failed' },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({ ok: true, message: cleaned });
   });

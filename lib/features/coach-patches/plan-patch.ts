@@ -55,45 +55,54 @@ interface PathRule {
   max?: number;
   maxLen?: number;
   enumValues?: string[];
+  /**
+   * Wave 6 review H4 fix : `null` is destructive for mandatory numeric scalars
+   * (downstream code does `plan.kcal * factor` → NaN). Only optional fields
+   * accept null (clearing a textual hint, a supplement entry, etc.).
+   */
+  nullable?: boolean;
 }
 
 const ALLOWED_PATTERNS: PathRule[] = [
-  // Calories
-  { pattern: /^kcal$/, type: 'number', min: 800, max: 6000 },
+  // Calories — H2 fix : min raised from 800 to 1200 (women WHO floor).
+  // Below that, the plan-generator safety guidance is violated. If a tighter
+  // deficit is needed it should come from generate-plan with full medical
+  // context, not from a chat-emitted patch.
+  { pattern: /^kcal$/, type: 'number', min: 1200, max: 6000 },
 
-  // Macros (top-level + array entries should both work but we keep flat structure)
+  // Macros — mandatory numeric, no null
   { pattern: /^macros\.p$/, type: 'number', min: 0, max: 600 },
   { pattern: /^macros\.c$/, type: 'number', min: 0, max: 700 },
   { pattern: /^macros\.f$/, type: 'number', min: 0, max: 300 },
 
-  // Training sessions (per-session frequency)
+  // Training sessions
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.frequency_weekly$/, type: 'number', min: 1, max: 7 },
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.name$/, type: 'string', maxLen: 80 },
 
-  // Training exercises (sets / reps / rest)
+  // Training exercises
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.exercises\.([0-9]|1[0-9]|20)\.sets$/, type: 'number', min: 1, max: 10 },
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.exercises\.([0-9]|1[0-9]|20)\.reps$/, type: 'string', maxLen: 20 },
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.exercises\.([0-9]|1[0-9]|20)\.rest_seconds$/, type: 'number', min: 0, max: 600 },
   { pattern: /^training\.sessions\.([0-9]|1[0-9]|20)\.exercises\.([0-9]|1[0-9]|20)\.name$/, type: 'string', maxLen: 80 },
 
-  // Cardio
+  // Cardio — mandatory shape, no nulls
   { pattern: /^cardio\.frequency_weekly$/, type: 'number', min: 0, max: 7 },
   { pattern: /^cardio\.duration_minutes$/, type: 'number', min: 0, max: 180 },
   { pattern: /^cardio\.intensity$/, type: 'enum', enumValues: ['basse', 'modérée', 'haute'] },
-  { pattern: /^cardio\.type$/, type: 'string', maxLen: 60 },
+  { pattern: /^cardio\.type$/, type: 'string', maxLen: 60, nullable: true },
 
-  // Meals template (name + description + approx_kcal)
+  // Meals template — description is optional/clearable
   { pattern: /^meals_template\.([0-9]|1[0-9]|20)\.name$/, type: 'string', maxLen: 60 },
-  { pattern: /^meals_template\.([0-9]|1[0-9]|20)\.description$/, type: 'string', maxLen: 600 },
+  { pattern: /^meals_template\.([0-9]|1[0-9]|20)\.description$/, type: 'string', maxLen: 600, nullable: true },
   { pattern: /^meals_template\.([0-9]|1[0-9]|20)\.approx_kcal$/, type: 'number', min: 0, max: 3000 },
 
-  // Supplements
-  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.name$/, type: 'string', maxLen: 80 },
-  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.dosage$/, type: 'string', maxLen: 80 },
-  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.timing$/, type: 'string', maxLen: 80 },
+  // Supplements — entire entry clearable via null on any sub-field
+  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.name$/, type: 'string', maxLen: 80, nullable: true },
+  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.dosage$/, type: 'string', maxLen: 80, nullable: true },
+  { pattern: /^supplements\.([0-9]|1[0-9]|20)\.timing$/, type: 'string', maxLen: 80, nullable: true },
 
-  // Lifestyle notes
-  { pattern: /^lifestyle_notes$/, type: 'string', maxLen: 1200 },
+  // Lifestyle notes — clearable
+  { pattern: /^lifestyle_notes$/, type: 'string', maxLen: 1200, nullable: true },
 ];
 
 /**
@@ -103,7 +112,9 @@ const ALLOWED_PATTERNS: PathRule[] = [
 export function validatePatchEntry(path: string, value: PatchValue): string | null {
   const rule = ALLOWED_PATTERNS.find((r) => r.pattern.test(path));
   if (!rule) return 'path_not_whitelisted';
-  if (value === null) return null; // allow clearing
+  if (value === null) {
+    return rule.nullable ? null : 'null_not_allowed_for_mandatory_field';
+  }
   if (rule.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return 'not_a_number';
     if (rule.min !== undefined && value < rule.min) return `below_min_${rule.min}`;

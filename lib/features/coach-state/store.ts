@@ -22,24 +22,23 @@ function ref(uid: string) {
 }
 
 /**
- * Load or initialize the coach state for this user. Always returns a non-null
- * object. If the doc doesn't exist, returns the default (without persisting —
- * persistence happens on first write).
+ * Load or initialize the coach state for this user. Returns a non-null object.
+ *
+ * Wave 6 review M5 fix : distinguish "doc absent" (safe to return defaults +
+ * caller will create on write) from "read failed" (network outage etc) —
+ * in the failure case we rethrow so the caller doesn't blindly overwrite
+ * existing data with defaults.
  */
 export async function loadCoachState(uid: string): Promise<CoachState> {
-  try {
-    const snap = await ref(uid).get();
-    if (snap.exists) {
-      const data = snap.data() as Partial<CoachState>;
-      return {
-        ...DEFAULT_COACH_STATE,
-        created_at: data.created_at ?? new Date().toISOString(),
-        updated_at: data.updated_at ?? new Date().toISOString(),
-        ...data,
-      } as CoachState;
-    }
-  } catch (e) {
-    console.warn('[coach-state] load failed:', e);
+  const snap = await ref(uid).get(); // let exception propagate
+  if (snap.exists) {
+    const data = snap.data() as Partial<CoachState>;
+    return {
+      ...DEFAULT_COACH_STATE,
+      created_at: data.created_at ?? new Date().toISOString(),
+      updated_at: data.updated_at ?? new Date().toISOString(),
+      ...data,
+    } as CoachState;
   }
   const now = new Date().toISOString();
   return {
@@ -74,22 +73,42 @@ export async function patchCoachState(
 
 /**
  * Convenience: stamp the coach as having intervened just now.
- * If `markUnread` is true, also flag has_unread_intervention so /dashboard can
- * surface a badge.
+ *
+ * Wave 6 review C3 fix : was previously a non-transactional read-modify-write
+ * that lost concurrent topic additions. Now uses runTransaction with the
+ * coach_state doc so concurrent calls serialize and topic additions merge.
  */
 export async function markCoachIntervention(
   uid: string,
   opts: { markUnread?: boolean; topic?: string } = {},
 ): Promise<void> {
-  const current = await loadCoachState(uid);
-  const newTopics = opts.topic
-    ? Array.from(new Set([...current.topics_discussed, opts.topic])).slice(-MAX_TOPICS_DISCUSSED)
-    : current.topics_discussed;
-  await patchCoachState(uid, {
-    last_intervention_at: new Date().toISOString(),
-    has_unread_intervention: opts.markUnread ? true : current.has_unread_intervention,
-    topics_discussed: newTopics,
-  });
+  try {
+    await adminDb.runTransaction(async (tx) => {
+      const docRef = ref(uid);
+      const snap = await tx.get(docRef);
+      const current = snap.exists ? (snap.data() as Partial<CoachState>) : null;
+      const existingTopics = current?.topics_discussed ?? [];
+      const newTopics = opts.topic
+        ? Array.from(new Set([...existingTopics, opts.topic])).slice(-MAX_TOPICS_DISCUSSED)
+        : existingTopics;
+      const now = new Date().toISOString();
+      tx.set(
+        docRef,
+        {
+          ...(snap.exists ? {} : { ...DEFAULT_COACH_STATE, created_at: now }),
+          last_intervention_at: now,
+          has_unread_intervention: opts.markUnread
+            ? true
+            : current?.has_unread_intervention ?? false,
+          topics_discussed: newTopics,
+          updated_at: now,
+        },
+        { merge: true },
+      );
+    });
+  } catch (e) {
+    console.warn('[coach-state] markCoachIntervention tx failed:', e);
+  }
 }
 
 /** Mark all proactive interventions as read (called when user opens /coach). */
@@ -97,16 +116,36 @@ export async function markInterventionsRead(uid: string): Promise<void> {
   await patchCoachState(uid, { has_unread_intervention: false });
 }
 
-/** Add a pending followup. */
+/**
+ * Add a pending followup.
+ *
+ * Wave 6 review C3 fix : transactional read-modify-write so concurrent calls
+ * don't clobber each other.
+ */
 export async function addPendingFollowup(
   uid: string,
   fu: Omit<CoachPendingFollowup, 'id' | 'created_at'>,
 ): Promise<void> {
-  const current = await loadCoachState(uid);
-  const id = Math.random().toString(36).slice(2, 12);
-  const now = new Date().toISOString();
-  const newFu: CoachPendingFollowup = { ...fu, id, created_at: now };
-  await patchCoachState(uid, {
-    pending_followups: [...current.pending_followups, newFu].slice(-20),
-  });
+  try {
+    await adminDb.runTransaction(async (tx) => {
+      const docRef = ref(uid);
+      const snap = await tx.get(docRef);
+      const current = snap.exists ? (snap.data() as Partial<CoachState>) : null;
+      const id = Math.random().toString(36).slice(2, 12);
+      const now = new Date().toISOString();
+      const newFu: CoachPendingFollowup = { ...fu, id, created_at: now };
+      const merged = [...(current?.pending_followups ?? []), newFu].slice(-20);
+      tx.set(
+        docRef,
+        {
+          ...(snap.exists ? {} : { ...DEFAULT_COACH_STATE, created_at: now }),
+          pending_followups: merged,
+          updated_at: now,
+        },
+        { merge: true },
+      );
+    });
+  } catch (e) {
+    console.warn('[coach-state] addPendingFollowup tx failed:', e);
+  }
 }

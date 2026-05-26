@@ -10,8 +10,10 @@ describe('validatePatchEntry — whitelist', () => {
   it('accepts kcal in range', () => {
     expect(validatePatchEntry('kcal', 2200)).toBeNull();
   });
-  it('rejects kcal below min', () => {
+  it('rejects kcal below 1200 (post-review H2 floor)', () => {
     expect(validatePatchEntry('kcal', 600)).toMatch(/below_min/);
+    expect(validatePatchEntry('kcal', 1000)).toMatch(/below_min/);
+    expect(validatePatchEntry('kcal', 1200)).toBeNull();
   });
   it('rejects kcal above max', () => {
     expect(validatePatchEntry('kcal', 7000)).toMatch(/above_max/);
@@ -37,8 +39,14 @@ describe('validatePatchEntry — whitelist', () => {
     expect(validatePatchEntry('meals_template.0.description', 'a'.repeat(700))).toMatch(/too_long/);
     expect(validatePatchEntry('meals_template.0.description', 'a'.repeat(500))).toBeNull();
   });
-  it('accepts null to clear', () => {
-    expect(validatePatchEntry('kcal', null)).toBeNull();
+  it('rejects null on mandatory numeric field (kcal)', () => {
+    expect(validatePatchEntry('kcal', null)).toBe('null_not_allowed_for_mandatory_field');
+    expect(validatePatchEntry('macros.p', null)).toBe('null_not_allowed_for_mandatory_field');
+  });
+  it('accepts null on optional textual fields', () => {
+    expect(validatePatchEntry('lifestyle_notes', null)).toBeNull();
+    expect(validatePatchEntry('cardio.type', null)).toBeNull();
+    expect(validatePatchEntry('supplements.0.name', null)).toBeNull();
   });
 });
 
