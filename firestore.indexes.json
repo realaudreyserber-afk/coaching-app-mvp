@@ -9,34 +9,6 @@
       ]
     },
     {
-      "collectionGroup": "coach_messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "timestamp", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "checkins_daily",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "checkins_weekly",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "week", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "bloodwork",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "food_logs",
       "queryScope": "COLLECTION",
       "fields": [
@@ -69,25 +41,11 @@
       ]
     },
     {
-      "collectionGroup": "_stripe_events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "received_at", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "rgpd_audit_log",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "uid", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "tdee_history",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "week", "order": "DESCENDING" }
       ]
     },
     {
@@ -104,13 +62,6 @@
       "fields": [
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "sent_at", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "body_scans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
     {
@@ -136,34 +87,6 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "operation_name", "order": "ASCENDING" },
         { "fieldPath": "finished_at", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "checkins_daily",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "created_at", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "checkins_weekly",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "created_at", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "body_scans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "created_at", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "food_logs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "logged_at", "order": "DESCENDING" }
       ]
     }
   ],
