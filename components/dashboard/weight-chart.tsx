@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -86,11 +86,18 @@ export default function WeightChart({ data }: WeightChartProps) {
     );
   }
 
-  const weights = data.map((d) => d.weight);
-  const minWeight = Math.min(...weights);
-  const maxWeight = Math.max(...weights);
-  const yMin = Math.max(0, Math.floor(minWeight - 2));
-  const yMax = Math.ceil(maxWeight + 2);
+  // Wave 13C — Memoize the domain calc so re-renders (parent state changes
+  // unrelated to data) don't re-scan the array. Cheap but on low-end mobile
+  // every avoided re-render counts.
+  const { yMin, yMax } = useMemo(() => {
+    const weights = data.map((d) => d.weight);
+    const minWeight = Math.min(...weights);
+    const maxWeight = Math.max(...weights);
+    return {
+      yMin: Math.max(0, Math.floor(minWeight - 2)),
+      yMax: Math.ceil(maxWeight + 2),
+    };
+  }, [data]);
 
   // Use computed CSS values for proper SSR-safe theming
   const gridColor = 'rgba(255, 255, 255, 0.06)';
@@ -138,6 +145,11 @@ export default function WeightChart({ data }: WeightChartProps) {
             dot={{ r: 3, strokeWidth: 1, fill: goldGlow, stroke: goldColor }}
             activeDot={{ r: 5, fill: goldGlow, stroke: goldColor, strokeWidth: 2 }}
             filter="url(#weight-line-glow)"
+            // Wave 13C — disable Recharts default animation. On low-end
+            // Android (PWA) the easing function stacking caused measurable
+            // jank when data was streamed in via onSnapshot. Static chart
+            // is fast.
+            isAnimationActive={false}
           />
 
           <Line
@@ -149,6 +161,7 @@ export default function WeightChart({ data }: WeightChartProps) {
             dot={false}
             activeDot={{ r: 4, fill: techColor }}
             filter="url(#weight-line-glow)"
+            isAnimationActive={false}
           />
         </LineChart>
       </ResponsiveContainer>

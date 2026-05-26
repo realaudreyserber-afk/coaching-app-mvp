@@ -354,7 +354,14 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
       }, { status: 200 });
 
     } catch (error) {
+      // Wave 13C — Sentry captureException pour observabilité. Les 500
+      // Vertex/streaming partaient dans logs Vercel uniquement, jamais
+      // dans Sentry car le catch les "résout" avant l'unhandled handler.
       console.error('Error in coach API route:', error);
+      try {
+        const Sentry = await import('@sentry/nextjs');
+        Sentry.captureException(error, { tags: { route: 'api/ai/coach' } });
+      } catch { /* Sentry not loaded — degrade silently */ }
       const errMsg = error instanceof Error ? error.message : String(error);
       return NextResponse.json(
         { error: 'Le Coach IA a rencontré une erreur.', details: errMsg },

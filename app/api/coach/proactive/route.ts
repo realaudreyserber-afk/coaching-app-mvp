@@ -164,6 +164,10 @@ export async function POST(req: NextRequest) {
       });
     } catch (err) {
       console.error('[coach/proactive] tx failed:', err);
+      try {
+        const Sentry = await import('@sentry/nextjs');
+        Sentry.captureException(err, { tags: { route: 'api/coach/proactive' } });
+      } catch { /* Sentry degrade */ }
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'persist_failed' },
         { status: 500 },

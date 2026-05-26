@@ -80,15 +80,34 @@ describe('Firestore rules — client-writable sub-collections', () => {
   it('owner writes checkins_daily + food_logs + coach_messages + daily_tasks', async () => {
     const alice = env.authenticatedContext('alice').firestore();
     await assertSucceeds(alice.doc('users/alice/checkins_daily/2026-05-24').set({ weight: 80 }));
-    await assertSucceeds(alice.doc('users/alice/food_logs/log1').set({ logged_at: '2026-05-24T12:00:00Z' }));
+    // Wave 13C — Shape validation on food_logs: require date + kcal.
+    await assertSucceeds(
+      alice
+        .doc('users/alice/food_logs/log1')
+        .set({ date: '2026-05-24', kcal: 500, logged_at: '2026-05-24T12:00:00Z' }),
+    );
+    // Wave 13C — Shape validation on coach_messages: role MUST be 'user'
+    // on client direct writes (assistant writes go through admin SDK).
     await assertSucceeds(alice.doc('users/alice/coach_messages/m1').set({ role: 'user', content: 'hi' }));
     await assertSucceeds(alice.doc('users/alice/daily_tasks/2026-05-24').set({ completed: true }));
+  });
+
+  it('owner cannot impersonate the assistant nor write malformed food_logs', async () => {
+    const alice = env.authenticatedContext('alice').firestore();
+    // Coach impersonation — must be blocked by the new rule.
+    await assertFails(
+      alice.doc('users/alice/coach_messages/fake').set({ role: 'assistant', content: 'fake coach' }),
+    );
+    // Missing required fields on food_logs.
+    await assertFails(alice.doc('users/alice/food_logs/bad1').set({ logged_at: '...' }));
+    // kcal out of bounds.
+    await assertFails(alice.doc('users/alice/food_logs/bad2').set({ date: '2026-05-24', kcal: 99999 }));
   });
 
   it('non-owner cannot write any client-writable sub-collection', async () => {
     const bob = env.authenticatedContext('bob').firestore();
     await assertFails(bob.doc('users/alice/checkins_daily/2026-05-24').set({ weight: 80 }));
-    await assertFails(bob.doc('users/alice/food_logs/log1').set({ kcal: 500 }));
+    await assertFails(bob.doc('users/alice/food_logs/log1').set({ date: '2026-05-24', kcal: 500 }));
     await assertFails(bob.doc('users/alice/coach_messages/m1').set({ role: 'user', content: 'spy' }));
   });
 });

@@ -37,12 +37,31 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
       match /food_logs/{logId} {
-        allow read, write: if isOwner(uid);
+        allow read: if isOwner(uid);
+        // Wave 13C — Shape validation: require date + kcal on creates, cap
+        // total field count to stop runaway docs. Admin SDK (server-side
+        // ingestion routes) bypasses rules so this only constrains the
+        // client direct-write path.
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasAll(['date', 'kcal'])
+          && request.resource.data.date is string
+          && request.resource.data.kcal is number
+          && request.resource.data.kcal >= 0
+          && request.resource.data.kcal <= 10000
+          && request.resource.data.size() <= 30;
+        allow update, delete: if isOwner(uid);
       }
       match /coach_messages/{msgId} {
         // Client writes user messages, server writes assistant messages
-        // (admin SDK bypasses). Allow both for owner.
-        allow read, write: if isOwner(uid);
+        // (admin SDK bypasses). Wave 13C — block client impersonation:
+        // direct writes must have role='user' (assistants must come from
+        // the streaming /api/ai/coach server path).
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.role == 'user'
+          && request.resource.data.content is string
+          && request.resource.data.content.size() <= 8000;
+        allow update, delete: if isOwner(uid);
       }
       match /daily_tasks/{date} {
         allow read, write: if isOwner(uid);

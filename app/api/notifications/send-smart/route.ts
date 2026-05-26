@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/firebase/auth-middleware';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { adminDb, adminMessaging } from '@/lib/firebase/admin';
 import { generateSmartNotification } from '@/lib/features/smart-notifs/generator';
 import { flags } from '@/lib/features/flags';
@@ -13,6 +14,15 @@ export async function POST(req: NextRequest) {
   }
 
   return withAuth(req, async (authenticatedReq, user) => {
+    // Wave 13C — Cap notif spam. Each call = Vertex generation + FCM
+    // multicast. 10/h is generous and protects against trigger loops.
+    const rl = await checkRateLimit(user.uid, { scope: 'notif_smart', perHour: 10 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate_limited', retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     try {
       const { context } = await req.json().catch(() => ({ context: 'missing_checkin' }));
 

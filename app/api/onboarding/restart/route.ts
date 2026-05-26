@@ -19,9 +19,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import { withAuth } from "@/lib/firebase/auth-middleware";
+import { checkRateLimit } from "@/lib/firebase/rate-limit";
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (_authenticatedReq, user) => {
+    // Wave 13C — Cap restart spam. Each restart writes the user doc + the
+    // user can then loop through onboarding firing /api/ai/generate-plan
+    // again. Limit to 5/h matches the generate-plan ceiling.
+    const rl = await checkRateLimit(user.uid, { scope: "onboarding_restart", perHour: 5 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "rate_limited", retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     try {
       const userRef = adminDb.collection("users").doc(user.uid);
       const snap = await userRef.get();

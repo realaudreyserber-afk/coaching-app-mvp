@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/firebase/auth-middleware';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { adminDb } from '@/lib/firebase/admin';
 import { getStripe, STRIPE_PRICE_IDS } from '@/lib/stripe/server';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (_authReq, user) => {
+    // Wave 13C — Cap Stripe checkout session creation (creates Stripe
+    // resources + Firestore writes). 10/h is enough for any legitimate
+    // checkout flow but stops abuse.
+    const rl = await checkRateLimit(user.uid, { scope: 'stripe_checkout', perHour: 10 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate_limited', retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     try {
       const { interval } = await req.json().catch(() => ({ interval: 'monthly' }));
       const priceId =

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/firebase/auth-middleware';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { adminDb } from '@/lib/firebase/admin';
 import { refreshGoogleFitAccessToken } from '@/lib/features/wearables/oauth';
 import { fetchGoogleFitMetrics } from '@/lib/features/wearables/sync-service';
@@ -15,6 +16,14 @@ export async function POST(req: NextRequest) {
 
   return withAuth(req, async (authenticatedReq, user) => {
     const uid = user.uid;
+    // Wave 13C — Cap Google Fit calls (OAuth refresh + 3-4 API calls each).
+    const rl = await checkRateLimit(uid, { scope: 'wearables_sync', perHour: 12 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate_limited', retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {

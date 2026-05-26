@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/firebase/auth-middleware';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText } from '@/lib/vertex/client';
 import { flags } from '@/lib/features/flags';
 import { VOICE_LOG_SYSTEM_PROMPT } from '@/lib/features/voice-log/prompts';
@@ -15,6 +16,15 @@ export async function POST(req: NextRequest) {
   }
 
   return withAuth(req, async (authenticatedReq, user) => {
+    // Wave 13C — Rate-limit Vertex multimodal calls. A voice log triggers
+    // a Gemini Flash call (€) — at 60/min an attacker could rack up bills.
+    const rl = await checkRateLimit(user.uid, { scope: 'nutrition_voice', perMinute: 6, perHour: 30 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate_limited', retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     try {
       const formData = await req.formData();
       const audioFile = formData.get('audio') as File | null;

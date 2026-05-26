@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/firebase/auth-middleware';
+import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText } from '@/lib/vertex/client';
 import { flags } from '@/lib/features/flags';
 import { RECIPE_OCR_SYSTEM_PROMPT } from '@/lib/features/recipe-ocr/prompts';
@@ -15,6 +16,14 @@ export async function POST(req: NextRequest) {
   }
 
   return withAuth(req, async (authenticatedReq, user) => {
+    // Wave 13C — Cap Vertex Vision calls (Gemini Flash + image).
+    const rl = await checkRateLimit(user.uid, { scope: 'nutrition_recipe_ocr', perMinute: 4, perHour: 20 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate_limited', retry_after_sec: rl.retryAfterSec },
+        { status: 429 },
+      );
+    }
     try {
       const { imageBase64, mimeType } = await req.json();
 

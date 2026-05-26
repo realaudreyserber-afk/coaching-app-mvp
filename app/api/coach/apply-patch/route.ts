@@ -190,6 +190,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result.body, { status: result.status });
     } catch (err) {
       console.error('[coach/apply-patch] tx failed:', err);
+      try {
+        const Sentry = await import('@sentry/nextjs');
+        Sentry.captureException(err, { tags: { route: 'api/coach/apply-patch' } });
+      } catch { /* Sentry degrade */ }
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'internal_error' },
         { status: 500 },
