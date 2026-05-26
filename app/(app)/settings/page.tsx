@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
-import { UserSettings, UserProfile } from "@/types/user";
+import { UserSettings, UserProfile, TrainingEnvironment } from "@/types/user";
 import { User, Settings as SettingsIcon, ShieldAlert, Download, LogOut, Save, Check, ShieldCheck } from "lucide-react";
 import { flags } from "@/lib/features/flags";
 import { HudCard, PanelHeader, Tag } from "@/components/nodream";
@@ -114,6 +114,7 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [height, setHeight] = useState("");
   const [activityLevel, setActivityLevel] = useState<UserProfile["activity_level"]>("sedentary");
+  const [trainingEnvironment, setTrainingEnvironment] = useState<TrainingEnvironment>("gym");
 
   // App preferences settings
   const [notifications, setNotifications] = useState(true);
@@ -160,6 +161,7 @@ export default function SettingsPage() {
             setName(uData.profile.name || "");
             setHeight(uData.profile.height ? String(uData.profile.height) : "");
             setActivityLevel(uData.profile.activity_level || "sedentary");
+            setTrainingEnvironment(uData.profile.training_environment || "gym");
           }
           if (uData.settings) {
             setNotifications(uData.settings.notifications !== false);
@@ -224,6 +226,7 @@ export default function SettingsPage() {
           name: name.trim(),
           height: heightNum,
           activity_level: activityLevel,
+          training_environment: trainingEnvironment,
         };
         const updatedSettings: UserSettings = {
           notifications,
@@ -487,6 +490,73 @@ export default function SettingsPage() {
                   <option value="moderately_active">Actif</option>
                   <option value="very_active">Très actif</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Training environment — drives exercise filtering for coach + plan */}
+            <div>
+              <label style={labelStyle}>Lieu d&apos;entraînement</label>
+              <p
+                className="mono"
+                style={{
+                  fontSize: 9,
+                  color: "var(--fg-5)",
+                  letterSpacing: "0.05em",
+                  marginTop: -2,
+                  marginBottom: 8,
+                }}
+              >
+                Détermine quels exercices ORACLE.IA peut prescrire
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { val: "gym", label: "Salle complète", desc: "Barres, machines, poulies" },
+                  { val: "home_gym", label: "Home gym", desc: "Barre + haltères + rack" },
+                  { val: "home_bodyweight", label: "Poids du corps", desc: "PDC + barre de traction" },
+                  { val: "mixed", label: "Mixte", desc: "Alterne selon disponibilité" },
+                ] as Array<{ val: TrainingEnvironment; label: string; desc: string }>).map((opt) => {
+                  const active = trainingEnvironment === opt.val;
+                  return (
+                    <button
+                      key={opt.val}
+                      type="button"
+                      onClick={() => setTrainingEnvironment(opt.val)}
+                      className="mono cursor-pointer text-left transition-all"
+                      style={{
+                        padding: "10px 12px",
+                        background: active ? "var(--gold-tint-15)" : "var(--glass-bg-2)",
+                        color: active ? "var(--gold-400)" : "var(--fg-3)",
+                        border: `1px solid ${active ? "var(--gold-tint-35)" : "var(--glass-border)"}`,
+                        boxShadow: active ? "var(--glow-gold-soft)" : "none",
+                        clipPath:
+                          "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                      }}
+                      aria-pressed={active}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: "0.1em",
+                          textTransform: "uppercase",
+                          display: "block",
+                        }}
+                      >
+                        {opt.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: active ? "var(--fg-3)" : "var(--fg-5)",
+                          marginTop: 2,
+                          display: "block",
+                        }}
+                      >
+                        {opt.desc}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

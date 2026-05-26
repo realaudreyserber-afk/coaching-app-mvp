@@ -1,3 +1,9 @@
+export type TrainingEnvironment =
+  | 'gym' // salle complète : barres, machines, poulies, halteres, racks
+  | 'home_gym' // home gym équipé : barre + rack + halteres + banc
+  | 'home_bodyweight' // poids du corps uniquement (+/- barre traction)
+  | 'mixed'; // alterne entre les deux
+
 export interface UserProfile {
   name: string;
   sex: 'male' | 'female' | 'other';
@@ -6,6 +12,19 @@ export interface UserProfile {
   timezone: string;
   profession: string;
   activity_level: 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active';
+  /**
+   * Where the user trains. Drives exercise filtering in the coach + plan generator.
+   * If 'home_bodyweight', only exercises with equipment ⊆ {aucun, barre_traction,
+   * barre_traction_neutre, barres_paralleles, anneaux, elastique, tapis, mur, box,
+   * banc, ceinture_lest} are prescribed.
+   */
+  training_environment?: TrainingEnvironment;
+  /**
+   * Optional fine-grained list of available equipment slugs (used when
+   * training_environment is 'home_gym' or 'mixed' for custom filtering).
+   * Slugs match the `equipment` field of lib/features/exercises/database.json.
+   */
+  available_equipment?: string[];
   created_at: string; // ISO string
 }
 

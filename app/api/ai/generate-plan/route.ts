@@ -4,6 +4,7 @@ import { withAuth } from '@/lib/firebase/auth-middleware';
 import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText, parseLLMJson } from '@/lib/vertex/client';
 import { buildPlanGeneratorSystemPrompt } from '@/lib/vertex/prompts/plan-generator';
+import { buildPlanRagFragment } from '@/lib/features/rag-coach/context';
 import { PlanSchema } from '@/lib/vertex/schemas';
 import { PLAN_RESPONSE_SCHEMA } from '@/lib/vertex/response-schemas';
 import { checkUserBaseline } from '@/lib/vertex/safety';
@@ -76,8 +77,8 @@ export async function POST(req: NextRequest) {
       }
 
       // Customize system instructions based on profile paths and fasting.
-      // The exercise library + training methods knowledge is injected
-      // level-aware: beginners don't see "avance" exercises in the menu.
+      // Wave 4B: the exercise library is now injected via RAG retrieve
+      // (pattern + level + equipment filtered) instead of a flat dump.
       const trainingHistory = (userContext.profile as Record<string, unknown> | undefined)
         ?.training_history;
       const userLevel: "debutant" | "intermediaire" | "avance" =
@@ -86,7 +87,13 @@ export async function POST(req: NextRequest) {
           : trainingHistory === "advanced"
             ? "avance"
             : "intermediaire";
-      let systemInstruction = buildPlanGeneratorSystemPrompt(userLevel);
+
+      // RAG retrieve : ~40-50 exos couvrant tous les patterns essentiels,
+      // filtrés par niveau + environnement (gym / home_gym / home_bodyweight).
+      const ragPlanFragment = await buildPlanRagFragment(
+        userContext.profile as { training_history?: string; training_environment?: any; available_equipment?: string[] } | undefined,
+      );
+      let systemInstruction = buildPlanGeneratorSystemPrompt(userLevel) + ragPlanFragment;
       if (flags.profilePaths()) {
         const pathInstructions = PROFILE_PATH_PLAN_INSTRUCTIONS[profilePath];
         if (pathInstructions) {

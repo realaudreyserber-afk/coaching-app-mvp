@@ -41,6 +41,10 @@ const ALLOWED_FIELDS: Record<string, FieldSpec> = {
     type: "string",
     enum: ["beginner", "intermediate", "advanced"],
   },
+  "profile.training_environment": {
+    type: "string",
+    enum: ["gym", "home_gym", "home_bodyweight", "mixed"],
+  },
   "profile.waist_cm": { type: "number", min: 40, max: 200 },
   "profile.neck_cm": { type: "number", min: 25, max: 70 },
   "profile.hips_cm": { type: "number", min: 50, max: 200 },

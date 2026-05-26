@@ -11,6 +11,7 @@ import { buildRAGPrompt } from '@/lib/features/rag-sourcing/prompts';
 import { PROFILE_PATH_COACH_INSTRUCTIONS } from '@/lib/features/profile-paths/prompts';
 import { ProfilePath } from '@/lib/features/profile-paths/schema';
 import { buildEnrichedSystemPrompt, buildUserContext } from '@/lib/vertex/context-builder';
+import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (authenticatedReq, user) => {
@@ -190,7 +191,16 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
         }
       }
 
-      const fullSystemInstruction = `${enriched}${profilePathInstruction}`;
+      // 6.5 RAG coach : injecte top-K exos + 1-2 méthodes pertinents pour la
+      // dernière question utilisateur, filtrés par niveau + équipement.
+      // Cf. lib/features/rag-coach/context.ts. Empty string si query trop courte
+      // ou si les indexes ne sont pas chargés (build:rag pas encore lancé).
+      const ragCoachFragment = await buildCoachRagFragment(
+        lastMessageText,
+        userData.profile as { training_history?: string; training_environment?: any; available_equipment?: string[] } | undefined,
+      );
+
+      const fullSystemInstruction = `${enriched}${profilePathInstruction}${ragCoachFragment}`;
 
       // 4. Format chat history for Gemini API
       // Translate messages to Gemini API format (role: 'user' or 'model')

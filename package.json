@@ -12,7 +12,8 @@
     "test:rules": "vitest run --config vitest.rules.config.ts",
     "test:e2e": "playwright test",
     "verify:env": "node scripts/verify-env.mjs",
-    "lint:snake-case": "node scripts/check-snake-case.mjs"
+    "lint:snake-case": "node scripts/check-snake-case.mjs",
+    "build:rag": "node scripts/build-rag-embeddings.mjs"
   },
   "dependencies": {
     "@google-cloud/text-to-speech": "^6.4.1",
