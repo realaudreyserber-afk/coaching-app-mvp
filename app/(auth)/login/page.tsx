@@ -108,7 +108,10 @@ export default function LoginPage() {
     }
   };
 
-  if (loading || (user && !submitting)) {
+  // Show the loader only when a REAL (non-anonymous) user is in transit to
+  // /dashboard or /onboarding. Anonymous users on /login are here on purpose
+  // to upgrade their account — they need to see the form, not a loader.
+  if (loading || (user && !user.isAnonymous && !submitting)) {
     return (
       <Loader size="fullscreen" message="Préparation de ton espace de coaching..." />
     );
