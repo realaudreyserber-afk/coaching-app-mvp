@@ -311,19 +311,44 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!user || deleteInput !== "SUPPRIMER") return;
+    if (!user || deleteInput !== "EFFACER") return;
     setDeleting(true);
     setErrorMsg("");
 
     try {
+      // Wave 11C — Reauth before destructive action (RGPD + matches what
+      // /settings/privacy does). Server rejects with 403 if auth_time is
+      // older than 5 min. Detect provider so we don't hardcode Google.
+      const { reauthenticateWithPopup, GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential } = await import("firebase/auth");
+      const providerId = user.providerData[0]?.providerId;
+      if (providerId === "google.com") {
+        await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      } else if (providerId === "password") {
+        // Email/password reauth needs the current password — prompt the user.
+        const pwd = window.prompt("Confirme ton mot de passe pour supprimer ton compte :");
+        if (!pwd) {
+          setDeleting(false);
+          return;
+        }
+        const cred = EmailAuthProvider.credential(user.email ?? "", pwd);
+        await reauthenticateWithCredential(user, cred);
+      }
+      // Other providers (apple, facebook…) fall through — the server will
+      // still enforce the 5-min freshness check.
+
       const token = await getFreshToken();
       if (!token) throw new Error("Token d'authentification invalide.");
 
+      // Use POST (the modern endpoint with confirmText + reauth check) —
+      // same contract as /settings/privacy. The legacy DELETE method is
+      // kept server-side for back-compat but no longer called from the UI.
       const response = await fetch("/api/user/delete", {
-        method: "DELETE",
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ confirmText: "EFFACER" }),
       });
 
       const data = await response.json();
@@ -1046,7 +1071,7 @@ export default function SettingsPage() {
                   type="text"
                   value={deleteInput}
                   onChange={(e) => setDeleteInput(e.target.value)}
-                  placeholder="SUPPRIMER"
+                  placeholder="EFFACER"
                   className="mono"
                   style={{
                     ...inputBase,
@@ -1058,7 +1083,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
-                  disabled={deleteInput !== "SUPPRIMER" || deleting}
+                  disabled={deleteInput !== "EFFACER" || deleting}
                   className="mono cursor-pointer"
                   style={{
                     width: '100%',
@@ -1067,8 +1092,8 @@ export default function SettingsPage() {
                     letterSpacing: '0.25em',
                     textTransform: 'uppercase',
                     fontWeight: 700,
-                    background: deleteInput === "SUPPRIMER" ? 'var(--alert-500)' : 'var(--alert-tint-15)',
-                    color: deleteInput === "SUPPRIMER" ? 'var(--ink-900)' : 'var(--fg-5)',
+                    background: deleteInput === "EFFACER" ? 'var(--alert-500)' : 'var(--alert-tint-15)',
+                    color: deleteInput === "EFFACER" ? 'var(--ink-900)' : 'var(--fg-5)',
                     border: '1px solid var(--alert-500)',
                     opacity: deleting ? 0.5 : 1,
                     clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
@@ -1096,10 +1121,14 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={async () => {
+            // Wave 11C — Replace native alert() with the page's setErrorMsg
+            // tactical banner so the user sees a styled message instead of
+            // a browser modal.
             try {
+              setErrorMsg("");
               const token = await getFreshToken();
               if (!token) {
-                alert("Session expirée — reconnecte-toi.");
+                setErrorMsg("Session expirée — reconnecte-toi.");
                 return;
               }
               const res = await fetch("/api/onboarding/restart", {
@@ -1108,14 +1137,15 @@ export default function SettingsPage() {
               });
               if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
-                alert(`Erreur : ${body?.error || res.statusText}`);
+                setErrorMsg(`Erreur : ${body?.error || res.statusText}`);
                 return;
               }
-              const { resumeStep } = await res.json();
+              const data = await res.json();
+              const resumeStep = typeof data?.resumeStep === "number" ? data.resumeStep : 1;
               router.push(`/onboarding/${resumeStep}`);
             } catch (err) {
               console.error("[settings] restart onboarding failed:", err);
-              alert("Erreur réseau.");
+              setErrorMsg("Erreur réseau — vérifie ta connexion.");
             }
           }}
           className="mono cursor-pointer"

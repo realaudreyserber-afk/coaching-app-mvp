@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/firebase/hooks';
 import { auth } from '@/lib/firebase/client';
-import { reauthenticateWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { reauthenticateWithPopup, GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `linsociable-export-${user.uid.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `nodream-export-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -55,9 +55,23 @@ export default function PrivacyPage() {
     setDeleting(true);
     setError(null);
     try {
-      // Reauth required by Cloud Function dataExportPurge (< 5min)
-      const provider = new GoogleAuthProvider();
-      await reauthenticateWithPopup(user, provider);
+      // Reauth required by Cloud Function dataExportPurge (< 5min).
+      // Wave 11C — detect provider so we don't hardcode Google. Users who
+      // signed up via email/password get a password prompt; others fall
+      // through and the server's 5-min freshness check handles them.
+      const providerId = user.providerData[0]?.providerId;
+      if (providerId === 'google.com') {
+        await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      } else if (providerId === 'password') {
+        const pwd = window.prompt('Confirme ton mot de passe pour supprimer ton compte :');
+        if (!pwd) {
+          setDeleting(false);
+          return;
+        }
+        const cred = EmailAuthProvider.credential(user.email ?? '', pwd);
+        await reauthenticateWithCredential(user, cred);
+      }
+      // Anonymous + other providers: skip client-side reauth, rely on server.
 
       const token = await getFreshToken();
       const res = await fetch('/api/user/delete', {
