@@ -1,4 +1,4 @@
-/* eslint-disable react/no-unescaped-entities */
+﻿/* eslint-disable react/no-unescaped-entities */
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -191,7 +191,7 @@ export default function BarcodePage() {
       <div className="flex-1 flex flex-col justify-center items-center py-10 px-6 bg-background text-center space-y-6">
         <Card className="max-w-md w-full border-border">
           <CardHeader className="space-y-2">
-            <span className="text-4xl">🚧</span>
+            <span className="mono" style={{fontSize:10,letterSpacing:'0.3em',color:'var(--accent-tech)',textTransform:'uppercase',display:'inline-block',padding:'4px 10px',border:'1px solid var(--accent-tech)',fontWeight:700}}>[BETA]</span>
             <CardTitle className="text-2xl font-serif">Module en cours de déploiement</CardTitle>
             <CardDescription>
               Le scanner de code-barres n'est pas encore disponible dans ta zone.

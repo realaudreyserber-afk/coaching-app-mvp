@@ -239,13 +239,26 @@ export default function DashboardPage() {
   }
 
   // Calculate progress stats
-  const startWeight = baseline?.weight ?? profile?.weight ?? 0;
-  const currentWeight =
+  // Wave 12 — cast everything via Number() because Firestore writes from a
+  // raw <input type="number"> may end up as strings depending on the writer.
+  // Without this, `currentWeight.toFixed(1)` below would throw and crash the
+  // dashboard.
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+  const startWeight = toNum(baseline?.weight ?? profile?.weight);
+  const currentWeight = toNum(
     todayCheckin?.weight ??
-    chartData[chartData.length - 1]?.weight ??
-    profile?.weight ??
-    startWeight;
-  const targetWeight = goals?.target_weight || 0;
+      chartData[chartData.length - 1]?.weight ??
+      profile?.weight ??
+      startWeight,
+  );
+  const targetWeight = toNum(goals?.target_weight);
   const deltaPoids = currentWeight - startWeight;
   const targetDelta = targetWeight - startWeight;
   

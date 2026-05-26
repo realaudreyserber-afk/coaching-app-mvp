@@ -194,15 +194,23 @@ export default function CoachPage() {
     })();
   }, [user, loading, getFreshToken]);
 
-  // Load last 10 messages from user's chat history in Firestore if available
+  // Load last 30 messages from user's chat history in Firestore if available
   useEffect(() => {
     if (loading || !user) return;
+
+    // Wave 12 — `cancelled` guard prevents the loaded history from
+    // overwriting messages the user just sent between mount and fetch
+    // completion. If a message went out while we were fetching, the
+    // setMessages from this effect would erase it. Same flag covers
+    // unmount cleanup.
+    let cancelled = false;
 
     const loadChatHistory = async () => {
       try {
         const chatRef = collection(db, 'users', user.uid, 'coach_messages');
         const q = query(chatRef, orderBy('timestamp', 'asc'), limit(30));
         const snap = await getDocs(q);
+        if (cancelled) return;
 
         if (!snap.empty) {
           const loadedHistory: ChatMessage[] = [];
@@ -223,14 +231,24 @@ export default function CoachPage() {
               timestamp: data.timestamp
             });
           });
-          setMessages(loadedHistory);
+          // Merge instead of overwrite: keep any local message whose
+          // timestamp is more recent than the last loaded one (user typed
+          // before history arrived). Defensive on undefined timestamps —
+          // legacy docs may lack the field.
+          setMessages((prev) => {
+            if (loadedHistory.length === 0) return prev;
+            const lastLoadedTs = loadedHistory[loadedHistory.length - 1].timestamp ?? '';
+            const newer = prev.filter((m) => (m.timestamp ?? '') > lastLoadedTs);
+            return [...loadedHistory, ...newer];
+          });
         }
       } catch (err) {
-        console.error('Error loading chat history:', err);
+        if (!cancelled) console.error('Error loading chat history:', err);
       }
     };
 
     loadChatHistory();
+    return () => { cancelled = true; };
   }, [user, loading]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
