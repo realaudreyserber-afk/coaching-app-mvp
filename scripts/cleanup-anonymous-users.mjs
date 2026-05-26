@@ -31,6 +31,9 @@
  *   # 4. Delete EVERYTHING anonymous (no-data + incomplete)
  *   node scripts/cleanup-anonymous-users.mjs --include-incomplete --confirm
  *
+ *   # 5. Always keep the N most recent anonymous users (paranoid safety)
+ *   node scripts/cleanup-anonymous-users.mjs --keep-most-recent=1 --confirm
+ *
  * Requires:
  *   - GOOGLE_APPLICATION_CREDENTIALS env var pointing to a service account
  *     JSON, OR gcloud auth application-default login active.
@@ -54,12 +57,26 @@ if (!PROJECT) {
 const CONFIRM = process.argv.includes("--confirm");
 const INCLUDE_INCOMPLETE = process.argv.includes("--include-incomplete");
 
+// --keep-most-recent=N : never delete the N most recently created anonymous
+// users, even if they match other deletion criteria. Defensive guard for
+// "I just signed in anonymously and I want to keep that session".
+function parseKeepMostRecent() {
+  const arg = process.argv.find((a) => a.startsWith("--keep-most-recent"));
+  if (!arg) return 0;
+  const eq = arg.indexOf("=");
+  if (eq === -1) return 1; // bare flag means "keep 1"
+  const n = parseInt(arg.slice(eq + 1), 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+const KEEP_MOST_RECENT = parseKeepMostRecent();
+
 console.log("🧹 Anonymous users cleanup");
 console.log(`   project           : ${PROJECT}`);
 console.log(`   mode              : ${CONFIRM ? "DELETE (confirmed)" : "DRY-RUN"}`);
 console.log(
   `   selection         : ${INCLUDE_INCOMPLETE ? "anonymous + (no-profile OR profile-but-no-onboarding_completed)" : "anonymous + no-profile only"}`,
 );
+console.log(`   keep-most-recent  : ${KEEP_MOST_RECENT}`);
 console.log("");
 
 admin.initializeApp({ projectId: PROJECT });
@@ -181,11 +198,28 @@ async function main() {
   console.log(`  - no_firestore_doc   : ${buckets.no_firestore_doc.length}  (Auth-only orphan — default delete)`);
   console.log("");
 
-  const toDelete = [
+  let toDelete = [
     ...buckets.candidate_empty,
     ...buckets.no_firestore_doc,
     ...(INCLUDE_INCOMPLETE ? buckets.candidate_partial : []),
   ];
+
+  if (KEEP_MOST_RECENT > 0 && toDelete.length > 0) {
+    // Sort the candidate pool by creationTime desc, lift the N most recent
+    // out of the deletion list. Auth metadata.creationTime is an ISO string,
+    // so lex-sort works.
+    const sortedByRecent = [...toDelete].sort((a, b) =>
+      String(b.creationTime).localeCompare(String(a.creationTime)),
+    );
+    const kept = sortedByRecent.slice(0, KEEP_MOST_RECENT);
+    const keptUids = new Set(kept.map((u) => u.uid));
+    toDelete = toDelete.filter((u) => !keptUids.has(u.uid));
+    console.log(`🛡  Keeping ${kept.length} most recent anonymous user(s) (--keep-most-recent):`);
+    for (const k of kept) {
+      console.log(`     ${k.uid}  (created ${k.creationTime})`);
+    }
+    console.log("");
+  }
 
   if (toDelete.length === 0) {
     console.log("✅ Nothing to delete with current flags.");
