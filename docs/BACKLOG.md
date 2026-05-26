@@ -52,7 +52,7 @@
 
 ### Observabilité / CI
 
-- [ ] **[P1]** Sentry sur routes coach — `/api/ai/coach`, `/api/ai/coach/*`, `/api/coach/apply-patch`, `/api/coach/proactive`. Actuellement les 500 Vertex partent dans logs Vercel uniquement. (2026-05-26)
+- [x] **[P1]** Sentry sur routes coach — fait Wave 13C pour /api/ai/coach, /api/coach/apply-patch, /api/coach/proactive. **Reste à étendre** aux autres routes Vertex : analyze-photo, weekly-review, daily-insight, bloodwork/analyze, scanner/analyze, nutrition/photo-recognize, coach-session-* (commit `0e46418`).
 - [ ] **[P2]** Workflow CI Playwright — `.github/workflows/e2e.yml` pour `e2e/coach-flow.spec.ts` + `e2e/onboarding.spec.ts` sur chaque PR (avec webServer Next + `npx playwright test`). (2026-05-26)
 - [ ] **[P2]** Dashboard badge dot E2E — wire Firestore emulator pour valider vraiment le badge unread coach. Test actuellement volontairement faible, cf `e2e/coach-flow.spec.ts:78-80`. (2026-05-26)
 
@@ -61,9 +61,9 @@
 - [ ] **[P1]** Script de migration `anonymous → Google` — quand un user se logge en Google après avoir fait l'onboarding en mode anonymous, son plan/profile/baseline restent orphelins sous l'UID anonymous. Solution : implémenter `linkWithCredential` au moment du Google login, OU script de migration post-hoc qui copie users/{anonymous_uid}/* vers users/{google_uid}/*. (2026-05-27)
 - [ ] **[P2]** Migration `wearable_sync` legacy camelCase → snake_case — script `scripts/migrate-wearable-sync.mjs`. Pas critique tant que peu de users actifs. (2026-05-26)
 - [ ] **[P2]** PWA icons NoDream — régénérer `/public/icons/icon-192.png`, `icon-512.png`, `maskable-*.png` avec le brand NoDream actuel. Les icons actuels sont peut-être legacy. (2026-05-26)
-- [ ] **[P2]** Dashboard insight cache — `aiInsight` POST/api/ai/daily-insight fire à chaque mount du dashboard si checkin existe. Stocker en Firestore `checkin.insight` (TTL 6h) pour éviter les appels LLM redondants. Déferré de Wave 11D. (2026-05-27)
-- [ ] **[P2]** Coach `messagesEndRef.scrollIntoView({behavior:'smooth'})` à chaque chunk = saccadé sur mobile pendant streaming. Throttle ou switch à `behavior:'auto'` pendant streaming, `smooth` à la fin. (2026-05-27)
-- [ ] **[P2]** `app/(app)/coach/page.tsx` h-[calc(100vh-4rem)] — sur iOS Safari avec adresse bar dynamique, `100vh` casse layout. Préférer `100dvh`. (2026-05-27)
+- [x] **[P2]** Dashboard insight cache — fait Wave 13A (commit `da2b9cd`).
+- [x] **[P2]** Coach scrollIntoView throttle — fait Wave 13B (commit `dc93079`).
+- [x] **[P2]** Coach 100vh → 100dvh iOS Safari — fait Wave 13B (commit `dc93079`).
 
 ### UX onboarding
 
@@ -115,6 +115,20 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 
 ---
 
+## 🔍 Audit Wave 13C — items à faire (reste de l'audit)
+
+Items identifiés par l'audit du 2026-05-27 mais pas encore traités (P1/P2 plus bas que les 7 routes fixées) :
+
+- [ ] **[P1]** Étendre Sentry captureException aux autres routes Vertex : `app/api/ai/analyze-photo`, `weekly-review`, `daily-insight`, `bloodwork/analyze`, `scanner/analyze`, `nutrition/photo-recognize`, `coach-session-cue`, `coach-session-debrief`, `coach-session-debrief`, `coach-meal-feedback`, `coach-audio`, `coach-progress-analysis`.
+- [ ] **[P2]** Rate-limit sur les routes secondaires : `app/api/profile/update-fields`, `app/api/user/tdee-recalc`, `app/api/notifications/register`, `app/api/nutrition/barcode`, `app/api/micro-tasks/today`, `app/api/user/export`, `app/api/user/delete`.
+- [ ] **[P2]** Firestore rules — étendre validation shape sur : `medications` (cap size + required fields), `micronutrients_daily` (numeric ranges), `experiments` (whitelist exp_id), `referrals` (cap size).
+- [ ] **[P2]** Magic numbers — rewire les `setTimeout(..., 2000)` dispersés dans 4 pages settings vers `TOAST_DURATION_MS` (constante créée Wave 13C). Aussi les `setTimeout(..., 800)` dans `components/onboarding/steps.tsx` (fake delays).
+- [ ] **[P2]** Recharts code-splitting — `dynamic(() => import('@/components/dashboard/weight-chart'))` pour réduire le bundle initial (~96KB gz). Le composant est déjà mount-gated mais pas lazy-loaded.
+- [ ] **[P3]** Accessibility settings/notifications + settings/privacy : audit des `htmlFor`/`id` (10 inputs, 12 htmlFor — il manque 2 associations).
+- [ ] **[P3]** Silent catch logging — `.catch(() => {})` dans `app/api/stripe/checkout/route.ts:55` (rollback creating flag) + `lib/features/rag-sourcing/client.ts:38-40` (PubMed/Corpus/Internal cascade). Au moins Sentry breadcrumb.
+
+---
+
 ## ✅ Historique récent
 
 ### Session 2026-05-27
@@ -129,6 +143,9 @@ _Liste des défauts connus, à ne PAS corriger sans réflexion (souvent il y a u
 - [x] **Wave 11D** — Coach streaming AbortController + 90s watchdog. Cleanup au démontage pour éviter "setState on unmounted component" warnings + memory leaks. Détection AbortError pour ne pas perturber l'UI sur navigation. Dashboard insight cache déferré en P2 (commit `b7c11b8`). (✓ 2026-05-27)
 - [x] **Wave 11E** — Polish UX : limit(50) sur /plan/history, limit(180)+limit(104) sur /progress daily/weekly, photo onError fallback "Photo expirée" (Storage signed URLs expiration), runTransaction sur génération code référral (race 2 tabs), fix markdown `**` non rendu → `<strong>` (commit `77904bf`). (✓ 2026-05-27)
 - [x] **Wave 12** — P0 sécurité OAuth Google Fit (cookie session vs `?uid=` spoofable), Bearer header manquant sur /api/user/sync-wearables. Dashboard `currentWeight.toFixed` crash protection via toNum(). Coach loadChatHistory dedup vs send race + cancelled cleanup. 9 pages : emoji 🚧 retiré au profit d'un tag `[BETA]` NoDream tech accent (cohérence avec feedback_no_emojis.md) (commit `b29e288`). (✓ 2026-05-27)
+- [x] **Wave 13A** — P1 dashboard live coach badge (onSnapshot vs one-shot getDoc) + daily-insight cache 6h sur checkin.insight (évite POST Vertex à chaque refresh). Subscription Stripe URL allowlist (`checkout.stripe.com` / `billing.stripe.com`) avant `window.location.href` + normalize Firestore Timestamp/string/number pour period_end (évite "Invalid Date") (commit `da2b9cd`). (✓ 2026-05-27)
+- [x] **Wave 13B** — P2 micronutrients 7 queries N+1 → 1 query range (`date >= start AND <= end`) + util local date Europe/Paris. Coach scrollIntoView throttle 6 fps + behavior:'auto' pendant streaming + 100vh → 100dvh iOS Safari. Workout summary Web Share fallback clipboard + toast gold "X copié" + debriefRequestedFor reset on session.id change (commit `dc93079`). (✓ 2026-05-27)
+- [x] **Wave 13C** — Audit ouvert : rate-limit sur 7 routes Vertex/Stripe/FCM coûteuses (voice-recognize, recipe-ocr, send-smart, sync-wearables, stripe checkout+portal, onboarding restart). Sentry captureException sur 3 routes coach (Wave 11D bonus). Firestore rules shape validation : food_logs requires {date, kcal 0-10000} + ≤30 fields, coach_messages role MUST be 'user' côté client (anti-impersonation assistant). WeightChart memoize yMin/yMax + isAnimationActive=false (perf low-end). Lib/constants/ui.ts source de vérité pour les magic numbers UI. Tests rules étendus pour couvrir les 2 nouvelles contraintes (commit `0e46418`). (✓ 2026-05-27)
 
 ### Session 2026-05-26
 
