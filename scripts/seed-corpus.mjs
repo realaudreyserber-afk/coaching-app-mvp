@@ -396,6 +396,126 @@ const protocols = [
 ];
 
 // ============================================================
+// NUTRITION GUIDES — Hôpital d'Ottawa P1208 (5 sections prioritaires)
+// Doc complet : docs/corpus/corpus-nutrition-ottawa.md
+// Sections 12-14 manquantes dans le doc source (ingestion partielle).
+// ============================================================
+
+const nutritionGuides = [
+  {
+    id: "ottawa-principes-fondamentaux",
+    source: "ottawa-hospital-p1208",
+    source_title: "Plan d'alimentation pour la gestion du poids — Hôpital d'Ottawa",
+    section_number: 1,
+    section_title: "Principes fondamentaux de la gestion du poids",
+    themes: ["gestion_poids", "principes", "long_terme", "objectifs_realistes"],
+    summary:
+      "L'obésité demande des solutions long-terme (comme l'hypertension/diabète). 5 à 10 % de perte suffit déjà pour des bénéfices santé majeurs. Vise les comportements, pas le chiffre.",
+    key_points: [
+      "L'obésité exige des solutions long-terme — pas de miracle court terme",
+      "Une perte de 5-10 % du poids actuel apporte des bénéfices santé majeurs",
+      "Le succès se définit aussi par : qualité de vie, estime de soi, santé globale, maintien",
+      "Fixe des objectifs réalistes — abandonner le 'poids d'adolescent'",
+    ],
+    coach_usage:
+      "À citer en début de coaching pour cadrer les attentes. Quand l'utilisateur vise une perte rapide ou un poids irréaliste, ramener au '5-10 % suffit'.",
+    target_audience: "Grand public en gestion de poids, ne s'applique PAS aux sportifs en sèche compétitive.",
+  },
+  {
+    id: "ottawa-auto-evaluation-habitudes",
+    source: "ottawa-hospital-p1208",
+    source_title: "Plan d'alimentation pour la gestion du poids — Hôpital d'Ottawa",
+    section_number: 3,
+    section_title: "Auto-évaluation des habitudes alimentaires",
+    themes: ["evaluation", "questionnaire", "habitudes", "diagnostic_initial"],
+    summary:
+      "Questionnaire 8 items (Oui/Non/Parfois) pour évaluer les habitudes de l'utilisateur. Chaque 'Non' ou 'Parfois' = opportunité d'objectif SMART.",
+    key_points: [
+      "Mange-t-il dans l'1h après le réveil ?",
+      "Repas espacés de 4-5 h sans saut ?",
+      "Repas équilibrés (Protéines + Fruits/Légumes + Céréales) ?",
+      "Protéines à CHAQUE repas ?",
+      "Quantité suffisante de protéines par repas ?",
+      "Limite les aliments riches en sucre/gras ?",
+      "Au moins 2 L de liquides sans calories par jour ?",
+      "Arrête de manger dès la satiété ?",
+    ],
+    coach_usage:
+      "Utilise ce questionnaire au démarrage de l'accompagnement coach. Pose les 8 questions, identifie les 2-3 leviers prioritaires, propose un objectif SMART par levier.",
+    target_audience: "Tous, en début d'accompagnement.",
+  },
+  {
+    id: "ottawa-modele-assiette-equilibree",
+    source: "ottawa-hospital-p1208",
+    source_title: "Plan d'alimentation pour la gestion du poids — Hôpital d'Ottawa",
+    section_number: 5,
+    section_title: "Plan d'alimentation équilibrée — modèle d'assiette",
+    themes: ["assiette", "equilibre", "macros", "regle_visuelle"],
+    summary:
+      "Modèle simple : ½ assiette légumes/fruits, ¼ protéines maigres, ¼ céréales entières/féculents, + 1 portion de bon gras, + eau.",
+    key_points: [
+      "½ assiette = Légumes / fruits",
+      "¼ assiette = Protéines maigres",
+      "¼ assiette = Céréales entières / féculents",
+      "+ 1 portion de bon gras (huile olive, avocat, noix)",
+      "+ Eau / boisson sans calories",
+      "Manger lentement (15-20 min par repas), assiettes plus petites, arrêter à satiété",
+      "2 L de liquides sans calories par jour",
+    ],
+    coach_usage:
+      "Règle visuelle facile à transmettre à l'utilisateur. Surtout efficace pour ceux qui n'aiment pas peser leurs aliments ou compter les calories. Compatible avec une stratégie 'mindful eating'.",
+    target_audience: "Grand public en gestion de poids. Sportifs en sèche : utiliser comme complément, pas comme seul outil.",
+  },
+  {
+    id: "ottawa-besoins-proteines-grand-public",
+    source: "ottawa-hospital-p1208",
+    source_title: "Plan d'alimentation pour la gestion du poids — Hôpital d'Ottawa",
+    section_number: 10,
+    section_title: "Apport en protéines — besoins quotidiens grand public",
+    themes: ["proteines", "besoins_journaliers", "satiete", "gestion_poids"],
+    summary:
+      "Cible non-sportif en gestion de poids : Femmes 60-90 g/jour (20-30 g/repas), Hommes 70-100 g/jour (20-30 g/repas). Protéines = satiété + glycémie stable + contrôle appétit.",
+    key_points: [
+      "Femmes : 60-90 g protéines/jour, 20-30 g par repas",
+      "Hommes : 70-100 g protéines/jour, 20-30 g par repas",
+      "Sources : viande maigre (20-25g/3oz), yogourt grec ½ t. (15g), légumineuses ½ t. (7-9g), œuf (6-7g), tofu (8-10g)",
+      "Protéines à CHAQUE repas pour la satiété et la stabilité glycémique",
+    ],
+    coach_usage:
+      "Valeurs conservatrices pour grand public. Pour SPORTIFS en sèche ou recomp, NE PAS utiliser ces valeurs — passer aux références ISSN (Jäger 2017, Helms 2014) : 1.6-2.2 g/kg poids corporel (cf. content/sources_scientifiques/items/jager-2017).",
+    target_audience: "Grand public en gestion de poids, PAS les sportifs.",
+    references_consulted: ["jager-2017", "helms-2014"],
+  },
+  {
+    id: "ottawa-echelle-faim",
+    source: "ottawa-hospital-p1208",
+    source_title: "Plan d'alimentation pour la gestion du poids — Hôpital d'Ottawa",
+    section_number: 12,
+    section_title: "Échelle de la faim (1 à 10) — outil de pleine conscience alimentaire",
+    themes: ["mindful_eating", "satiete", "auto_regulation", "echelle"],
+    summary:
+      "Échelle 1-10 à utiliser AVANT et APRÈS chaque repas. 5 = bien (ni faim ni plein). Objectif : manger en zone 3-4 → s'arrêter à 6.",
+    key_points: [
+      "1 = Affamé, étourdi/nauséeux",
+      "2 = Très faim, gargouillements, grincheux",
+      "3 = Faim, petit creux",
+      "4 = Léger début de faim",
+      "5 = Bien (ni faim ni plein) — point neutre",
+      "6 = Rassasié sans plus, ventre un peu plein",
+      "7 = Plein, estomac gonflé",
+      "8 = Trop plein, besoin de desserrer la ceinture",
+      "9 = Ballonné",
+      "10 = Gavé, mal au cœur",
+    ],
+    coach_usage:
+      "À enseigner comme outil de pleine conscience. Demander à l'utilisateur de noter son niveau de faim avant/après chaque repas pendant 1-2 semaines. Identifier les patterns (manger à 7-8 systématiquement = trop, à 1-2 = mauvaise planification).",
+    target_audience: "Tous, particulièrement utile pour les profils sujet au grignotage émotionnel ou hyperphagie.",
+    truncation_note:
+      "Le document Ottawa source est tronqué à cette section. Les recommandations pratiques d'usage (zone cible 3-4 → 6, par exemple) sont déduites par convention nutritionnelle classique.",
+  },
+];
+
+// ============================================================
 // PUSH TO FIRESTORE
 // ============================================================
 
@@ -421,10 +541,28 @@ async function seedProtocols() {
   console.log(`✅ ${protocols.length} protocols written to content/protocoles_seche/items/`);
 }
 
+async function seedNutritionGuides() {
+  console.log(`Seeding ${nutritionGuides.length} nutrition guides...`);
+  const batch = db.batch();
+  for (const guide of nutritionGuides) {
+    const ref = db
+      .collection("content")
+      .doc("nutrition_guides")
+      .collection("items")
+      .doc(guide.id);
+    batch.set(ref, guide);
+  }
+  await batch.commit();
+  console.log(
+    `✅ ${nutritionGuides.length} nutrition guides written to content/nutrition_guides/items/`,
+  );
+}
+
 async function main() {
   console.log(`Project: ${projectId}`);
   await seedSources();
   await seedProtocols();
+  await seedNutritionGuides();
   console.log("Done.");
 }
 

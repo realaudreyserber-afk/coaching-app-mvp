@@ -35,6 +35,20 @@ interface InternalProtocol {
   notes: string;
 }
 
+interface InternalNutritionGuide {
+  id: string;
+  source: string;
+  source_title: string;
+  section_number: number;
+  section_title: string;
+  themes: string[];
+  summary: string;
+  key_points?: string[];
+  coach_usage: string;
+  target_audience?: string;
+  references_consulted?: string[];
+}
+
 /**
  * Maps user query keywords to internal corpus themes.
  * The matching is intentionally loose: a query that mentions "protein"
@@ -134,6 +148,24 @@ const THEME_KEYWORDS: Record<string, string[]> = {
     "supplement",
   ],
   oxydation_lipides: ["graisse", "lipide", "oxydation", "fat-max", "substrat"],
+  // Themes spécifiques aux nutrition_guides Ottawa P1208
+  gestion_poids: ["poids", "kilos", "minceur", "obésité", "obesite", "perdre", "maigrir"],
+  principes: ["principe", "cadre", "approche", "philosophie", "fondamental"],
+  long_terme: ["long terme", "durable", "maintien", "permanent"],
+  objectifs_realistes: ["objectif", "but", "réaliste", "realiste", "rapide", "miracle"],
+  evaluation: ["évaluer", "evaluer", "habitudes", "questionnaire", "diagnostic", "bilan"],
+  questionnaire: ["question", "demander", "comment", "interroger"],
+  habitudes: ["habitude", "routine", "quotidien", "tous les jours"],
+  diagnostic_initial: ["initial", "départ", "depart", "commencer", "début", "debut"],
+  assiette: ["assiette", "portion", "équilibrer", "equilibrer", "menu", "repas", "plat"],
+  equilibre: ["équilibre", "equilibre", "balance", "varié", "varie"],
+  macros: ["macro", "macronutriment", "glucide", "lipide", "protéine", "proteine"],
+  regle_visuelle: ["visuel", "voir", "regarder", "simple", "facile"],
+  besoins_journaliers: ["besoin", "journalier", "quotidien", "par jour", "ration"],
+  satiete: ["faim", "satiété", "satiete", "rassasié", "rassasie", "estomac", "ventre", "plein"],
+  mindful_eating: ["mindful", "conscience", "écoute", "ecoute", "lentement", "mastiquer", "savourer"],
+  auto_regulation: ["régulation", "regulation", "contrôle", "controle", "écouter son corps"],
+  echelle: ["échelle", "echelle", "niveau", "intensité", "intensite", "noter"],
 };
 
 function scoreSource(source: InternalSource, normalizedQuery: string): number {
@@ -199,6 +231,73 @@ export async function searchInternalCorpus(
     }));
   } catch (err) {
     console.error("[internal-corpus] query failed:", err);
+    return [];
+  }
+}
+
+function scoreNutritionGuide(
+  guide: InternalNutritionGuide,
+  normalizedQuery: string,
+): number {
+  let score = 0;
+  for (const theme of guide.themes) {
+    const keywords = THEME_KEYWORDS[theme] ?? [];
+    for (const keyword of keywords) {
+      if (normalizedQuery.includes(keyword)) {
+        score += 1;
+      }
+    }
+  }
+  return score;
+}
+
+/**
+ * Search the nutrition guides corpus (Hôpital d'Ottawa P1208).
+ * Complémentaire à searchInternalCorpus : les guides Ottawa donnent un
+ * cadre patient-friendly (modèle d'assiette, échelle de faim, objectifs
+ * réalistes) que les sources scientifiques pures ne couvrent pas.
+ *
+ * Le coach les recevra dans le bloc [SOURCES SCIENTIFIQUES] existant via
+ * client.ts → searchScientificCorpus().
+ */
+export async function searchNutritionGuides(
+  query: string,
+  limit = 2,
+): Promise<SearchResult[]> {
+  try {
+    const snapshot = await adminDb
+      .collection("content")
+      .doc("nutrition_guides")
+      .collection("items")
+      .get();
+
+    if (snapshot.empty) {
+      console.warn("[internal-corpus] no nutrition guides found in Firestore");
+      return [];
+    }
+
+    const normalizedQuery = query.toLowerCase();
+    const scored: { guide: InternalNutritionGuide; score: number }[] = [];
+
+    snapshot.forEach((doc) => {
+      const guide = doc.data() as InternalNutritionGuide;
+      const score = scoreNutritionGuide(guide, normalizedQuery);
+      if (score > 0) scored.push({ guide, score });
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, limit).map(({ guide }) => ({
+      title: guide.section_title,
+      authors: "Hôpital d'Ottawa",
+      source: "Plan d'alimentation pour la gestion du poids (P1208, 2015)",
+      year: "2015",
+      url: "",
+      abstractSnippet: guide.summary,
+      language: "fr" as const,
+    }));
+  } catch (err) {
+    console.error("[internal-corpus] nutrition guides query failed:", err);
     return [];
   }
 }
