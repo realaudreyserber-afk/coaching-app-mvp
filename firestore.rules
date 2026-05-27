@@ -177,6 +177,14 @@ service cloud.firestore {
         allow read: if false;
         allow write: if false;
       }
+      match /agent_memory_backup/{sessionId} {
+        // Multi-agent system : archive intégrale de chaque session
+        // (supervisor + sous-agents + arbitration + tokens + cost).
+        // Écrit uniquement via admin SDK (lib/vertex/agents/shared-memory.ts
+        // persistSessionRecord). Lu par l'owner pour audit / replay + admin.
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if false;
+      }
 
       // Default deny for any other future sub-collection under users/{uid}/
       match /{otherCollection}/{docId} {

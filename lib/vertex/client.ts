@@ -109,6 +109,21 @@ async function withRetry<T>(fn: () => Promise<T>, signal?: AbortSignal, attempts
 }
 
 export async function generateText(options: GenerateOptions): Promise<string> {
+  const result = await generateTextWithUsage(options);
+  return result.text;
+}
+
+export interface GenerateTextResult {
+  text: string;
+  tokens: { input: number; output: number };
+}
+
+/**
+ * Variante de generateText qui retourne aussi les tokens consommés.
+ * Utilisée par le système multi-agent pour cost tracking par session
+ * (cf. lib/vertex/agents/). Comportement identique sinon.
+ */
+export async function generateTextWithUsage(options: GenerateOptions): Promise<GenerateTextResult> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash';
 
@@ -130,7 +145,14 @@ export async function generateText(options: GenerateOptions): Promise<string> {
       } as any,
     }), options.signal);
 
-    return response.text || '';
+    const usage = (response as any).usageMetadata ?? {};
+    return {
+      text: response.text || '',
+      tokens: {
+        input: usage.promptTokenCount ?? 0,
+        output: usage.candidatesTokenCount ?? 0,
+      },
+    };
   }
 
   const model = vertexAI.getGenerativeModel({
@@ -151,7 +173,14 @@ export async function generateText(options: GenerateOptions): Promise<string> {
   );
 
   const responseResult = response.response;
-  return responseResult.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const usage = (responseResult as any).usageMetadata ?? {};
+  return {
+    text: responseResult.candidates?.[0]?.content?.parts?.[0]?.text || '',
+    tokens: {
+      input: usage.promptTokenCount ?? 0,
+      output: usage.candidatesTokenCount ?? 0,
+    },
+  };
 }
 
 export function parseLLMJson<T = unknown>(raw: string): T {

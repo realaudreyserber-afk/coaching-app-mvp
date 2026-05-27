@@ -207,7 +207,56 @@ export interface SubscriptionContext {
   current_period_end?: string;
 }
 
-// Wave 6B — persistent coach memory
+// ---- Wave 13E : 3 nouveaux blocs d'enrichissement -----------------
+
+/**
+ * Historique des checkins quotidiens sur 7 jours.
+ * Permet au coach de voir une tendance, pas juste l'instant T.
+ */
+export interface Checkin7DayHistory {
+  count: number; // nb de checkins effectifs (max 7)
+  weight_trend?: {
+    earliest_weight_kg?: number;
+    latest_weight_kg?: number;
+    delta_kg?: number; // négatif = perte
+    delta_pct_of_latest?: number; // delta_kg / latest * 100
+  };
+  averages?: {
+    sleep_hours?: number;
+    energy_1_10?: number;
+    mood_1_10?: number;
+    hunger_1_10?: number;
+    adherence_pct?: number;
+  };
+  sessions_done: number; // nb de session_done=true sur la fenêtre
+  recent_notes?: string[]; // jusqu'à 3 notes user textuelles récentes
+}
+
+/**
+ * Historique du TDEE adaptatif (4 dernières semaines).
+ * Calculé par /api/user/tdee-recalc + Cloud Function hebdo.
+ * Permet au coach de comparer TDEE théorique vs réel.
+ */
+export interface TdeeHistoryEntry {
+  week_key: string; // ex "2026-W21"
+  tdee_kcal: number;
+  mean_weight_kg?: number;
+  delta_weight_kg?: number; // sur la fenêtre observée
+  created_at?: string;
+}
+
+/**
+ * Résumé des patches récents appliqués par le coach au plan actif.
+ * Évite que le coach re-propose un changement déjà essayé.
+ */
+export interface CoachPatchSummary {
+  date: string; // YYYY-MM-DD ou ISO
+  fields_changed: string[]; // ex ["macros.c", "kcal"]
+  reason?: string; // raison textuelle du coach, si stockée
+}
+
+// ---- Original Wave 6B persistent coach memory --------------------
+
 export interface CoachStateContext {
   last_intervention_at?: string;
   has_unread_intervention?: boolean;
@@ -242,6 +291,10 @@ export interface UserContext {
   subscription?: SubscriptionContext;
   // Wave 6B
   coach_state?: CoachStateContext;
+  // Wave 13E — 3 nouveaux blocs d'enrichissement (cf. types ci-dessus)
+  checkin_7day_history?: Checkin7DayHistory;
+  tdee_history?: TdeeHistoryEntry[];
+  recent_coach_patches?: CoachPatchSummary[];
 }
 
 // =====================================================================
@@ -540,6 +593,87 @@ Ne ré-explique pas les sujets déjà couverts sauf si l'utilisateur le demande.
 `;
 }
 
+// ────────────────────────────────────────────────────────────────
+// Wave 13E — nouveaux block builders
+// ────────────────────────────────────────────────────────────────
+
+function checkin7DayBlock(ctx: UserContext): string {
+  const h = ctx.checkin_7day_history;
+  if (!h || h.count === 0) return '';
+  const lines: string[] = [];
+  lines.push(`\n[HISTORIQUE CHECKINS 7J — ${h.count} checkin(s) effectif(s)]`);
+
+  if (h.weight_trend) {
+    const t = h.weight_trend;
+    if (t.earliest_weight_kg !== undefined && t.latest_weight_kg !== undefined) {
+      const sign = t.delta_kg !== undefined && t.delta_kg > 0 ? '+' : '';
+      lines.push(
+        `Poids : ${t.earliest_weight_kg} kg → ${t.latest_weight_kg} kg (${sign}${t.delta_kg ?? 0} kg${t.delta_pct_of_latest !== undefined ? `, ${sign}${t.delta_pct_of_latest.toFixed(2)}%` : ''})`,
+      );
+    }
+  }
+
+  if (h.averages) {
+    const a = h.averages;
+    const parts: string[] = [];
+    if (a.sleep_hours !== undefined) parts.push(`Sommeil ~${a.sleep_hours.toFixed(1)} h`);
+    if (a.energy_1_10 !== undefined) parts.push(`Énergie ${a.energy_1_10.toFixed(1)}/10`);
+    if (a.mood_1_10 !== undefined) parts.push(`Humeur ${a.mood_1_10.toFixed(1)}/10`);
+    if (a.hunger_1_10 !== undefined) parts.push(`Faim ${a.hunger_1_10.toFixed(1)}/10`);
+    if (a.adherence_pct !== undefined) parts.push(`Adhérence ~${Math.round(a.adherence_pct)}%`);
+    if (parts.length) lines.push(`Moyennes : ${parts.join(' · ')}`);
+  }
+
+  lines.push(`Séances effectuées sur 7j : ${h.sessions_done}`);
+
+  if (h.recent_notes?.length) {
+    lines.push(`Notes récentes user :`);
+    for (const n of h.recent_notes.slice(0, 3)) lines.push(`  > "${n}"`);
+  }
+
+  lines.push(
+    `\nUtilise ces tendances pour réagir à des patterns (poids qui stagne, énergie qui baisse, faim qui monte) plutôt qu'à l'instant T. Cite explicitement les chiffres quand pertinent (ex : "ton énergie moyenne 4.2/10 depuis 5 jours, on devrait alléger le déficit").`,
+  );
+  return lines.join('\n');
+}
+
+function tdeeHistoryBlock(ctx: UserContext): string {
+  const entries = ctx.tdee_history;
+  if (!entries || entries.length === 0) return '';
+  const lines: string[] = [];
+  lines.push(`\n[HISTORIQUE TDEE ADAPTATIF — ${entries.length} dernière(s) semaine(s)]`);
+  for (const e of entries.slice(0, 4)) {
+    const dwSuffix =
+      e.delta_weight_kg !== undefined
+        ? ` · Δpoids ${e.delta_weight_kg > 0 ? '+' : ''}${e.delta_weight_kg.toFixed(2)} kg`
+        : '';
+    const weightSuffix = e.mean_weight_kg !== undefined ? ` · poids moy ${e.mean_weight_kg.toFixed(1)} kg` : '';
+    lines.push(`- ${e.week_key} : TDEE ${e.tdee_kcal} kcal${weightSuffix}${dwSuffix}`);
+  }
+  lines.push(
+    `\nCompare au TDEE théorique du profil pour calibrer chirurgicalement. Si TDEE adaptatif < théorique sur 3 semaines → adaptation métabolique (Rosenbaum 2010) → considère un diet break / refeed plutôt qu'augmenter le déficit.`,
+  );
+  return lines.join('\n');
+}
+
+function recentCoachPatchesBlock(ctx: UserContext): string {
+  const patches = ctx.recent_coach_patches;
+  if (!patches || patches.length === 0) return '';
+  const lines: string[] = [];
+  lines.push(`\n[PATCHES APPLIQUÉS RÉCEMMENT AU PLAN — ${patches.length} dernier(s)]`);
+  for (const p of patches.slice(0, 5)) {
+    const fields = p.fields_changed.join(', ');
+    const reason = p.reason ? ` — "${p.reason.slice(0, 100)}"` : '';
+    lines.push(`- ${p.date} : ${fields}${reason}`);
+  }
+  lines.push(
+    `\nNE re-propose PAS un changement déjà appliqué qui n'a pas montré de bénéfice. Si l'utilisateur stagne après ces patches, propose un levier DIFFÉRENT (ex : cardio plutôt que macros, ou diet break plutôt que -100 kcal).`,
+  );
+  return lines.join('\n');
+}
+
+// ────────────────────────────────────────────────────────────────
+
 function subscriptionBlock(ctx: UserContext): string {
   const s = ctx.subscription;
   if (!s) return '';
@@ -571,6 +705,10 @@ export interface EnrichOptions {
   includeWearables?: boolean;
   includeSubscription?: boolean;
   includeCoachState?: boolean;
+  // Wave 13E
+  includeCheckin7DayHistory?: boolean;
+  includeTdeeHistory?: boolean;
+  includeRecentCoachPatches?: boolean;
 }
 
 const DEFAULT_OPTS: Required<EnrichOptions> = {
@@ -590,6 +728,10 @@ const DEFAULT_OPTS: Required<EnrichOptions> = {
   includeWearables: true,
   includeSubscription: true,
   includeCoachState: true,
+  // Wave 13E — par défaut on inclut tout (sauf si désactivé explicitement)
+  includeCheckin7DayHistory: true,
+  includeTdeeHistory: true,
+  includeRecentCoachPatches: true,
 };
 
 /**
@@ -618,6 +760,10 @@ export function buildEnrichedSystemPrompt(
   if (o.includeStreak) parts.push(streakBlock(ctx));
   if (o.includeBodyScan) parts.push(bodyScanBlock(ctx));
   if (o.includeWearables) parts.push(wearablesBlock(ctx));
+  // Wave 13E — historique 7j + tdee adaptatif + patches récents
+  if (o.includeCheckin7DayHistory) parts.push(checkin7DayBlock(ctx));
+  if (o.includeTdeeHistory) parts.push(tdeeHistoryBlock(ctx));
+  if (o.includeRecentCoachPatches) parts.push(recentCoachPatchesBlock(ctx));
   if (o.includeRag) parts.push(ragBlock(ctx));
   if (o.includeNotification) parts.push(notificationBlock(ctx));
 
@@ -645,6 +791,10 @@ export interface BuildContextInput {
   wearablesToday?: WearablesToday;
   subscription?: SubscriptionContext;
   coachState?: CoachStateContext;
+  // Wave 13E
+  checkin7DayHistory?: Checkin7DayHistory;
+  tdeeHistory?: TdeeHistoryEntry[];
+  recentCoachPatches?: CoachPatchSummary[];
 }
 
 export function buildUserContext(input: BuildContextInput): UserContext {
@@ -707,5 +857,9 @@ export function buildUserContext(input: BuildContextInput): UserContext {
     wearables_today: input.wearablesToday,
     subscription: sub,
     coach_state: input.coachState,
+    // Wave 13E
+    checkin_7day_history: input.checkin7DayHistory,
+    tdee_history: input.tdeeHistory,
+    recent_coach_patches: input.recentCoachPatches,
   };
 }

@@ -28,6 +28,9 @@ import type {
   WearablesToday,
   StreakState,
   SubscriptionContext,
+  Checkin7DayHistory,
+  TdeeHistoryEntry,
+  CoachPatchSummary,
 } from './context-builder';
 
 /**
@@ -298,6 +301,211 @@ async function fetchWearablesToday(uid: string, timezone?: string): Promise<Wear
   }
 }
 
+// ────────────────────────────────────────────────────────────────
+// Wave 13E — historique checkins 7j + TDEE adaptatif + patches récents
+// ────────────────────────────────────────────────────────────────
+
+interface CheckinDailyDoc {
+  // Shape tolérant : différents writers ont utilisé des conventions
+  // légèrement différentes (weight vs weight_kg, etc.). On accepte tout.
+  weight?: number;
+  weight_kg?: number;
+  sleep_hours?: number;
+  sleep?: number;
+  energy?: number;
+  energy_1_10?: number;
+  mood?: number;
+  mood_1_10?: number;
+  hunger?: number;
+  hunger_1_10?: number;
+  adherence_nutrition?: number;
+  adherence_pct?: number;
+  session_done?: boolean;
+  workout_done?: boolean;
+  notes?: string;
+  notes_user?: string;
+  user_notes?: string;
+  created_at?: string;
+  date?: string;
+}
+
+async function fetchCheckin7DayHistory(
+  uid: string,
+  timezone?: string,
+): Promise<Checkin7DayHistory | undefined> {
+  try {
+    const sevenDaysAgo = new Date(startOfTodayInTz(timezone).getTime() - 7 * 24 * 3600 * 1000);
+    const snap = await adminDb
+      .collection('users').doc(uid)
+      .collection('checkins_daily')
+      .where('created_at', '>=', sevenDaysAgo.toISOString())
+      .orderBy('created_at', 'asc')
+      .limit(7)
+      .get();
+    if (snap.empty) return undefined;
+
+    const docs = snap.docs.map((d) => d.data() as CheckinDailyDoc);
+
+    // Weight trend
+    const weights = docs
+      .map((d) => d.weight ?? d.weight_kg)
+      .filter((w): w is number => typeof w === 'number' && w > 0);
+    let weightTrend: Checkin7DayHistory['weight_trend'];
+    if (weights.length >= 2) {
+      const first = weights[0];
+      const last = weights[weights.length - 1];
+      const delta = last - first;
+      weightTrend = {
+        earliest_weight_kg: Math.round(first * 100) / 100,
+        latest_weight_kg: Math.round(last * 100) / 100,
+        delta_kg: Math.round(delta * 100) / 100,
+        delta_pct_of_latest:
+          last > 0 ? Math.round((delta / last) * 1000) / 10 : undefined,
+      };
+    } else if (weights.length === 1) {
+      weightTrend = { latest_weight_kg: Math.round(weights[0] * 100) / 100 };
+    }
+
+    // Averages
+    const avg = (vals: number[]) =>
+      vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : undefined;
+    const sleeps = docs
+      .map((d) => d.sleep_hours ?? d.sleep)
+      .filter((v): v is number => typeof v === 'number');
+    const energies = docs
+      .map((d) => d.energy ?? d.energy_1_10)
+      .filter((v): v is number => typeof v === 'number');
+    const moods = docs
+      .map((d) => d.mood ?? d.mood_1_10)
+      .filter((v): v is number => typeof v === 'number');
+    const hungers = docs
+      .map((d) => d.hunger ?? d.hunger_1_10)
+      .filter((v): v is number => typeof v === 'number');
+    const adherences = docs
+      .map((d) => d.adherence_nutrition ?? d.adherence_pct)
+      .filter((v): v is number => typeof v === 'number');
+
+    const averages = {
+      sleep_hours: avg(sleeps),
+      energy_1_10: avg(energies),
+      mood_1_10: avg(moods),
+      hunger_1_10: avg(hungers),
+      adherence_pct: avg(adherences),
+    };
+
+    const sessionsDone = docs.filter(
+      (d) => d.session_done === true || d.workout_done === true,
+    ).length;
+
+    const recentNotes = docs
+      .map((d) => d.notes ?? d.notes_user ?? d.user_notes)
+      .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+      .slice(-3)
+      .map((n) => n.slice(0, 200));
+
+    return {
+      count: docs.length,
+      weight_trend: weightTrend,
+      averages,
+      sessions_done: sessionsDone,
+      recent_notes: recentNotes.length ? recentNotes : undefined,
+    };
+  } catch (e) {
+    console.warn('[context-fetcher] checkin_7day_history fetch failed:', e);
+    return undefined;
+  }
+}
+
+interface TdeeHistoryDoc {
+  week_key?: string;
+  tdee_kcal?: number;
+  tdee?: number;
+  mean_weight_kg?: number;
+  mean_weight?: number;
+  delta_weight_kg?: number;
+  delta_weight?: number;
+  created_at?: string;
+}
+
+async function fetchTdeeHistory(
+  uid: string,
+  limit = 4,
+): Promise<TdeeHistoryEntry[] | undefined> {
+  try {
+    const snap = await adminDb
+      .collection('users').doc(uid)
+      .collection('tdee_history')
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .get();
+    if (snap.empty) return undefined;
+    return snap.docs.map((d) => {
+      const data = d.data() as TdeeHistoryDoc;
+      return {
+        week_key: data.week_key ?? d.id,
+        tdee_kcal: data.tdee_kcal ?? data.tdee ?? 0,
+        mean_weight_kg: data.mean_weight_kg ?? data.mean_weight,
+        delta_weight_kg: data.delta_weight_kg ?? data.delta_weight,
+        created_at: data.created_at,
+      };
+    });
+  } catch (e) {
+    console.warn('[context-fetcher] tdee_history fetch failed:', e);
+    return undefined;
+  }
+}
+
+interface CoachPatchDoc {
+  patch?: Record<string, unknown>;
+  patch_applied?: Record<string, unknown>;
+  accepted?: string[];
+  fields_changed?: string[];
+  reason?: string;
+  reason_short?: string;
+  created_at?: string;
+  applied_at?: string;
+  archived_at?: string;
+}
+
+async function fetchRecentCoachPatches(
+  uid: string,
+  limit = 5,
+): Promise<CoachPatchSummary[] | undefined> {
+  try {
+    const snap = await adminDb
+      .collection('users').doc(uid)
+      .collection('coach_patches')
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .get();
+    if (snap.empty) return undefined;
+    return snap.docs.map((d) => {
+      const data = d.data() as CoachPatchDoc;
+      const dateStr =
+        data.created_at ?? data.applied_at ?? data.archived_at ?? '';
+      // Détecter les fields modifiés : priorité fields_changed > accepted >
+      // keys de patch_applied > keys de patch.
+      let fields: string[] = [];
+      if (Array.isArray(data.fields_changed)) fields = data.fields_changed;
+      else if (Array.isArray(data.accepted)) fields = data.accepted;
+      else if (data.patch_applied && typeof data.patch_applied === 'object')
+        fields = Object.keys(data.patch_applied);
+      else if (data.patch && typeof data.patch === 'object')
+        fields = Object.keys(data.patch);
+      return {
+        date: dateStr.slice(0, 10),
+        fields_changed: fields,
+        reason: data.reason ?? data.reason_short,
+      };
+    });
+  } catch (e) {
+    console.warn('[context-fetcher] coach_patches fetch failed:', e);
+    return undefined;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────
+
 /**
  * Master fetcher: gather all Wave 5 enrichment blocks in parallel.
  *
@@ -319,19 +527,32 @@ export async function fetchEnrichmentContext(
     | 'wearablesToday'
     | 'streak'
     | 'subscription'
+    | 'checkin7DayHistory'
+    | 'tdeeHistory'
+    | 'recentCoachPatches'
   >
 > {
   // Timezone fix : read profile.timezone for proper "today" bucketing.
   // Defaults to Europe/Paris if missing (matches FR-67 product focus).
   const timezone: string | undefined = userData.profile?.timezone;
 
-  const [todayFoodLogs, recentFormChecks, bodyScanRecent, wearablesToday] =
-    await Promise.all([
-      fetchTodayFoodLogs(uid, activePlanKcal, timezone),
-      fetchRecentFormChecks(uid),
-      fetchBodyScanRecent(uid),
-      fetchWearablesToday(uid, timezone),
-    ]);
+  const [
+    todayFoodLogs,
+    recentFormChecks,
+    bodyScanRecent,
+    wearablesToday,
+    checkin7DayHistory,
+    tdeeHistory,
+    recentCoachPatches,
+  ] = await Promise.all([
+    fetchTodayFoodLogs(uid, activePlanKcal, timezone),
+    fetchRecentFormChecks(uid),
+    fetchBodyScanRecent(uid),
+    fetchWearablesToday(uid, timezone),
+    fetchCheckin7DayHistory(uid, timezone),
+    fetchTdeeHistory(uid, 4),
+    fetchRecentCoachPatches(uid, 5),
+  ]);
 
   const lastSessionSummary = (userData.last_session_summary as LastSessionSummary | undefined) ?? undefined;
   const streak = (userData.streak as StreakState | undefined) ?? undefined;
@@ -350,6 +571,9 @@ export async function fetchEnrichmentContext(
     wearablesToday,
     streak,
     subscription,
+    checkin7DayHistory,
+    tdeeHistory,
+    recentCoachPatches,
   };
 }
 

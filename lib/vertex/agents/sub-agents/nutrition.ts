@@ -1,0 +1,120 @@
+/**
+ * NutritionCoach — sous-agent macros/aliments/recettes/fasting/GLP-1.
+ *
+ * fetchContext :
+ *  - profile (objectif, poids, genre)
+ *  - active_plan (kcal/macros/meals_template subset)
+ *  - today_food_logs (totaux + sample d'aliments)
+ *  - top 3 nutrition_guides Ottawa pertinents par rapport au message user
+ */
+
+import 'server-only';
+import { adminDb } from '@/lib/firebase/admin';
+import { BaseAgent } from './base';
+import { NUTRITION_SYSTEM_PROMPT } from '../../prompts/agents/nutrition';
+import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corpus';
+import type { AgentInput, SubAgentName } from '../types';
+
+export class NutritionCoach extends BaseAgent {
+  readonly name: SubAgentName = 'nutrition';
+  readonly systemPrompt = NUTRITION_SYSTEM_PROMPT;
+  readonly temperature = 0.3;
+
+  protected async fetchContext(input: AgentInput): Promise<Record<string, unknown>> {
+    const ctx: Record<string, unknown> = {};
+    const userRef = adminDb.collection('users').doc(input.uid);
+
+    // Profile (subset utile pour nutrition)
+    try {
+      const snap = await userRef.get();
+      const profile = snap.data();
+      if (profile) {
+        ctx.profile = {
+          objective: profile.objective,
+          weight_kg: profile.weight_kg,
+          height_cm: profile.height_cm,
+          age: profile.age,
+          sex: profile.sex,
+          activity_level: profile.activity_level,
+          dietary_restrictions: profile.dietary_restrictions,
+          uses_glp1: profile.uses_glp1 ?? false,
+          allergies: profile.allergies,
+        };
+      }
+    } catch (e) {
+      console.warn('[nutrition-agent] profile fetch failed:', e);
+    }
+
+    // Active plan (kcal + macros + meals_template subset)
+    try {
+      const plans = await userRef
+        .collection('plans')
+        .where('active', '==', true)
+        .limit(1)
+        .get();
+      const plan = plans.docs[0]?.data();
+      if (plan) {
+        ctx.active_plan = {
+          kcal: plan.kcal,
+          macros: plan.macros,
+          meals_template: Array.isArray(plan.meals_template)
+            ? plan.meals_template.map((m: { name?: string; approx_kcal?: number }) => ({
+                name: m?.name,
+                approx_kcal: m?.approx_kcal,
+              }))
+            : undefined,
+        };
+      }
+    } catch (e) {
+      console.warn('[nutrition-agent] active_plan fetch failed:', e);
+    }
+
+    // Today's food logs (totaux du jour + 5 dernières entries)
+    try {
+      const todayYmd = new Date().toISOString().split('T')[0];
+      const logs = await userRef
+        .collection('food_logs')
+        .where('logged_at', '>=', `${todayYmd}T00:00:00`)
+        .orderBy('logged_at', 'desc')
+        .limit(20)
+        .get();
+      let totalKcal = 0;
+      let totalP = 0;
+      let totalC = 0;
+      let totalF = 0;
+      const recentItems: string[] = [];
+      logs.docs.forEach((d) => {
+        const data = d.data();
+        totalKcal += data.totals?.kcal ?? 0;
+        totalP += data.totals?.p ?? 0;
+        totalC += data.totals?.c ?? 0;
+        totalF += data.totals?.f ?? 0;
+        const name = data.items?.[0]?.name;
+        if (name && recentItems.length < 5) recentItems.push(name);
+      });
+      ctx.today_food_logs = {
+        count: logs.size,
+        totals: { kcal: totalKcal, p: totalP, c: totalC, f: totalF },
+        recent_items: recentItems,
+      };
+    } catch (e) {
+      console.warn('[nutrition-agent] today_food_logs fetch failed:', e);
+    }
+
+    // Nutrition guides Ottawa pertinents
+    try {
+      const guides = await searchNutritionGuides(input.user_message, 3);
+      if (guides.length > 0) {
+        ctx.nutrition_guides_ottawa = guides.map((g) => ({
+          section: g.title,
+          summary: g.abstractSnippet,
+          source: g.source,
+        }));
+      }
+    } catch (e) {
+      console.warn('[nutrition-agent] nutrition_guides fetch failed:', e);
+    }
+
+    return ctx;
+  }
+}
