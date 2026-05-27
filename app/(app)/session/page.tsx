@@ -77,33 +77,12 @@ export default function SessionLandingPage() {
     load();
   }, [user, loading]);
 
-  const handleStart = async (blockIndex: number, block: PlanTrainingSession) => {
+  const handleStart = (blockIndex: number, _block: PlanTrainingSession) => {
     if (!user || !plan?.id) return;
-    setStarting(blockIndex);
-    setErr(null);
-    try {
-      const token = await getFreshToken();
-      if (!token) throw new Error("Auth requise");
-      const res = await fetch("/api/sessions/start", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          plan_id: plan.id,
-          session_block_index: blockIndex,
-          operation_name: block.name,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "start_failed");
-      router.push(`/session/live/${data.session_id}`);
-    } catch (e: any) {
-      setErr(e?.message ?? "Impossible de démarrer la séance");
-    } finally {
-      setStarting(null);
-    }
+    // Nouvelle archi post-séance : pas d'API start, redirect direct vers le
+    // formulaire de log. La session sera créée en Firestore en 1 seul POST
+    // /api/sessions/log-full au moment "Enregistrer la séance".
+    router.push(`/session/log/${plan.id}?block=${blockIndex}`);
   };
 
   if (loading || fetching) {
@@ -190,36 +169,14 @@ export default function SessionLandingPage() {
         </div>
       )}
 
-      {/* In-progress banner */}
+      {/* Session in_progress résiduelle de l'ancien live tracking — affichée
+          en info seulement (plus de bouton "Reprendre" : la nouvelle archi
+          est en log post-séance, voir /session/log/[planId]). */}
       {inProgress && (
-        <HudCard accent="tech" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
-          <PanelHeader
-            code="SESSION-LIVE · EN COURS"
-            title={
-              <span className="flex items-center gap-2">
-                <RotateCcw className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
-                Reprends ta séance
-              </span>
-            }
-            accent="tech"
-            right={<Tag accent="tech">{inProgress.data.session_code}</Tag>}
-          />
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p style={{ fontSize: 14, color: "var(--fg-2)", margin: 0 }}>
-                {inProgress.data.operation_name}
-              </p>
-              <p className="mono" style={{ fontSize: 10, color: "var(--fg-5)", letterSpacing: "0.1em", marginTop: 4 }}>
-                Démarré : {new Date(inProgress.data.started_at).toLocaleString("fr-FR")}
-              </p>
-            </div>
-            <button
-              onClick={() => router.push(`/session/live/${inProgress.id}`)}
-              className="btn btn-tech"
-            >
-              <Play className="h-4 w-4" aria-hidden="true" /> Reprendre
-            </button>
-          </div>
+        <HudCard accent="tech" chamfer="sm" style={{ padding: "0.75rem 1rem" }}>
+          <p className="mono" style={{ fontSize: 10, letterSpacing: "0.15em", color: "var(--fg-5)", textTransform: "uppercase", margin: 0 }}>
+            [INFO] Ancienne session live `{inProgress.data.session_code}` toujours marquée in_progress en Firestore — sans incidence sur le nouveau flow post-séance.
+          </p>
         </HudCard>
       )}
 
@@ -320,43 +277,16 @@ export default function SessionLandingPage() {
 
                 <button
                   onClick={() => handleStart(idx, block)}
-                  disabled={starting !== null || !!inProgress}
                   className="btn btn-primary"
                   style={{ width: "100%" }}
-                  title={inProgress ? "Reprends ta session en cours d'abord" : undefined}
                 >
-                  {starting === idx ? (
-                    <>Initialisation...</>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4" aria-hidden="true" /> Lancer
-                    </>
-                  )}
+                  <Play className="h-4 w-4" aria-hidden="true" /> Lancer
                 </button>
               </HudCard>
             ))}
           </div>
         )}
 
-        {inProgress && (
-          <p
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: "var(--fg-5)",
-              letterSpacing: "0.1em",
-              textAlign: "center",
-              marginTop: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <AlertTriangle className="h-3 w-3" style={{ color: "var(--alert-500)" }} aria-hidden="true" />
-            Une session est déjà en cours · termine-la ou abandonne avant d&apos;en lancer une autre.
-          </p>
-        )}
       </div>
     </div>
   );
