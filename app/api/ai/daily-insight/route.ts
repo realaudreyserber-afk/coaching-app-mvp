@@ -6,6 +6,7 @@ import { generateText, parseLLMJson } from '@/lib/vertex/client';
 import { DAILY_INSIGHT_SYSTEM_PROMPT } from '@/lib/vertex/prompts/daily-insight';
 import { DailyInsightSchema } from '@/lib/vertex/schemas';
 import { DAILY_INSIGHT_RESPONSE_SCHEMA } from '@/lib/vertex/response-schemas';
+import { fetchEnrichmentContext, extractPlanKcal } from '@/lib/vertex/context-fetcher';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (_authReq, user) => {
@@ -32,13 +33,31 @@ export async function POST(req: NextRequest) {
         }, { status: 404 });
       }
 
+      // Enrichissement contextuel (Phase 1B) : on charge plan actif + enrichments
+      // (last_session, streak, today_food, body_scan, wearables) pour que l'IA
+      // génère un insight référencé aux vraies données, pas générique.
+      const userData = userSnap.data() ?? {};
+      const activePlanSnap = await userRef.collection('plans').where('active', '==', true).limit(1).get();
+      const activePlan = activePlanSnap.empty ? undefined : activePlanSnap.docs[0].data();
+      const enrichments = await fetchEnrichmentContext(uid, userData, extractPlanKcal(activePlan));
+
       const ctx = {
-        profile: userSnap.data()?.profile,
+        profile: userData.profile,
+        baseline: userData.baseline,
+        goals: userData.goals,
+        active_plan: activePlan
+          ? { kcal: activePlan.kcal, macros: activePlan.macros, cardio_type: activePlan.cardio?.type }
+          : undefined,
         checkin_today: checkinSnap.data(),
+        last_session: enrichments.lastSessionSummary,
+        streak: enrichments.streak,
+        today_food: enrichments.todayFoodLogs,
+        body_scan_recent: enrichments.bodyScanRecent,
+        wearables_today: enrichments.wearablesToday,
       };
 
       const raw = await generateText({
-        model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-2.5-flash',
+        model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: `Données du jour :\n${JSON.stringify(ctx, null, 2)}` }] }],
         systemInstruction: DAILY_INSIGHT_SYSTEM_PROMPT,
         temperature: 0.5,

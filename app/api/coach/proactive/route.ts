@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     };
 
     const text = await generateText({
-      model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-2.5-flash',
+      model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text: `Contexte :\n${JSON.stringify(ctx, null, 2)}` }] },
       ],
       // L4 fix : Flash handles the full prompt without issue. Truncating at 2500

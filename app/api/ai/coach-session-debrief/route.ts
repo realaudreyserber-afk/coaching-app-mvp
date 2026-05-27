@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       const promptText = `Données de la séance :\n${JSON.stringify(compactCtx, null, 2)}`;
 
       const debrief = await generateText({
-        model: process.env.VERTEX_AI_MODEL_FLASH || "gemini-2.5-flash",
+        model: process.env.VERTEX_AI_MODEL_FLASH || "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: promptText }] }],
         // We reuse the coach base prompt only for tone/identity, then override
         // the task with the debrief instruction.

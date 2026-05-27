@@ -89,7 +89,7 @@ Query: "${lastMessageText}"
 Return ONLY the English terms separated by spaces. No other text or punctuation.
 `;
           const extractedKeywords = await generateText({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.5-flash',
             contents: [{ role: 'user', parts: [{ text: extractPrompt }] }],
             temperature: 0.1,
           });
@@ -301,7 +301,7 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
               }
 
               for await (const chunk of generateTextStream({
-                model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+                model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash',
                 contents: formattedContents,
                 systemInstruction: fullSystemInstruction,
                 temperature: 0.4,
@@ -342,7 +342,7 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
       }
 
       const coachResponse = await generateText({
-        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash',
         contents: formattedContents,
         systemInstruction: fullSystemInstruction,
         temperature: 0.4,

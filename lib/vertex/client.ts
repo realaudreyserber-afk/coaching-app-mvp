@@ -26,14 +26,14 @@ export const vertexAI = new VertexAI(vertexOptions);
 
 // Instantiate the two primary models we'll use in the MVP (deprecated/legacy Vertex AI usage)
 export const modelPro = vertexAI.getGenerativeModel({
-  model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+  model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash',
   generationConfig: {
     temperature: 0.2,
   },
 });
 
 export const modelFlash = vertexAI.getGenerativeModel({
-  model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-2.5-flash',
+  model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
   generationConfig: {
     temperature: 0.1,
   },
@@ -61,6 +61,16 @@ interface GenerateOptions {
   responseMimeType?: string;
   responseSchema?: object;
   signal?: AbortSignal;
+  /**
+   * Optional cached content reference (Gemini explicit caching).
+   * Format : "cachedContents/{id}" returned by ai.caches.create().
+   * When provided, the cache's systemInstruction + contents are reused,
+   * billed at ~10% of normal input rate. The caller must NOT pass
+   * systemInstruction in parallel — it's already in the cache. Only
+   * supported via the @google/genai SDK path (requires GEMINI_API_KEY).
+   * Cf. lib/vertex/cached-coach-prompt.ts pour l'helper coach.
+   */
+  cachedContentName?: string;
 }
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
@@ -100,7 +110,7 @@ async function withRetry<T>(fn: () => Promise<T>, signal?: AbortSignal, attempts
 
 export async function generateText(options: GenerateOptions): Promise<string> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro';
+  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash';
 
   if (geminiApiKey) {
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -111,7 +121,11 @@ export async function generateText(options: GenerateOptions): Promise<string> {
         temperature: options.temperature ?? 0.3,
         responseMimeType: options.responseMimeType,
         responseSchema: options.responseSchema,
-        systemInstruction: options.systemInstruction,
+        // Cache et systemInstruction sont mutuellement exclusifs :
+        // si un cache est fourni, son systemInstruction prime.
+        ...(options.cachedContentName
+          ? { cachedContent: options.cachedContentName }
+          : { systemInstruction: options.systemInstruction }),
         abortSignal: options.signal,
       } as any,
     }), options.signal);
@@ -166,7 +180,7 @@ export function parseLLMJson<T = unknown>(raw: string): T {
 
 export async function* generateTextStream(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro';
+  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash';
 
   if (geminiApiKey) {
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -176,7 +190,10 @@ export async function* generateTextStream(options: GenerateOptions): AsyncGenera
       config: {
         temperature: options.temperature ?? 0.3,
         responseMimeType: options.responseMimeType,
-        systemInstruction: options.systemInstruction,
+        // Cache et systemInstruction sont mutuellement exclusifs (cf. generateText).
+        ...(options.cachedContentName
+          ? { cachedContent: options.cachedContentName }
+          : { systemInstruction: options.systemInstruction }),
         abortSignal: options.signal,
       } as any,
     });

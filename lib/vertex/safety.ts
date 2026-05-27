@@ -67,7 +67,7 @@ export async function runSafetyCheck(text: string, ctx: SafetyContext = {}): Pro
 
   try {
     const raw = await generateText({
-      model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-2.5-flash',
+      model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
       contents: [{ role: 'user', parts: [{ text }] }],
       systemInstruction: SAFETY_SYSTEM_PROMPT,
       temperature: 0,

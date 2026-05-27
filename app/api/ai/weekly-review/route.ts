@@ -6,6 +6,7 @@ import { generateText, parseLLMJson } from '@/lib/vertex/client';
 import { WEEKLY_REVIEW_SYSTEM_PROMPT } from '@/lib/vertex/prompts/weekly-review';
 import { WeeklyReviewSchema } from '@/lib/vertex/schemas';
 import { WEEKLY_REVIEW_RESPONSE_SCHEMA } from '@/lib/vertex/response-schemas';
+import { fetchEnrichmentContext, extractPlanKcal } from '@/lib/vertex/context-fetcher';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (_authReq, user) => {
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
       const weeklyMeasurements = body.measurements ?? null;
       const userNotes = body.notes ?? '';
 
+      // Enrichissement contextuel (Phase 1B) : last_session, streak, body_scan,
+      // recent_form_checks. Permet à l'IA de référencer les sessions terminées
+      // et les analyses techniques récentes dans son diagnostic.
+      const enrichments = await fetchEnrichmentContext(uid, userData, extractPlanKcal(activePlan ?? undefined));
+
       const context = {
         profile: userData.profile,
         goals: userData.goals,
@@ -56,10 +62,14 @@ export async function POST(req: NextRequest) {
         daily_checkins_7d: dailyData,
         weekly_measurements: weeklyMeasurements,
         user_notes: userNotes,
+        last_session: enrichments.lastSessionSummary,
+        streak: enrichments.streak,
+        body_scan_recent: enrichments.bodyScanRecent,
+        recent_form_checks: enrichments.recentFormChecks,
       };
 
       const raw = await generateText({
-        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: `Analyse cette semaine et propose un diagnostic :\n${JSON.stringify(context, null, 2)}` }] }],
         systemInstruction: WEEKLY_REVIEW_SYSTEM_PROMPT,
         temperature: 0.3,

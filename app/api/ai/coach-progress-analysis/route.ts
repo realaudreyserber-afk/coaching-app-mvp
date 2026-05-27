@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
       const promptText = `Données progression 4 dernières semaines :\n${JSON.stringify(ctx, null, 2)}`;
 
       const analysis = await generateText({
-        model: process.env.VERTEX_AI_MODEL_FLASH || "gemini-2.5-flash",
+        model: process.env.VERTEX_AI_MODEL_FLASH || "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: promptText }] }],
         systemInstruction: `${COACH_SYSTEM_PROMPT.slice(0, 2000)}\n\n${PROGRESS_INSTRUCTION}`,
         temperature: 0.4,
