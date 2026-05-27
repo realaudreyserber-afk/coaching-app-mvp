@@ -12,6 +12,59 @@ import { flags } from '@/lib/features/flags';
 import { detectProfilePath } from '@/lib/features/profile-paths/detector';
 import { PROFILE_PATH_PLAN_INSTRUCTIONS } from '@/lib/features/profile-paths/prompts';
 
+// Recalcule les champs déterministes que l'IA ne génère plus (pour réduire
+// les tokens output et passer sous le timeout Vercel 60s) :
+//   - items[].kcal = p*4 + c*4 + f*9
+//   - meal.macros = somme des items[].p/c/f
+//   - meal.approx_kcal = somme des items[].kcal
+// Idempotent : si l'IA les a quand même générés (sortie hors-schema), on
+// respecte ses valeurs.
+function enrichPlanOutput(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const plan = raw as Record<string, any>;
+  if (!Array.isArray(plan.meals_template)) return plan;
+
+  for (const meal of plan.meals_template) {
+    if (!meal || typeof meal !== 'object' || !Array.isArray(meal.items)) continue;
+
+    for (const item of meal.items) {
+      if (!item || typeof item !== 'object') continue;
+      if (
+        typeof item.kcal !== 'number' &&
+        typeof item.p === 'number' &&
+        typeof item.c === 'number' &&
+        typeof item.f === 'number'
+      ) {
+        item.kcal = Math.round(item.p * 4 + item.c * 4 + item.f * 9);
+      }
+    }
+
+    if (!meal.macros || typeof meal.macros !== 'object') {
+      const totals = meal.items.reduce(
+        (acc: { p: number; c: number; f: number }, it: any) => ({
+          p: acc.p + (typeof it?.p === 'number' ? it.p : 0),
+          c: acc.c + (typeof it?.c === 'number' ? it.c : 0),
+          f: acc.f + (typeof it?.f === 'number' ? it.f : 0),
+        }),
+        { p: 0, c: 0, f: 0 },
+      );
+      meal.macros = {
+        p: Math.round(totals.p),
+        c: Math.round(totals.c),
+        f: Math.round(totals.f),
+      };
+    }
+
+    if (typeof meal.approx_kcal !== 'number') {
+      meal.approx_kcal = Math.round(
+        meal.items.reduce((sum: number, it: any) => sum + (typeof it?.kcal === 'number' ? it.kcal : 0), 0),
+      );
+    }
+  }
+
+  return plan;
+}
+
 export async function POST(req: NextRequest) {
   return withAuth(req, async (authenticatedReq, user) => {
     try {
@@ -131,7 +184,7 @@ ${JSON.stringify(userContext, null, 2)}
         throw new Error("L'IA n'a retourné aucune réponse.");
       }
 
-      const parsedPlan = PlanSchema.parse(parseLLMJson(responseText));
+      const parsedPlan = PlanSchema.parse(enrichPlanOutput(parseLLMJson(responseText)));
 
       // 5. Save the generated plan in subcollection plans/
       const planData = {

@@ -936,8 +936,19 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || "La génération a échoué.");
+        // Vercel timeout (60s) renvoie du HTML/texte, pas du JSON.
+        // On lit en text() puis on tente JSON.parse — si ça échoue, on déduit
+        // de response.status le bon message pour l'utilisateur.
+        const text = await response.text();
+        let errMsg = "La génération a échoué.";
+        try {
+          errMsg = JSON.parse(text)?.error || errMsg;
+        } catch {
+          errMsg = response.status === 504 || response.status === 408
+            ? "La génération a dépassé 60s côté Vertex AI. Vertex est lent, réessaye dans un moment."
+            : `Erreur ${response.status}. Réessaye, ou contacte le support si ça persiste.`;
+        }
+        throw new Error(errMsg);
       }
 
       setProgressMsg("Enregistrement du plan dans Firestore...");

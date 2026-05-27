@@ -80,10 +80,9 @@ DIRECTIVES CRITIQUES :
 4bis. **Décomposition des repas — OBLIGATOIRE** : chaque entrée de \`meals_template\` doit lister \`items\` avec :
    - Le nom EXACT de l'aliment (ex: "Blanc de poulet", "Flocons d'avoine", "Banane", "Huile d'olive", "Œuf entier")
    - Le \`grams\` (poids cru par défaut, sauf si \`state: "cuit"\` indiqué)
-   - Les macros (\`kcal\`, \`p\`, \`c\`, \`f\`) **pour cette quantité précise** (pas pour 100g) — utilise les tables CIQUAL/USDA standards
-   - Le total \`macros\` du repas = somme exacte des \`items[].p/c/f\`
-   - La somme \`items[].kcal\` doit égaler \`approx_kcal\` ± 10 kcal
-   - **Vise une cohérence stricte** : la somme de tous les \`meals_template[].approx_kcal\` ± collations doit approcher la cible \`kcal\` du plan (tolérance ±100 kcal)
+   - Les macros (\`p\`, \`c\`, \`f\`) **pour cette quantité précise** (pas pour 100g) — utilise les tables CIQUAL/USDA standards
+   - **NE GÉNÈRE PAS** les champs déterministes \`kcal\` (par item), \`macros\` (total du repas), \`approx_kcal\` (total du repas) — l'app les recalcule serveur à partir des p/c/f. Chaque champ que tu génères en plus rallonge la sortie et fait dépasser le timeout 60s.
+   - **Cohérence cible** : la somme mentale de tes p/c/f × leurs kcal théoriques (p×4+c×4+f×9) sur tous les repas doit approcher la cible \`kcal\` du plan (tolérance ±100 kcal). Tu fais le calcul mentalement avant de répondre.
    - Ne mets pas d'ingrédients vagues type "légumes" ou "féculents" — sois SPÉCIFIQUE ("Brocoli", "Riz basmati")
    - 3-6 \`items\` par repas selon la complexité ; ne descends pas en dessous de 3 sauf collation pure
 5. **Entraînement & Cardio** : Conçois un programme adapté au niveau d'activité déclaré et au matériel disponible (maison ou salle de sport). **Utilise EXCLUSIVEMENT des exos de la bibliothèque ci-dessous** (le champ \`name\` = \`name_fr\` exact, ou tu casses le rendu UI). Respecte le niveau de l'athlète : interdiction de prescrire un exo "avance" si le profil est débutant.
@@ -106,23 +105,18 @@ Structure du JSON attendu :
     {
       "name": string, // ex: Petit-déjeuner
       "description": string, // phrase courte (1 ligne) — ex: "Omelette + flocons + fruits rouges"
-      "approx_kcal": number, // doit égaler la somme de items[].kcal ± 10 kcal
       "items": [ // OBLIGATOIRE — détail aliment par aliment avec grammages
         {
           "food": string, // nom exact ex: "Blanc de poulet", "Flocons d'avoine", "Huile d'olive"
           "grams": number, // grammage cru (sauf si state="cuit")
           "state": "cru" | "cuit", // défaut "cru" — l'user pèse avant cuisson
-          "kcal": number, // pour cette quantité (pas pour 100g)
           "p": number,   // protéines en g pour cette quantité
           "c": number,   // glucides en g pour cette quantité
           "f": number    // lipides en g pour cette quantité
+          // NE GÉNÈRE PAS "kcal" — recalculé serveur via p*4+c*4+f*9
         }
-      ],
-      "macros": { // OBLIGATOIRE — total du repas (somme des items)
-        "p": number,
-        "c": number,
-        "f": number
-      }
+      ]
+      // NE GÉNÈRE PAS "approx_kcal" ni "macros" (total) — recalculés serveur
     }
   ],
   "training": {
