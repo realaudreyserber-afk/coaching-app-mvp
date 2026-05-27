@@ -78,6 +78,8 @@
 
 - [ ] **[P1]** Vérifier que le coach context envoie bien BF% dans le prompt — `lib/vertex/context-builder.ts:259` doit sortir `BF actuel: 32%` quand `baseline.bf_pct` présent. Vu rapidement OK, mais pas testé end-to-end. (2026-05-26)
 - [ ] **[P2]** Hook coach proactif "BF% manquant" — si après 3 jours d'usage le user n'a toujours pas de `baseline.bf_pct`, le coach propose de l'ajouter via /settings ou par message. (2026-05-26)
+- [ ] **[P2]** Récupérer les mensurations partagées au coach AVANT le whitelist update — dans la conv 2026-05-27, l'user a donné `neck=50, waist=120, arm=44, forearm=39, shoulder=143, wrist=19`. Les champs `arm/forearm/shoulder/wrist/thigh/calf/chest_cm` n'étaient pas dans le whitelist `update-fields/route.ts` à ce moment-là (étendu par commit `90ebeb7` après coup) → tentatives `<COACH_SAVE>` du coach silently rejected. **Solution simple** : retourner sur /coach et redire "re-sauvegarde mes mensurations : cou 50, taille 120, bras 44, avant-bras 39, épaules 143, poignet 19" → le coach émet un nouveau `<COACH_SAVE>` qui sera accepté cette fois (whitelist OK). **Plus tard** : implémenter un parsing du chat history pour récup auto (ROI/complexité à évaluer). Cf. aussi le script `scripts/show-profile.mjs` créé en session pour auditer `users/{uid}.profile.*_cm`. (2026-05-27)
+- [ ] **[P2]** UI Settings — saisie directe des mensurations supplémentaires — `arm_cm`, `forearm_cm`, `shoulder_cm`, `wrist_cm`, `thigh_cm`, `calf_cm`, `chest_cm` sont whitelist côté serveur (commit `90ebeb7`) mais ne sont pas saisissables hors chat coach. Ajouter un bloc dans Settings Profile Card (grille 7 inputs number, optionnels) pour ceux qui n'aiment pas le chat. (2026-05-27)
 
 ### Refactor / nettoyage
 
