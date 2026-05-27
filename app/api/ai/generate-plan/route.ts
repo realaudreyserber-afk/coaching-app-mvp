@@ -172,7 +172,12 @@ ${JSON.stringify(userContext, null, 2)}
       `;
 
       const responseText = await generateText({
-        model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+        // TEMP — downgrade Pro 2.5 → Flash 3.5 pour passer sous le timeout
+        // Vercel 60s. Flash génère plus vite (~2-3× plus rapide en JSON
+        // structuré) mais raisonne moins finement. À revert dès que le
+        // split en 2 appels parallèles (nutrition + training) sera en place.
+        // Original: model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+        model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: promptText }] }],
         systemInstruction,
         temperature: 0.3,
