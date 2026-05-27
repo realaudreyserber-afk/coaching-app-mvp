@@ -6,14 +6,18 @@
  * Activé via env var `USE_MULTI_AGENT_BACKEND=1` (cf. route.ts).
  *
  * Différences fonctionnelles vs ancien coach :
- *   - PAS de <COACH_SAVE> / <COACH_PLAN_PATCH> émis par défaut (le supervisor
- *     génère du texte coach, pas du structuré). Profile auto-update + plan
- *     patch via le multi-agent = non supporté pour l'instant.
  *   - PAS de streaming token-by-token sur la réponse finale (un seul chunk
  *     après ~15-25s). Trade-off accepté pour bénéficier de l'analyse
  *     multi-agent (meilleur routing, archive de session).
  *   - Profile path, GLP1, fasting flags : non utilisés (les sous-agents font
  *     leur propre fetchContext).
+ *
+ * Compatibilité conservée :
+ *   - <COACH_SAVE> / <COACH_PLAN_PATCH> émis par le supervisor aggregate
+ *     (cf. prompts/agents/supervisor.ts §PERSISTANCE) → le frontend les
+ *     parse via le pipeline existant (/api/profile/update-fields + /api/coach/apply-patch).
+ *   - Les balises sont incluses dans le chunk SSE mais STRIPPED avant la
+ *     persistance coach_messages (chat history reste propre).
  *
  * Bénéfices :
  *   - Archive intégrale de chaque session dans agent_memory_backup
@@ -66,15 +70,18 @@ export async function runMultiAgentCoach(
       });
 
       // Persister la réponse dans coach_messages (même collection que l'ancien
-      // coach, pour que l'historique chat soit cohérent peu importe le backend)
-      void persistAssistantMessage(userRef, result.finalResponse, result.sessionRecord.session_id).catch(
-        (e) => console.warn('[coach-multi-adapter] persist failed:', e),
-      );
+      // coach, pour que l'historique chat soit cohérent peu importe le backend).
+      // On strip les balises avant persistance pour ne pas polluer l'historique.
+      void persistAssistantMessage(
+        userRef,
+        stripCoachTags(result.finalResponse),
+        result.sessionRecord.session_id,
+      ).catch((e) => console.warn('[coach-multi-adapter] persist failed:', e));
 
       return NextResponse.json(
         {
-          response: result.finalResponse,
-          sources: [], // les citations sont dans le texte agrégé directement
+          response: result.finalResponse, // balises gardées pour le client
+          sources: [],
           session_id: result.sessionRecord.session_id,
           cost_estimate_usd: result.sessionRecord.cost_estimate_usd,
         },
@@ -146,14 +153,18 @@ export async function runMultiAgentCoach(
         });
 
         const finalText = result.finalResponse;
-        // Émet la réponse complète en un seul chunk (le UI append normalement)
+        // On émet le texte BRUT (avec balises COACH_SAVE / COACH_PLAN_PATCH si
+        // présentes) — le frontend coach/page.tsx parse + strip pour l'affichage,
+        // et POST les balises vers /api/profile/update-fields et /api/coach/apply-patch.
         controller.enqueue(
           encoder.encode(
             `event: chunk\ndata: ${JSON.stringify({ text: finalText })}\n\n`,
           ),
         );
 
-        await finalize('done', finalText, result.sessionRecord.session_id);
+        // Pour la persistance coach_messages, on strip les balises pour ne pas
+        // polluer l'historique chat (le frontend ne les ré-affiche pas non plus).
+        await finalize('done', stripCoachTags(finalText), result.sessionRecord.session_id);
 
         controller.enqueue(encoder.encode(`event: done\ndata: {}\n\n`));
         try {
@@ -210,4 +221,21 @@ async function persistAssistantMessage(
     session_id: sessionId,
     finalized_at: new Date().toISOString(),
   });
+}
+
+/**
+ * Retire les balises <COACH_SAVE> et <COACH_PLAN_PATCH> du texte avant
+ * persistance dans coach_messages. Le frontend les parse depuis le SSE et
+ * les POST vers les endpoints dédiés ; on ne veut pas qu'elles polluent
+ * l'historique chat (l'user ne doit pas voir le JSON brut).
+ */
+function stripCoachTags(text: string): string {
+  let out = text.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
+  out = out.replace(/<COACH_PLAN_PATCH>[\s\S]*?<\/COACH_PLAN_PATCH>/g, '');
+  // Cas où une balise ouvrante n'a pas de fermante (génération coupée) — strip jusqu'à la fin
+  for (const tag of ['<COACH_SAVE>', '<COACH_PLAN_PATCH>']) {
+    const openIdx = out.indexOf(tag);
+    if (openIdx !== -1) out = out.slice(0, openIdx);
+  }
+  return out.trimEnd();
 }
