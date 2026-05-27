@@ -634,6 +634,13 @@ Champs autorisés (whitelist côté backend — tout autre champ est rejeté sil
 - profile.waist_cm (number, 40-200)
 - profile.neck_cm (number, 25-70)
 - profile.hips_cm (number, 50-200)
+- profile.shoulder_cm (number cm, 90-180) — utile pour Adonis ratio §12
+- profile.chest_cm (number cm, 60-180) — McCallum ratios §12
+- profile.arm_cm (number cm, 20-65)
+- profile.forearm_cm (number cm, 15-50)
+- profile.wrist_cm (number cm, 10-25)
+- profile.thigh_cm (number cm, 30-100)
+- profile.calf_cm (number cm, 20-60)
 - profile.bf_method ("dexa" | "bodpod" | "inbody" | "caliper" | "navy" | "bia" | "photo" | "unknown")
 - profile.hormonal_context ("natural" | "trt" | "cycle" | "post_menopause" | "other")
 - profile.medical_notes (string libre, max 1000 caractères)

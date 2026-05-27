@@ -81,6 +81,15 @@ const ALLOWED_FIELDS: Record<string, FieldSpec> = {
   "profile.waist_cm": { type: "number", min: 40, max: 200 },
   "profile.neck_cm": { type: "number", min: 25, max: 70 },
   "profile.hips_cm": { type: "number", min: 50, max: 200 },
+  // Mensurations complémentaires — exploitables par le prompt §12 du coach
+  // (ratios McCallum, Adonis Index, indices esthétiques).
+  "profile.shoulder_cm": { type: "number", min: 90, max: 180 },
+  "profile.chest_cm": { type: "number", min: 60, max: 180 },
+  "profile.arm_cm": { type: "number", min: 20, max: 65 },
+  "profile.forearm_cm": { type: "number", min: 15, max: 50 },
+  "profile.wrist_cm": { type: "number", min: 10, max: 25 },
+  "profile.thigh_cm": { type: "number", min: 30, max: 100 },
+  "profile.calf_cm": { type: "number", min: 20, max: 60 },
   "profile.bf_method": {
     type: "string",
     enum: ["dexa", "bodpod", "inbody", "caliper", "navy", "bia", "photo", "unknown"],

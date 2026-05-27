@@ -41,6 +41,14 @@ export interface UserProfile {
   waist_cm?: number;
   neck_cm?: number;
   hips_cm?: number;
+  // Mensurations complémentaires (Adonis ratio, McCallum §12 du coach)
+  shoulder_cm?: number;
+  chest_cm?: number;
+  arm_cm?: number;
+  forearm_cm?: number;
+  wrist_cm?: number;
+  thigh_cm?: number;
+  calf_cm?: number;
   bf_method?: string; // "dexa" | "inbody" | "caliper" | "navy" | "bia" | "photo" | "unknown"
   hormonal_context?: string; // "natural" | "trt" | "cycle" | "post_menopause"
   medical_notes?: string;
@@ -282,6 +290,13 @@ PROFIL DE L'UTILISATEUR :
 - Tour de taille : ${p?.waist_cm ? `${p.waist_cm} cm` : '(non mesuré)'}
 - Tour de cou : ${p?.neck_cm ? `${p.neck_cm} cm` : '(non mesuré)'}
 ${p?.hips_cm ? `- Tour de hanches : ${p.hips_cm} cm` : ''}
+${p?.shoulder_cm ? `- Tour d'épaules : ${p.shoulder_cm} cm` : ''}
+${p?.chest_cm ? `- Tour de poitrine : ${p.chest_cm} cm` : ''}
+${p?.arm_cm ? `- Tour de bras : ${p.arm_cm} cm` : ''}
+${p?.forearm_cm ? `- Tour d'avant-bras : ${p.forearm_cm} cm` : ''}
+${p?.wrist_cm ? `- Tour de poignet : ${p.wrist_cm} cm` : ''}
+${p?.thigh_cm ? `- Tour de cuisse : ${p.thigh_cm} cm` : ''}
+${p?.calf_cm ? `- Tour de mollet : ${p.calf_cm} cm` : ''}
 - Contexte hormonal : ${p?.hormonal_context ?? 'naturel (à confirmer)'}
 - Notes médicales : ${p?.medical_notes ?? '(aucune signalée)'}
 - TDEE théorique : ${p?.tdee_theoretical ? `${p.tdee_theoretical} kcal` : '(à calculer)'}
