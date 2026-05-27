@@ -172,11 +172,15 @@ ${JSON.stringify(userContext, null, 2)}
       `;
 
       const responseText = await generateText({
-        // TEMP — downgrade Pro 2.5 → Flash 3.5 pour passer sous le timeout
-        // Vercel 60s. Flash génère plus vite (~2-3× plus rapide en JSON
-        // structuré) mais raisonne moins finement. À revert dès que le
-        // split en 2 appels parallèles (nutrition + training) sera en place.
-        // Original: model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
+        // Upgrade Pro 2.5 → Flash 3.5 (génération Gemini 3.x). Flash 3.5
+        // dépasse Pro 2.5 sur reasoning + instruction following + JSON
+        // schema generation tout en étant ~2-3× plus rapide en JSON
+        // structuré, ce qui résout aussi le timeout Vercel 60s rencontré
+        // sur generate-plan avec Pro 2.5. Validé en prod 2026-05-27.
+        // Note : revérifier que la règle §3bis du prompt (Katch-McArdle
+        // si bf_pct fourni) est bien suivie — Flash peut fallback sur
+        // Mifflin si bf_method == 'photo' (jugé incertain).
+        // Old: model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-2.5-pro',
         model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: promptText }] }],
         systemInstruction,

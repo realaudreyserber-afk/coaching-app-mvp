@@ -138,8 +138,14 @@ export default function CoachPage() {
   const router = useRouter();
   const { user, getFreshToken, loading } = useAuth();
   
+  // Greeting hardcoded en empty state. ID unique pour qu'on puisse le filtrer
+  // explicitement quand Firestore renvoie des messages (typique post-onboarding :
+  // welcome + plan_generated arrivent en async, le greeting ne doit pas s'ajouter
+  // dessus). Sans cet id, son timestamp set au mount le faisait survivre au merge
+  // timestamp-based ci-dessous.
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
+      id: '__initial_greeting__',
       role: 'assistant',
       content: "Salut. Je suis NoDream, ton coach IA. Pose-moi tes questions sur ta nutrition, ton entraînement ou ta récupération. Pas de promesse facile, pas de blabla — on va droit au but. Qu'est-ce qui te bloque aujourd'hui ?",
       timestamp: new Date().toISOString()
@@ -255,7 +261,15 @@ export default function CoachPage() {
           setMessages((prev) => {
             if (loadedHistory.length === 0) return prev;
             const lastLoadedTs = loadedHistory[loadedHistory.length - 1].timestamp ?? '';
-            const newer = prev.filter((m) => (m.timestamp ?? '') > lastLoadedTs);
+            // Vire explicitement le greeting hardcoded (__initial_greeting__)
+            // avant le merge. Son timestamp set au mount du composant le
+            // faisait survivre au filter time-based et apparaître après les
+            // messages proactifs (welcome + plan_generated) post-onboarding.
+            const newer = prev.filter(
+              (m) =>
+                m.id !== '__initial_greeting__' &&
+                (m.timestamp ?? '') > lastLoadedTs,
+            );
             return [...loadedHistory, ...newer];
           });
         }
