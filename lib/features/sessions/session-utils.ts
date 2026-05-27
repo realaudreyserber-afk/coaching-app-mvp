@@ -102,7 +102,13 @@ export function computeSessionMetrics(
     sets_completed: setsCompleted,
     sets_planned: setsPlanned,
     completion_pct: completionPct,
-    vs_previous_volume_pct: vsPreviousVolumePct,
+    // Firestore Admin SDK rejette les valeurs `undefined` dans tx.update().
+    // On omet le champ entier au lieu de l'écrire à undefined, ce qui faisait
+    // crasher /api/sessions/[id]/log-set sur la 1ère session de chaque user
+    // (pas de previousVolumeKg → undefined → 500 "Write failed").
+    ...(vsPreviousVolumePct !== undefined && {
+      vs_previous_volume_pct: vsPreviousVolumePct,
+    }),
   };
 }
 
