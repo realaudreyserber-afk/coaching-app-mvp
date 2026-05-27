@@ -278,8 +278,27 @@ export function Step3Measurements({ userData, onPrev, onNext }: StepProps) {
 // STEP 4: BODY FAT (Taux de masse grasse)
 // ==========================================
 export function Step4BodyFat({ userData, onPrev, onNext }: StepProps) {
+  // Mode "exact" pré-sélectionné si l'utilisateur revient avec une mesure
+  // précise déjà enregistrée (DEXA/InBody/Navy/...). Sinon mode "estimate".
+  const existingMethod = userData?.profile?.bf_method as string | undefined;
+  const hasExactMeasurement =
+    userData?.baseline?.bf_pct != null &&
+    existingMethod &&
+    existingMethod !== "unknown" &&
+    existingMethod !== "photo";
+
+  const [mode, setMode] = useState<"estimate" | "exact">(
+    hasExactMeasurement ? "exact" : "estimate",
+  );
   const [bf, setBf] = useState(userData?.baseline?.bf_pct || 25);
-  
+  const [bfExact, setBfExact] = useState(
+    userData?.baseline?.bf_pct != null ? String(userData.baseline.bf_pct) : "",
+  );
+  const [bfMethod, setBfMethod] = useState<string>(
+    hasExactMeasurement ? (existingMethod as string) : "",
+  );
+  const [error, setError] = useState("");
+
   const bfRanges = [
     { value: 12, label: "Très Sec (< 15%)", desc: "Abdominaux très visibles, veines apparentes." },
     { value: 18, label: "Athlétique (15% - 20%)", desc: "Abdominaux dessinés en bonne lumière, athlétique." },
@@ -288,43 +307,160 @@ export function Step4BodyFat({ userData, onPrev, onNext }: StepProps) {
     { value: 36, label: "Très Élevé (> 30%)", desc: "Masse grasse importante répartie sur l'ensemble du corps." },
   ];
 
+  const bfMethodOptions = [
+    { value: "dexa", label: "DEXA (±1%)" },
+    { value: "bodpod", label: "BodPod (±2%)" },
+    { value: "inbody", label: "InBody (±3%)" },
+    { value: "caliper", label: "Caliper pli cutané (±3-5%)" },
+    { value: "navy", label: "Navy / mètre ruban (±3-4%)" },
+    { value: "bia", label: "BIA balance (±5-8%)" },
+    { value: "photo", label: "Photo visuel (±5-10%)" },
+  ];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
+    if (mode === "exact") {
+      const num = parseFloat(bfExact);
+      if (isNaN(num) || num < 3 || num > 60) {
+        setError("Saisis une valeur entre 3 et 60% (ou bascule sur l'estimation visuelle).");
+        return;
+      }
+      if (!bfMethod) {
+        setError("Sélectionne la méthode utilisée pour mesurer ton BF.");
+        return;
+      }
+      await onNext({
+        baseline: {
+          ...(userData?.baseline || {}),
+          bf_pct: num,
+          bf_measured_at: new Date().toISOString(),
+        },
+        profile: {
+          ...(userData?.profile || {}),
+          bf_method: bfMethod,
+        },
+      });
+      return;
+    }
+
+    // Mode "estimate" — comportement initial : on enregistre la valeur de la
+    // tranche choisie et on marque la méthode comme "photo" (référentiel visuel).
     await onNext({
       baseline: {
         ...(userData?.baseline || {}),
         bf_pct: bf,
-      }
+      },
+      profile: {
+        ...(userData?.profile || {}),
+        bf_method: "photo",
+      },
     });
   };
 
   return (
     <Card className="max-w-md w-full mx-auto border-border">
       <CardHeader className="text-center space-y-2">
-        <CardTitle className="text-3xl font-serif">Estime ta masse grasse</CardTitle>
+        <CardTitle className="text-3xl font-serif">
+          {mode === "exact" ? "Saisis ton BF exact" : "Estime ta masse grasse"}
+        </CardTitle>
         <CardDescription>
-          Une estimation approximative suffit pour démarrer la recomposition.
+          {mode === "exact"
+            ? "Une mesure précise (DEXA, InBody, caliper, Navy) calibre ton plan via Katch-McArdle au lieu de Mifflin-St Jeor."
+            : "Une estimation approximative suffit pour démarrer la recomposition."}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            {bfRanges.map((range) => (
-              <button
-                key={range.value}
-                type="button"
-                onClick={() => setBf(range.value)}
-                className={`w-full text-left p-4 rounded-md border transition-all ${
-                  bf === range.value
-                    ? "border-primary bg-orange-light text-primary dark:bg-primary/20"
-                    : "border-border hover:bg-muted"
-                }`}
-              >
-                <div className="font-medium text-sm">{range.label}</div>
-                <div className="text-xs text-muted-foreground mt-1">{range.desc}</div>
-              </button>
-            ))}
+          {/* Mode selector — estimate vs exact */}
+          <div className="flex gap-1 p-1 rounded-md border border-border">
+            <button
+              type="button"
+              onClick={() => setMode("estimate")}
+              className={`flex-1 px-3 py-2 text-sm rounded-sm transition-all ${
+                mode === "estimate"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Estimer visuellement
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("exact")}
+              className={`flex-1 px-3 py-2 text-sm rounded-sm transition-all ${
+                mode === "exact"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Je connais ma valeur
+            </button>
           </div>
+
+          {mode === "estimate" ? (
+            <div className="space-y-4">
+              {bfRanges.map((range) => (
+                <button
+                  key={range.value}
+                  type="button"
+                  onClick={() => setBf(range.value)}
+                  className={`w-full text-left p-4 rounded-md border transition-all ${
+                    bf === range.value
+                      ? "border-primary bg-orange-light text-primary dark:bg-primary/20"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  <div className="font-medium text-sm">{range.label}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{range.desc}</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="onboarding-bf-exact" className="text-sm font-medium">
+                  Body fat (%)
+                </label>
+                <input
+                  id="onboarding-bf-exact"
+                  type="number"
+                  step="0.1"
+                  min="3"
+                  max="60"
+                  value={bfExact}
+                  onChange={(e) => setBfExact(e.target.value)}
+                  placeholder="ex: 18.5"
+                  className="w-full h-11 px-3 rounded-md border border-border bg-transparent focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="onboarding-bf-method" className="text-sm font-medium">
+                  Méthode de mesure
+                </label>
+                <select
+                  id="onboarding-bf-method"
+                  value={bfMethod}
+                  onChange={(e) => setBfMethod(e.target.value)}
+                  className="w-full h-11 px-3 rounded-md border border-border bg-transparent focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">— Sélectionne —</option>
+                  {bfMethodOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </p>
+          )}
 
           <div className="flex gap-4">
             <Button type="button" variant="outline" onClick={onPrev} className="w-1/3 h-11">

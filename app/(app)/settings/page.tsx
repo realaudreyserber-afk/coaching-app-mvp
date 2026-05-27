@@ -115,6 +115,12 @@ export default function SettingsPage() {
   const [height, setHeight] = useState("");
   const [activityLevel, setActivityLevel] = useState<UserProfile["activity_level"]>("sedentary");
   const [trainingEnvironment, setTrainingEnvironment] = useState<TrainingEnvironment>("gym");
+  // BF connu — saisie directe pour bascule Mifflin-St Jeor → Katch-McArdle
+  // (cf. lib/vertex/prompts/plan-generator.ts §3bis).
+  const [bfPct, setBfPct] = useState("");
+  const [bfMethod, setBfMethod] = useState<
+    "" | "dexa" | "bodpod" | "inbody" | "caliper" | "navy" | "bia" | "photo"
+  >("");
 
   // App preferences settings
   const [notifications, setNotifications] = useState(true);
@@ -162,6 +168,16 @@ export default function SettingsPage() {
             setHeight(uData.profile.height ? String(uData.profile.height) : "");
             setActivityLevel(uData.profile.activity_level || "sedentary");
             setTrainingEnvironment(uData.profile.training_environment || "gym");
+            // Pré-remplit la méthode BF seulement si c'est une mesure précise
+            // ("photo" = mode estimation visuelle de l'onboarding → on garde
+            // le sélecteur vide pour que le user puisse saisir une vraie mesure).
+            const method = uData.profile.bf_method as string | undefined;
+            if (method && method !== "unknown" && method !== "photo") {
+              setBfMethod(method as typeof bfMethod);
+            }
+          }
+          if (uData.baseline?.bf_pct != null) {
+            setBfPct(String(uData.baseline.bf_pct));
           }
           if (uData.settings) {
             setNotifications(uData.settings.notifications !== false);
@@ -212,6 +228,20 @@ export default function SettingsPage() {
       return;
     }
 
+    // BF connu — optionnel. Si saisi : range strict + méthode obligatoire.
+    let bfPctNum: number | null = null;
+    if (bfPct.trim() !== "") {
+      bfPctNum = parseFloat(bfPct);
+      if (isNaN(bfPctNum) || bfPctNum < 3 || bfPctNum > 60) {
+        setErrorMsg("BF doit être entre 3 et 60% (laisse vide si inconnu).");
+        return;
+      }
+      if (!bfMethod) {
+        setErrorMsg("Sélectionne la méthode utilisée pour mesurer ton BF.");
+        return;
+      }
+    }
+
     setSaving(true);
     setErrorMsg("");
     setSaveSuccess(false);
@@ -227,6 +257,8 @@ export default function SettingsPage() {
           height: heightNum,
           activity_level: activityLevel,
           training_environment: trainingEnvironment,
+          // Mémorise la méthode seulement si une mesure BF est fournie ce coup-ci
+          ...(bfPctNum !== null && bfMethod ? { bf_method: bfMethod } : {}),
         };
         const updatedSettings: UserSettings = {
           notifications,
@@ -237,6 +269,16 @@ export default function SettingsPage() {
         await updateDoc(userRef, {
           profile: updatedProfile,
           settings: updatedSettings,
+          // Si BF saisi, met à jour baseline. Le coach lit baseline.bf_pct
+          // en priorité (cf. lib/vertex/context-builder.ts profileBlock) et
+          // bascule sur Katch-McArdle au lieu de Mifflin-St Jeor.
+          ...(bfPctNum !== null && {
+            baseline: {
+              ...(currentData.baseline || {}),
+              bf_pct: bfPctNum,
+              bf_measured_at: new Date().toISOString(),
+            },
+          }),
           ...(featureFasting && {
             fasting_protocol: {
               active: fastingActive,
@@ -582,6 +624,65 @@ export default function SettingsPage() {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* BF connu — permet la saisie directe d'une mesure précise
+                (DEXA/InBody/caliper/Navy). Le coach + plan-generator
+                bascule alors sur Katch-McArdle au lieu de Mifflin-St Jeor. */}
+            <div
+              className="space-y-2 pt-3"
+              style={{ borderTop: '1px solid var(--glass-border)' }}
+            >
+              <label style={labelStyle}>BF connu (optionnel)</label>
+              <p
+                className="mono"
+                style={{
+                  fontSize: 9,
+                  color: 'var(--fg-5)',
+                  letterSpacing: '0.05em',
+                  marginTop: -2,
+                  marginBottom: 8,
+                }}
+              >
+                Mesure DEXA / InBody / caliper / Navy — laisse vide si tu n'as pas mesuré
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="settings-bf-pct" style={labelStyle}>BF (%)</label>
+                  <input
+                    id="settings-bf-pct"
+                    type="number"
+                    step="0.1"
+                    min={3}
+                    max={60}
+                    placeholder="ex: 18.5"
+                    value={bfPct}
+                    onChange={(e) => setBfPct(e.target.value)}
+                    className="mono"
+                    style={inputBase}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="settings-bf-method" style={labelStyle}>Méthode</label>
+                  <select
+                    id="settings-bf-method"
+                    value={bfMethod}
+                    onChange={(e: any) => setBfMethod(e.target.value)}
+                    className="mono"
+                    style={inputBase}
+                    disabled={!bfPct.trim()}
+                  >
+                    <option value="">— Sélectionne —</option>
+                    <option value="dexa">DEXA (±1%)</option>
+                    <option value="bodpod">BodPod (±2%)</option>
+                    <option value="inbody">InBody (±3%)</option>
+                    <option value="caliper">Caliper (±3-5%)</option>
+                    <option value="navy">Navy (±3-4%)</option>
+                    <option value="bia">BIA balance (±5-8%)</option>
+                    <option value="photo">Photo visuel (±5-10%)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
