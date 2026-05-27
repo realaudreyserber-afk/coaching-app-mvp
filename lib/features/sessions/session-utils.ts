@@ -158,10 +158,22 @@ export function appendSetLog(
   if (!target) {
     throw new Error(`Exercise not found in session: ${exerciseId}`);
   }
-  target.sets_logged.push({
-    ...log,
+  // Firestore Admin SDK rejette les valeurs `undefined` dans tx.update().
+  // On construit le SetLog explicitement avec les champs requis, et on
+  // n'inclut les optionnels (loaded_kg, tempo_seconds, rest_taken_seconds,
+  // notes) que s'ils sont définis. Sinon : crash "Write failed" sur log-set.
+  const cleanLog: SetLog = {
+    set_index: log.set_index,
+    weight_kg: log.weight_kg,
+    reps_done: log.reps_done,
+    rpe_felt: log.rpe_felt,
     completed_at: log.completed_at ?? new Date().toISOString(),
-  });
+    ...(log.loaded_kg !== undefined && { loaded_kg: log.loaded_kg }),
+    ...(log.tempo_seconds !== undefined && { tempo_seconds: log.tempo_seconds }),
+    ...(log.rest_taken_seconds !== undefined && { rest_taken_seconds: log.rest_taken_seconds }),
+    ...(log.notes !== undefined && { notes: log.notes }),
+  };
+  target.sets_logged.push(cleanLog);
   return copy;
 }
 
