@@ -512,7 +512,17 @@ export default function LogSessionPage() {
       if (!res.ok) throw new Error(data?.error ?? "Enregistrement échoué");
 
       setSuccess(true);
-      setTimeout(() => router.push("/dashboard"), 1500);
+      // Redirige vers /workout/summary qui auto-fire le debrief Vertex via
+      // /api/ai/coach-session-debrief. La séance elle-même n'a pas besoin
+      // de Vertex (juste Firestore) — l'analyse coach se fait là.
+      const sessionId = data?.session_id;
+      setTimeout(() => {
+        if (sessionId) {
+          router.push(`/workout/summary?from=${sessionId}`);
+        } else {
+          router.push("/dashboard");
+        }
+      }, 1500);
     } catch (e: any) {
       setErr(e?.message ?? "Impossible d'enregistrer la séance");
     } finally {
