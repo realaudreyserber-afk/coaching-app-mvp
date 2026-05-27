@@ -14,6 +14,7 @@ import { buildEnrichedSystemPrompt, buildUserContext } from '@/lib/vertex/contex
 import { fetchEnrichmentContext, extractPlanKcal } from '@/lib/vertex/context-fetcher';
 import { loadCoachState, markCoachIntervention } from '@/lib/features/coach-state/store';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
+import { runMultiAgentCoach } from '@/lib/vertex/agents/coach-route-adapter';
 
 export async function POST(req: NextRequest) {
   return withAuth(req, async (authenticatedReq, user) => {
@@ -74,6 +75,20 @@ export async function POST(req: NextRequest) {
           sources: [],
           safety: { flagged: true, reason: safety.reason },
         }, { status: 200 });
+      }
+
+      // Multi-agent backend (env-gated). Si activé, on délègue à runAgentSession
+      // qui orchestre Supervisor + sous-agents spécialisés, et on émet en SSE
+      // dans le format legacy attendu par coach/page.tsx (zéro change UI).
+      // Revertable instantanément en retirant USE_MULTI_AGENT_BACKEND=1.
+      if (process.env.USE_MULTI_AGENT_BACKEND === '1') {
+        return runMultiAgentCoach({
+          req,
+          uid,
+          userRef,
+          messages,
+          lastMessageText,
+        });
       }
 
       // 2. Perform RAG Sourcing if flag is active

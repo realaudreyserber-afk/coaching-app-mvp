@@ -13,6 +13,7 @@ import { SafetyCoach } from './safety';
 import { MentalCoach } from './mental';
 import { SocialCoach } from './social';
 import { EducationCoach } from './education';
+import { PlanningCoach } from './planning';
 
 const FACTORIES: Record<SubAgentName, () => BaseAgent> = {
   nutrition: () => new NutritionCoach(),
@@ -22,6 +23,7 @@ const FACTORIES: Record<SubAgentName, () => BaseAgent> = {
   mental: () => new MentalCoach(),
   social: () => new SocialCoach(),
   education: () => new EducationCoach(),
+  planning: () => new PlanningCoach(),
 };
 
 export function getSubAgent(name: SubAgentName): BaseAgent {

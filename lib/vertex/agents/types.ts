@@ -33,7 +33,8 @@ export type SubAgentName =
   | 'safety'
   | 'mental'
   | 'social'
-  | 'education';
+  | 'education'
+  | 'planning';
 
 /**
  * Liste runtime des sous-agents — source de vérité unique pour la
@@ -47,6 +48,7 @@ export const SUB_AGENT_NAMES: readonly SubAgentName[] = [
   'mental',
   'social',
   'education',
+  'planning',
 ] as const;
 
 export function isValidSubAgentName(name: unknown): name is SubAgentName {
@@ -193,6 +195,7 @@ export function createEmptySharedMemory(): SharedSessionMemory {
       mental: [],
       social: [],
       education: [],
+      planning: [],
     },
     facts: {},
     decisions: [],

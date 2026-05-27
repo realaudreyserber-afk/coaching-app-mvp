@@ -33,10 +33,25 @@ const PROACTIVE_INSTRUCTIONS: Record<string, string> = {
   plan_generated: `L'utilisateur vient de recevoir son premier plan généré. Tu commentes le plan en 70-120 mots : annonce la cible kcal + macros, explique la stratégie (déficit/maintenance/surplus + ratio macros + cardio), termine par 1 phrase actionnable pour la première semaine. Tutoiement, ton sec, factuel, pas de flatterie.`,
   session_finished: `L'utilisateur vient de terminer une séance de musculation. Message court (40-70 mots) : reconnais la séance, mentionne un point factuel (top lift OU complétion OU progression), termine par 1 conseil micro pour la récup (étirements, hydratation, sommeil). Tutoiement, ton sec.`,
   plateau_detected: `Le poids de l'utilisateur stagne depuis 14+ jours. Message direct (60-100 mots) : reconnais le plateau sans dramatiser, propose 1 hypothèse concrète à vérifier (déficit insuffisant, sommeil dégradé, surévaluation activité), suggère 1 action précise (recalibrer TDEE adaptatif, ajouter cardio LISS, recompter macros sur 3 jours). Pas de "ne lâche rien".`,
+  disengaged_detected: `L'utilisateur a réduit ou arrêté l'utilisation de l'app (plus de logs / checkins / messages depuis plusieurs jours). Un context.disengagement_signal sera fourni avec les jours d'inactivité. Message COURT (50-80 mots), tutoiement, ton sec. NE PAS culpabiliser, NE PAS dramatiser, NE PAS faire la liste de ses manquements. Au contraire : présence sobre, validation que la vie peut prendre le dessus, et UNE seule porte de re-entrée facile (ex: "tu veux qu'on reprenne par un check rapide, ou tu préfères qu'on attende encore quelques jours ?"). Surtout pas de slogan motivationnel ("tu peux le faire !"). Si l'inactivité dépasse 14 jours, mentionne explicitement que tu n'envoies plus de messages tant qu'il ne te dit pas qu'il veut reprendre — respect du choix.`,
 };
 
 interface ProactiveBody {
-  trigger: 'welcome' | 'plan_generated' | 'session_finished' | 'plateau_detected';
+  trigger:
+    | 'welcome'
+    | 'plan_generated'
+    | 'session_finished'
+    | 'plateau_detected'
+    | 'disengaged_detected';
+  /** Pour disengaged_detected : optionnel, signal de décrochage déjà calculé */
+  disengagement_signal?: {
+    level: 'low' | 'medium' | 'high';
+    days_since_last_food_log?: number | null;
+    days_since_last_checkin?: number | null;
+    days_since_last_workout?: number | null;
+    days_since_last_user_message?: number | null;
+    signals?: string[];
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -77,6 +92,20 @@ export async function POST(req: NextRequest) {
     if (body.trigger === 'plan_generated' && state.plan_debrief_sent) {
       return NextResponse.json({ ok: true, skipped: 'plan_debrief_already_sent' });
     }
+    // Disengagement : ne pas spammer — pas plus d'un message tous les 3 jours
+    if (body.trigger === 'disengaged_detected') {
+      const lastIntervention = state.last_intervention_at;
+      if (lastIntervention) {
+        const hoursSince = (Date.now() - new Date(lastIntervention).getTime()) / (60 * 60 * 1000);
+        if (hoursSince < 72) {
+          return NextResponse.json({
+            ok: true,
+            skipped: 'disengagement_throttled',
+            hours_since_last: Math.round(hoursSince),
+          });
+        }
+      }
+    }
 
     // Load minimal context for the model
     const userRef = adminDb.collection('users').doc(uid);
@@ -87,7 +116,7 @@ export async function POST(req: NextRequest) {
     const userData = userSnap.data() ?? {};
     const activePlan = plansSnap.empty ? undefined : plansSnap.docs[0].data();
 
-    const ctx = {
+    const ctx: Record<string, unknown> = {
       profile: {
         name: userData.profile?.name,
         sex: userData.profile?.sex,
@@ -107,6 +136,9 @@ export async function POST(req: NextRequest) {
           }
         : undefined,
     };
+    if (body.trigger === 'disengaged_detected' && body.disengagement_signal) {
+      ctx.disengagement_signal = body.disengagement_signal;
+    }
 
     const text = await generateText({
       model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
