@@ -2,42 +2,55 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Loader } from "@/components/ui/loader";
-import { HudCard, PanelHeader, Tag } from "@/components/nodream";
-import { Plus, Minus, Save, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { HudCard, PanelHeader, Tag, Corners } from "@/components/nodream";
+import {
+  Plus,
+  Minus,
+  Check,
+  ChevronRight,
+  Square,
+  Activity,
+  Flame,
+  Save,
+  TimerReset,
+} from "lucide-react";
 import type { PlanDoc, PlanTrainingSession } from "@/types/plan";
 
 /**
- * Page /session/log/[planId]?block=N — log post-séance simple.
+ * Page /session/log/[planId]?block=N — UX tactical OS local-first.
  *
- * Pattern industrie (Strong/Hevy/Jefit) : l'utilisateur saisit toute sa
- * séance en une fois APRÈS l'avoir faite. Pas de live tracking, pas de
- * Firestore write par set, pas de transaction concurrente.
+ * Pivot post-séance type Strong/Hevy : toute la séance est en state React
+ * pendant l'exécution (zéro write Firestore live). Un seul POST à la fin
+ * vers /api/sessions/log-full qui écrit tout en 1 batch — pas de risque
+ * d'undefined rejeté par Firestore Admin SDK.
  *
- * Tout est local jusqu'au bouton "Enregistrer", qui POST tout en un seul
- * appel à /api/sessions/log-full → 1 batch Firestore.
+ * Le UX visuel (header compteurs live, boutons SET, steppers gros, stats
+ * card live, file d'exécution avec block_code) est conservé depuis l'ancien
+ * /session/live mais avec la robustesse du pattern industrie.
  */
 
-interface SetInput {
-  weight_kg: string; // string pour permettre champ vide
-  reps_done: string;
-  rpe_felt: string;
-  loaded_kg?: string;
-  notes?: string;
+interface LocalSet {
+  weight_kg: number;
+  reps_done: number;
+  rpe_felt: number;
+  completed: boolean;
 }
 
-interface ExerciseEntry {
+interface LocalExercise {
   exercise_id: string;
   exercise_name: string;
   target_sets: number;
   target_reps_range: string;
   target_rest_seconds: number;
-  sets: SetInput[];
+  block_code: string;
+  superset_group?: string;
+  sets: LocalSet[];
 }
 
 function slugify(name: string): string {
@@ -49,28 +62,187 @@ function slugify(name: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-const inputStyle: React.CSSProperties = {
-  background: "var(--glass-bg-2)",
-  border: "1px solid var(--glass-border)",
-  color: "var(--fg-1)",
-  fontSize: 14,
-  padding: "0 10px",
-  height: 38,
-  width: "100%",
-  textAlign: "center",
-  clipPath:
-    "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-};
+/**
+ * Block code (A1, A2, B1, ...) — duplication light de la logique dans
+ * /api/sessions/start (Wave 7 #8). Cf. start/route.ts:190 pour la version
+ * canonique côté serveur.
+ */
+function buildBlockCode(
+  idx: number,
+  all: ReadonlyArray<{ superset_group?: string }>,
+): string {
+  const hasAnySupersetGroup = all.some(
+    (e) => typeof e.superset_group === "string" && e.superset_group,
+  );
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 9,
-  letterSpacing: "0.18em",
-  color: "var(--fg-4)",
-  textTransform: "uppercase",
-  fontWeight: 700,
-  display: "block",
-  marginBottom: 4,
-};
+  if (hasAnySupersetGroup) {
+    const groupLetters = new Map<string, string>();
+    const soloLetters = new Map<number, string>();
+    let nextLetterCode = "A".charCodeAt(0);
+    for (let i = 0; i < all.length; i++) {
+      const g = all[i].superset_group;
+      if (g) {
+        if (!groupLetters.has(g)) {
+          groupLetters.set(g, String.fromCharCode(nextLetterCode++));
+        }
+      } else {
+        soloLetters.set(i, String.fromCharCode(nextLetterCode++));
+      }
+    }
+    const me = all[idx];
+    const letter = me.superset_group
+      ? groupLetters.get(me.superset_group)!
+      : soloLetters.get(idx)!;
+    let slot = 1;
+    if (me.superset_group) {
+      for (let i = 0; i < idx; i++) {
+        if (all[i].superset_group === me.superset_group) slot++;
+      }
+    }
+    return `${letter}${slot}`;
+  }
+
+  // Fallback paires-de-2 (A1/A2, B1/B2, ...)
+  const blockLetter = String.fromCharCode("A".charCodeAt(0) + Math.floor(idx / 2));
+  const slot = (idx % 2) + 1;
+  return `${blockLetter}${slot}`;
+}
+
+function parseTargetRepsLow(range: string): number {
+  if (!range) return 10;
+  const m = range.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 10;
+}
+
+function formatDuration(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) {
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  }
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Stepper component — utilisé pour CHARGE / RÉPÉTITIONS / RPE
+// ────────────────────────────────────────────────────────────────
+
+interface StepperProps {
+  label: string;
+  unit?: string;
+  value: number;
+  step: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+  decimals?: number;
+}
+
+function Stepper({ label, unit, value, step, min, max, onChange, decimals = 0 }: StepperProps) {
+  const decrement = () => onChange(Math.max(min, +(value - step).toFixed(decimals)));
+  const increment = () => onChange(Math.min(max, +(value + step).toFixed(decimals)));
+  return (
+    <div
+      style={{
+        background: "var(--glass-bg-2)",
+        border: "1px solid var(--glass-border)",
+        padding: "8px 6px 10px",
+        clipPath:
+          "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+      }}
+    >
+      <div
+        className="mono"
+        style={{
+          fontSize: 9,
+          letterSpacing: "0.2em",
+          color: "var(--fg-5)",
+          textAlign: "center",
+          textTransform: "uppercase",
+          fontWeight: 700,
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      <div className="flex items-center justify-between gap-1">
+        <button
+          type="button"
+          onClick={decrement}
+          aria-label={`Diminuer ${label}`}
+          className="mono cursor-pointer"
+          style={{
+            width: 28,
+            height: 32,
+            background: "var(--glass-bg-2)",
+            border: "1px solid var(--glass-border)",
+            color: "var(--gold-400)",
+            clipPath:
+              "polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Minus className="h-3 w-3" aria-hidden="true" />
+        </button>
+        <div
+          className="mono"
+          style={{
+            flex: 1,
+            textAlign: "center",
+            fontSize: 22,
+            fontWeight: 900,
+            color: "var(--fg-1)",
+            lineHeight: 1,
+          }}
+        >
+          {value.toFixed(decimals)}
+        </div>
+        <button
+          type="button"
+          onClick={increment}
+          aria-label={`Augmenter ${label}`}
+          className="mono cursor-pointer"
+          style={{
+            width: 28,
+            height: 32,
+            background: "var(--glass-bg-2)",
+            border: "1px solid var(--glass-border)",
+            color: "var(--gold-400)",
+            clipPath:
+              "polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Plus className="h-3 w-3" aria-hidden="true" />
+        </button>
+      </div>
+      {unit && (
+        <div
+          className="mono"
+          style={{
+            fontSize: 8,
+            color: "var(--fg-5)",
+            textAlign: "center",
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            marginTop: 2,
+          }}
+        >
+          {unit}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Page principale
+// ────────────────────────────────────────────────────────────────
 
 export default function LogSessionPage() {
   const { user, loading, getFreshToken } = useAuth();
@@ -82,27 +254,41 @@ export default function LogSessionPage() {
 
   const [plan, setPlan] = useState<PlanDoc | null>(null);
   const [block, setBlock] = useState<PlanTrainingSession | null>(null);
-  const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
-  const [durationMinutes, setDurationMinutes] = useState<string>("60");
-  const [userNotes, setUserNotes] = useState<string>("");
+  const [exercises, setExercises] = useState<LocalExercise[]>([]);
+  const [userWeightKg, setUserWeightKg] = useState(75);
+  const [activeExoIdx, setActiveExoIdx] = useState(0);
+  const [activeSetIdx, setActiveSetIdx] = useState(0);
+  const [userNotes, setUserNotes] = useState("");
+
+  // Timer durée live
+  const startedAtMs = useRef<number>(Date.now());
+  const [nowMs, setNowMs] = useState(Date.now());
 
   const [fetching, setFetching] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Load plan + initialize exercises
+  // Tick chaque seconde pour la durée et les stats live
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Load plan + initialize exercises + user weight
   useEffect(() => {
     if (loading || !user || !planId) return;
     const load = async () => {
       try {
-        const planRef = doc(db, "users", user.uid, "plans", planId);
-        const snap = await getDoc(planRef);
-        if (!snap.exists()) {
+        const [planSnap, userSnap] = await Promise.all([
+          getDoc(doc(db, "users", user.uid, "plans", planId)),
+          getDoc(doc(db, "users", user.uid)),
+        ]);
+        if (!planSnap.exists()) {
           setErr("Plan introuvable");
           return;
         }
-        const planData = { id: snap.id, ...snap.data() } as PlanDoc;
+        const planData = { id: planSnap.id, ...planSnap.data() } as PlanDoc;
         setPlan(planData);
 
         const targetBlock = planData.training?.sessions?.[blockIndex];
@@ -112,20 +298,29 @@ export default function LogSessionPage() {
         }
         setBlock(targetBlock);
 
-        // Initialize exercises : 1 set vide par défaut par exo (target_sets sets vides en fait)
-        const initExos: ExerciseEntry[] = targetBlock.exercises.map((ex) => ({
-          exercise_id: slugify(ex.name),
-          exercise_name: ex.name,
-          target_sets: ex.sets,
-          target_reps_range: ex.reps,
-          target_rest_seconds: ex.rest_seconds,
-          sets: Array.from({ length: ex.sets }, () => ({
-            weight_kg: "",
-            reps_done: "",
-            rpe_felt: "8",
-          })),
-        }));
+        const initExos: LocalExercise[] = targetBlock.exercises.map((ex, idx) => {
+          const defaultReps = parseTargetRepsLow(ex.reps);
+          return {
+            exercise_id: slugify(ex.name),
+            exercise_name: ex.name,
+            target_sets: ex.sets,
+            target_reps_range: ex.reps,
+            target_rest_seconds: ex.rest_seconds,
+            block_code: buildBlockCode(idx, targetBlock.exercises),
+            superset_group: ex.superset_group,
+            sets: Array.from({ length: ex.sets }, () => ({
+              weight_kg: 0,
+              reps_done: defaultReps,
+              rpe_felt: 8,
+              completed: false,
+            })),
+          };
+        });
         setExercises(initExos);
+
+        // User weight pour calcul calories MET-based
+        const uw = (userSnap.data()?.profile?.weight as number) ?? userWeightKg;
+        if (typeof uw === "number" && uw > 0) setUserWeightKg(uw);
       } catch (e: any) {
         console.error("[session/log] load failed:", e);
         setErr(e?.message ?? "Erreur de chargement");
@@ -134,106 +329,155 @@ export default function LogSessionPage() {
       }
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, planId, blockIndex]);
 
-  const updateSetField = useCallback(
-    (exoIdx: number, setIdx: number, field: keyof SetInput, value: string) => {
-      setExercises((prev) => {
-        const copy = prev.map((ex, i) =>
-          i === exoIdx
-            ? {
-                ...ex,
-                sets: ex.sets.map((s, j) => (j === setIdx ? { ...s, [field]: value } : s)),
-              }
-            : ex,
-        );
-        return copy;
-      });
-    },
-    [],
+  // ─── Derived stats (useMemo) ───────────────────────────────────
+
+  const activeExo = exercises[activeExoIdx];
+  const activeSet = activeExo?.sets[activeSetIdx];
+
+  const durationSec = Math.max(0, Math.floor((nowMs - startedAtMs.current) / 1000));
+
+  const completedSets = useMemo(
+    () => exercises.flatMap((e) => e.sets.filter((s) => s.completed)),
+    [exercises],
   );
 
-  const addSet = useCallback((exoIdx: number) => {
+  const volumeKg = useMemo(
+    () => Math.round(completedSets.reduce((sum, s) => sum + s.weight_kg * s.reps_done, 0)),
+    [completedSets],
+  );
+
+  const setsPlanned = useMemo(
+    () => exercises.reduce((sum, e) => sum + e.target_sets, 0),
+    [exercises],
+  );
+  const setsCompleted = completedSets.length;
+  const completionPct =
+    setsPlanned > 0 ? Math.min(100, Math.round((setsCompleted / setsPlanned) * 100)) : 0;
+  const tonnageAvg = setsCompleted > 0 ? Math.round(volumeKg / setsCompleted) : 0;
+  const durationMin = durationSec / 60;
+  const densitySetsPerMin =
+    durationMin > 0 ? Math.round((setsCompleted / durationMin) * 100) / 100 : 0;
+  const caloriesEst = Math.round(5 * userWeightKg * (durationSec / 3600));
+
+  const exosTouched = useMemo(
+    () => exercises.filter((e) => e.sets.some((s) => s.completed)).length,
+    [exercises],
+  );
+
+  // ─── Actions ────────────────────────────────────────────────────
+
+  const updateActiveSet = useCallback(
+    (field: keyof LocalSet, value: number) => {
+      setExercises((prev) =>
+        prev.map((ex, i) =>
+          i === activeExoIdx
+            ? {
+                ...ex,
+                sets: ex.sets.map((s, j) =>
+                  j === activeSetIdx ? { ...s, [field]: value } : s,
+                ),
+              }
+            : ex,
+        ),
+      );
+    },
+    [activeExoIdx, activeSetIdx],
+  );
+
+  const validateSet = useCallback(() => {
+    if (!activeExo) return;
     setExercises((prev) =>
       prev.map((ex, i) =>
-        i === exoIdx
+        i === activeExoIdx
+          ? {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j === activeSetIdx ? { ...s, completed: true } : s,
+              ),
+            }
+          : ex,
+      ),
+    );
+    // Navigate to next set ; if last set, next exo set 0 ; if last exo, stay
+    if (activeSetIdx + 1 < activeExo.sets.length) {
+      setActiveSetIdx(activeSetIdx + 1);
+    } else if (activeExoIdx + 1 < exercises.length) {
+      setActiveExoIdx(activeExoIdx + 1);
+      setActiveSetIdx(0);
+    }
+  }, [activeExo, activeExoIdx, activeSetIdx, exercises.length]);
+
+  const unvalidateSet = useCallback(() => {
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i === activeExoIdx
+          ? {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j === activeSetIdx ? { ...s, completed: false } : s,
+              ),
+            }
+          : ex,
+      ),
+    );
+  }, [activeExoIdx, activeSetIdx]);
+
+  const addSetToActiveExo = useCallback(() => {
+    if (!activeExo) return;
+    const last = activeExo.sets[activeExo.sets.length - 1];
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i === activeExoIdx
           ? {
               ...ex,
               sets: [
                 ...ex.sets,
                 {
-                  weight_kg: ex.sets[ex.sets.length - 1]?.weight_kg ?? "",
-                  reps_done: "",
-                  rpe_felt: ex.sets[ex.sets.length - 1]?.rpe_felt ?? "8",
+                  weight_kg: last?.weight_kg ?? 0,
+                  reps_done: last?.reps_done ?? parseTargetRepsLow(ex.target_reps_range),
+                  rpe_felt: last?.rpe_felt ?? 8,
+                  completed: false,
                 },
               ],
             }
           : ex,
       ),
     );
+  }, [activeExo, activeExoIdx]);
+
+  const selectExoAndSet = useCallback((exoIdx: number, setIdx: number) => {
+    setActiveExoIdx(exoIdx);
+    setActiveSetIdx(setIdx);
   }, []);
 
-  const removeSet = useCallback((exoIdx: number, setIdx: number) => {
-    setExercises((prev) =>
-      prev.map((ex, i) =>
-        i === exoIdx ? { ...ex, sets: ex.sets.filter((_, j) => j !== setIdx) } : ex,
-      ),
-    );
-  }, []);
-
-  const totalSetsLogged = useMemo(
-    () =>
-      exercises.reduce(
-        (sum, ex) =>
-          sum +
-          ex.sets.filter(
-            (s) =>
-              s.weight_kg.trim() !== "" || parseFloat(s.reps_done) > 0,
-          ).length,
-        0,
-      ),
-    [exercises],
-  );
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleTerminer = async () => {
     if (!user || !plan || submitting) return;
-
-    // Validation : au moins 1 set rempli au total
-    if (totalSetsLogged === 0) {
-      setErr("Saisis au moins un set avec poids/reps avant d'enregistrer.");
+    if (setsCompleted === 0) {
+      setErr("Valide au moins un set avant de terminer la séance.");
       return;
     }
-
     setErr(null);
     setSubmitting(true);
     try {
       const token = await getFreshToken();
       if (!token) throw new Error("Authentification requise");
 
-      // Build le body : on ne garde que les sets remplis (weight ou reps > 0)
+      // Payload : on n'inclut que les sets completed=true
       const payloadExercises = exercises
         .map((ex) => ({
           exercise_id: ex.exercise_id,
           exercise_name: ex.exercise_name,
           sets_logged: ex.sets
-            .filter((s) => s.weight_kg.trim() !== "" || parseFloat(s.reps_done) > 0)
-            .map((s, idx) => {
-              const set: any = {
-                set_index: idx + 1,
-                weight_kg: parseFloat(s.weight_kg) || 0,
-                reps_done: parseInt(s.reps_done, 10) || 0,
-                rpe_felt: parseInt(s.rpe_felt, 10) || 8,
-              };
-              if (s.loaded_kg && s.loaded_kg.trim() !== "") {
-                const ld = parseFloat(s.loaded_kg);
-                if (!isNaN(ld)) set.loaded_kg = ld;
-              }
-              if (s.notes && s.notes.trim() !== "") {
-                set.notes = s.notes.trim();
-              }
-              return set;
-            }),
+            .filter((s) => s.completed)
+            .map((s, idx) => ({
+              set_index: idx + 1,
+              weight_kg: s.weight_kg,
+              reps_done: s.reps_done,
+              rpe_felt: s.rpe_felt,
+            })),
         }))
         .filter((ex) => ex.sets_logged.length > 0);
 
@@ -247,20 +491,20 @@ export default function LogSessionPage() {
           plan_id: planId,
           session_block_index: blockIndex,
           operation_name: block?.name,
-          duration_minutes: Math.max(1, parseInt(durationMinutes, 10) || 60),
+          duration_minutes: Math.max(1, Math.round(durationSec / 60)),
+          started_at: new Date(startedAtMs.current).toISOString(),
           exercises: payloadExercises,
           ...(userNotes.trim() ? { user_notes: userNotes.trim() } : {}),
         }),
       });
 
-      // Defensive non-JSON parsing : si Vercel timeout ou autre erreur HTML
       const text = await res.text();
       let data: any = null;
       try {
         data = JSON.parse(text);
       } catch {
         throw new Error(
-          res.status === 504
+          res.status === 504 || res.status === 408
             ? "Le serveur a mis trop de temps. Réessaye dans un moment."
             : `Erreur ${res.status}. Réessaye, ou contacte le support.`,
         );
@@ -268,10 +512,7 @@ export default function LogSessionPage() {
       if (!res.ok) throw new Error(data?.error ?? "Enregistrement échoué");
 
       setSuccess(true);
-      // Petite pause pour que l'utilisateur voie la confirmation
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+      setTimeout(() => router.push("/dashboard"), 1500);
     } catch (e: any) {
       setErr(e?.message ?? "Impossible d'enregistrer la séance");
     } finally {
@@ -279,8 +520,10 @@ export default function LogSessionPage() {
     }
   };
 
+  // ─── Render ─────────────────────────────────────────────────────
+
   if (loading || fetching) {
-    return <Loader size="fullscreen" message="Chargement du bloc..." />;
+    return <Loader size="fullscreen" message="Chargement de la séance..." />;
   }
 
   if (err && !block) {
@@ -301,66 +544,87 @@ export default function LogSessionPage() {
     );
   }
 
-  if (!block) return null;
+  if (!block || !activeExo) return null;
+
+  const sessionCodeDisplay = (() => {
+    const op = (block.name ?? "SESS")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toUpperCase()
+      .trim()
+      .split(/[^A-Z]+/)
+      .filter((w) => w.length > 2)[0];
+    return `${(op ?? "SESS").slice(0, 5)}-V??`;
+  })();
 
   return (
-    <div className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
-      {/* Tactical header */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => router.push("/session")}
-          className="mono flex items-center gap-2 cursor-pointer"
-          style={{
-            fontSize: 10,
-            letterSpacing: "0.2em",
-            color: "var(--fg-5)",
-            textTransform: "uppercase",
-            background: "transparent",
-            border: "none",
-            padding: 0,
-            marginBottom: 4,
-          }}
-        >
-          <ArrowLeft className="h-3 w-3" aria-hidden="true" /> Sélecteur
-        </button>
-        <span
-          className="mono"
-          style={{
-            fontSize: 10,
-            letterSpacing: "0.3em",
-            color: "var(--accent-tech)",
-            opacity: 0.85,
-          }}
-        >
-          [SESSION · LOG · POST-OPS]
-        </span>
-        <h2
-          style={{
-            fontFamily: "var(--font-sans)",
-            fontWeight: 900,
-            fontSize: "var(--type-h1)",
-            letterSpacing: "var(--tracking-display)",
-            lineHeight: 1.05,
-            color: "var(--fg-1)",
-            marginTop: 4,
-          }}
-        >
-          {block.name}
-        </h2>
-        <p
-          className="mono"
-          style={{
-            fontSize: "var(--type-meta)",
-            letterSpacing: "0.18em",
-            color: "var(--fg-4)",
-            textTransform: "uppercase",
-            margin: 0,
-          }}
-        >
-          Saisis tes charges et reps · ORACLE.IA analysera après
-        </p>
-      </div>
+    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-4">
+      {/* ============ HEADER BAR ============ */}
+      <HudCard accent="tech" chamfer="sm" style={{ padding: "0.75rem 1rem" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span
+              className="mono"
+              style={{
+                fontSize: 9,
+                letterSpacing: "0.3em",
+                color: "var(--accent-tech)",
+                textTransform: "uppercase",
+                fontWeight: 700,
+              }}
+            >
+              ● SESSION-LIVE · {sessionCodeDisplay}
+            </span>
+            <h1
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: "1.1rem",
+                fontWeight: 900,
+                color: "var(--fg-1)",
+                letterSpacing: "0.04em",
+                margin: "2px 0 0 0",
+                textTransform: "uppercase",
+              }}
+            >
+              OPÉRATION :{" "}
+              <span style={{ color: "var(--gold-400)" }}>{block.name}</span>
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            <HeaderStat label="Durée" value={formatDuration(durationSec)} />
+            <HeaderStat label="Volume" value={`${volumeKg}kg`} />
+            <HeaderStat
+              label="Exos"
+              value={`${exosTouched}/${exercises.length}`}
+            />
+            <HeaderStat label="Prog" value={`${completionPct}%`} accent="gold" />
+            <button
+              type="button"
+              onClick={() => router.push("/session")}
+              className="mono cursor-pointer"
+              style={{
+                padding: "6px 12px",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                background: "var(--alert-tint-15)",
+                color: "var(--alert-500)",
+                border: "1px solid var(--alert-500)",
+                clipPath:
+                  "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+              aria-label="Abandonner la séance"
+            >
+              <Square className="h-3 w-3" aria-hidden="true" /> Abandonner
+            </button>
+          </div>
+        </div>
+      </HudCard>
 
       {success && (
         <div
@@ -379,8 +643,8 @@ export default function LogSessionPage() {
               "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
           }}
         >
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          [ACK] Séance enregistrée. Redirection vers le dashboard...
+          <Check className="h-4 w-4" aria-hidden="true" />
+          [ACK] Séance enregistrée — redirection vers le dashboard...
         </div>
       )}
 
@@ -406,238 +670,437 @@ export default function LogSessionPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {exercises.map((ex, exoIdx) => (
-          <HudCard key={ex.exercise_id + "_" + exoIdx} accent="gold" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
-            <PanelHeader
-              code={`E${(exoIdx + 1).toString().padStart(2, "0")}`}
-              title={ex.exercise_name}
-              accent="gold"
-              right={
-                <Tag accent="gold">
-                  {ex.target_sets}×{ex.target_reps_range}
-                </Tag>
-              }
-            />
-            <p
-              className="mono"
+      {/* ============ EXERCICE EN COURS + STATS ============ */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Active exercise card (2/3) */}
+        <HudCard accent="gold" chamfer="sm" style={{ padding: "1rem 1.25rem" }} className="lg:col-span-2">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.3em",
+                  color: "var(--accent-tech)",
+                  textTransform: "uppercase",
+                }}
+              >
+                ● Exercice en cours · [{activeExo.block_code}]
+              </span>
+              <h2
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: "1.3rem",
+                  fontWeight: 900,
+                  color: "var(--fg-1)",
+                  margin: "4px 0 0 0",
+                  lineHeight: 1.2,
+                }}
+              >
+                {activeExo.exercise_name}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Tag accent="gold">
+              SÉRIE {activeSetIdx + 1} / {activeExo.sets.length}
+            </Tag>
+            <Tag accent="tech">CIBLE : {activeExo.target_reps_range} REPS</Tag>
+            <Tag accent="gold">REPOS {activeExo.target_rest_seconds}s</Tag>
+          </div>
+
+          {/* Boutons SET 1/2/3/... */}
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))" }}>
+            {activeExo.sets.map((set, sIdx) => {
+              const isActive = sIdx === activeSetIdx;
+              const isCompleted = set.completed;
+              return (
+                <button
+                  key={sIdx}
+                  type="button"
+                  onClick={() => setActiveSetIdx(sIdx)}
+                  className="mono cursor-pointer"
+                  style={{
+                    padding: "10px 8px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    textTransform: "uppercase",
+                    background: isCompleted
+                      ? "var(--accent-tech-tint)"
+                      : isActive
+                        ? "var(--gold-tint-15)"
+                        : "var(--glass-bg-2)",
+                    color: isCompleted
+                      ? "var(--accent-tech)"
+                      : isActive
+                        ? "var(--gold-400)"
+                        : "var(--fg-4)",
+                    border: `1px solid ${
+                      isCompleted
+                        ? "var(--accent-tech)"
+                        : isActive
+                          ? "var(--gold-tint-35)"
+                          : "var(--glass-border)"
+                    }`,
+                    boxShadow: isActive ? "var(--glow-gold-soft)" : "none",
+                    clipPath:
+                      "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                  }}
+                >
+                  SET {sIdx + 1}
+                  {isCompleted && <Check className="h-3 w-3" aria-hidden="true" />}
+                  {!isCompleted && isActive && <ChevronRight className="h-3 w-3" aria-hidden="true" />}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={addSetToActiveExo}
+              aria-label="Ajouter un set"
+              className="mono cursor-pointer"
               style={{
-                fontSize: 9,
-                letterSpacing: "0.15em",
-                color: "var(--fg-5)",
+                padding: "10px 8px",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.2em",
                 textTransform: "uppercase",
-                marginTop: -4,
-                marginBottom: 12,
+                background: "transparent",
+                color: "var(--fg-5)",
+                border: "1px dashed var(--glass-border)",
+                clipPath:
+                  "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
               }}
             >
-              Cible : {ex.target_sets} sets · {ex.target_reps_range} reps · repos {ex.target_rest_seconds}s
-            </p>
+              <Plus className="h-3 w-3" aria-hidden="true" />
+            </button>
+          </div>
 
-            <div className="space-y-2">
-              {/* Header */}
-              <div
-                className="grid gap-2 mono"
-                style={{ gridTemplateColumns: "30px 1fr 1fr 1fr 32px", fontSize: 9, color: "var(--fg-5)", letterSpacing: "0.15em", textTransform: "uppercase" }}
-              >
-                <span style={{ textAlign: "center" }}>#</span>
-                <span style={{ textAlign: "center" }}>Poids (kg)</span>
-                <span style={{ textAlign: "center" }}>Reps</span>
-                <span style={{ textAlign: "center" }}>RPE 1-10</span>
-                <span></span>
-              </div>
+          {/* Steppers CHARGE / RÉPÉTITIONS / RPE */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <Stepper
+              label="Charge"
+              unit="kg"
+              value={activeSet?.weight_kg ?? 0}
+              step={2.5}
+              min={0}
+              max={600}
+              decimals={1}
+              onChange={(v) => updateActiveSet("weight_kg", v)}
+            />
+            <Stepper
+              label="Répétitions"
+              unit="reps"
+              value={activeSet?.reps_done ?? 0}
+              step={1}
+              min={0}
+              max={200}
+              decimals={0}
+              onChange={(v) => updateActiveSet("reps_done", v)}
+            />
+            <Stepper
+              label="RPE ressenti"
+              unit="/10"
+              value={activeSet?.rpe_felt ?? 8}
+              step={0.5}
+              min={1}
+              max={10}
+              decimals={1}
+              onChange={(v) => updateActiveSet("rpe_felt", v)}
+            />
+          </div>
 
-              {ex.sets.map((set, setIdx) => (
-                <div
-                  key={setIdx}
-                  className="grid gap-2 items-center"
-                  style={{ gridTemplateColumns: "30px 1fr 1fr 1fr 32px" }}
-                >
-                  <span
-                    className="mono"
-                    style={{
-                      textAlign: "center",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "var(--gold-400)",
-                    }}
-                  >
-                    {setIdx + 1}
-                  </span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.5"
-                    min="0"
-                    max="600"
-                    value={set.weight_kg}
-                    onChange={(e) => updateSetField(exoIdx, setIdx, "weight_kg", e.target.value)}
-                    className="mono"
-                    style={inputStyle}
-                    aria-label={`Set ${setIdx + 1} poids en kg`}
-                  />
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="0"
-                    max="200"
-                    value={set.reps_done}
-                    onChange={(e) => updateSetField(exoIdx, setIdx, "reps_done", e.target.value)}
-                    className="mono"
-                    style={inputStyle}
-                    aria-label={`Set ${setIdx + 1} reps`}
-                  />
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    max="10"
-                    value={set.rpe_felt}
-                    onChange={(e) => updateSetField(exoIdx, setIdx, "rpe_felt", e.target.value)}
-                    className="mono"
-                    style={inputStyle}
-                    aria-label={`Set ${setIdx + 1} RPE`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSet(exoIdx, setIdx)}
-                    disabled={ex.sets.length <= 1}
-                    className="mono cursor-pointer"
-                    style={{
-                      height: 38,
-                      width: 32,
-                      background: "var(--glass-bg-2)",
-                      border: "1px solid var(--glass-border)",
-                      color: ex.sets.length <= 1 ? "var(--fg-5)" : "var(--alert-500)",
-                      opacity: ex.sets.length <= 1 ? 0.4 : 1,
-                      clipPath:
-                        "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                    aria-label={`Supprimer set ${setIdx + 1}`}
-                  >
-                    <Minus className="h-3 w-3" aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
+          {/* Bouton VALIDER */}
+          <button
+            type="button"
+            onClick={activeSet?.completed ? unvalidateSet : validateSet}
+            disabled={!activeSet || (!activeSet.completed && activeSet.reps_done <= 0 && activeSet.weight_kg <= 0)}
+            className="mono cursor-pointer"
+            style={{
+              width: "100%",
+              height: 48,
+              marginTop: 12,
+              background: activeSet?.completed
+                ? "var(--glass-bg-2)"
+                : "var(--accent-tech-tint)",
+              color: activeSet?.completed ? "var(--fg-3)" : "var(--accent-tech)",
+              border: `1px solid ${activeSet?.completed ? "var(--glass-border)" : "var(--accent-tech)"}`,
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              clipPath:
+                "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              boxShadow: activeSet?.completed ? "none" : "0 0 12px var(--accent-tech-tint-strong)",
+            }}
+          >
+            {activeSet?.completed ? (
+              <>
+                <TimerReset className="h-4 w-4" aria-hidden="true" /> Dévalider ce set
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" aria-hidden="true" /> Valider la série → repos {activeExo.target_rest_seconds}s
+              </>
+            )}
+          </button>
+        </HudCard>
 
+        {/* Stats card (1/3) */}
+        <HudCard accent="tech" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
+          <PanelHeader
+            code="STAT"
+            title={
+              <span className="flex items-center gap-2">
+                <Activity className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
+                Stats session
+              </span>
+            }
+            accent="tech"
+            right={<Tag accent="tech">LIVE</Tag>}
+          />
+          <div className="space-y-2 mt-1">
+            <StatRow label="Volume total" value={`${volumeKg} kg`} />
+            <StatRow label="Tonnage moyen / set" value={`${tonnageAvg} kg`} />
+            <StatRow label="Densité (set/min)" value={`${densitySetsPerMin}`} />
+            <StatRow
+              label="Calories estimées"
+              value={`${caloriesEst} kcal`}
+              icon={<Flame className="h-3 w-3" style={{ color: "var(--gold-400)" }} aria-hidden="true" />}
+            />
+            <StatRow label="Sets complétés" value={`${setsCompleted} / ${setsPlanned}`} />
+          </div>
+          <button
+            type="button"
+            onClick={handleTerminer}
+            disabled={submitting || success || setsCompleted === 0}
+            className="mono cursor-pointer"
+            style={{
+              width: "100%",
+              marginTop: 16,
+              height: 44,
+              background: "var(--gold-tint-15)",
+              color: "var(--gold-400)",
+              border: "1px solid var(--gold-tint-35)",
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              boxShadow: "var(--glow-gold-soft)",
+              clipPath:
+                "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              opacity: submitting || success || setsCompleted === 0 ? 0.5 : 1,
+            }}
+          >
+            <Save className="h-4 w-4" aria-hidden="true" />
+            {submitting
+              ? "Enregistrement..."
+              : success
+                ? "Enregistré"
+                : completionPct >= 100
+                  ? "Terminer la séance"
+                  : "Terminer (incomplet)"}
+          </button>
+        </HudCard>
+      </div>
+
+      {/* ============ FILE D'EXÉCUTION ============ */}
+      <HudCard accent="gold" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
+        <PanelHeader
+          code="QUEUE"
+          title="File d'exécution"
+          accent="gold"
+          right={<Tag accent="gold">{exercises.length} EXOS</Tag>}
+        />
+        <div className="space-y-1 mt-2">
+          {exercises.map((ex, exoIdx) => {
+            const isActive = exoIdx === activeExoIdx;
+            const completedHere = ex.sets.filter((s) => s.completed).length;
+            const allDone = completedHere === ex.sets.length;
+            const someDone = completedHere > 0;
+            return (
               <button
+                key={ex.exercise_id + "_" + exoIdx}
                 type="button"
-                onClick={() => addSet(exoIdx)}
+                onClick={() => selectExoAndSet(exoIdx, 0)}
                 className="mono cursor-pointer"
                 style={{
                   width: "100%",
-                  height: 32,
-                  background: "var(--gold-tint-08)",
-                  border: "1px dashed var(--gold-tint-25)",
-                  color: "var(--gold-400)",
-                  fontSize: 10,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                  clipPath:
-                    "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-                  display: "flex",
+                  padding: "8px 12px",
+                  background: isActive ? "var(--gold-tint-08)" : "transparent",
+                  border: `1px solid ${isActive ? "var(--gold-tint-25)" : "transparent"}`,
+                  borderLeft: isActive
+                    ? "3px solid var(--gold-400)"
+                    : allDone
+                      ? "3px solid var(--accent-tech)"
+                      : "3px solid transparent",
+                  display: "grid",
+                  gridTemplateColumns: "20px 40px 1fr auto",
                   alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  marginTop: 4,
+                  gap: 12,
+                  textAlign: "left",
+                  fontSize: 12,
+                  color: allDone
+                    ? "var(--fg-5)"
+                    : isActive
+                      ? "var(--fg-1)"
+                      : someDone
+                        ? "var(--fg-2)"
+                        : "var(--fg-3)",
+                  textDecoration: allDone ? "line-through" : "none",
+                  fontWeight: isActive ? 700 : 400,
                 }}
               >
-                <Plus className="h-3 w-3" aria-hidden="true" />
-                Ajouter un set
+                <span>
+                  {allDone ? (
+                    <Check className="h-3 w-3" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
+                  ) : isActive ? (
+                    <ChevronRight className="h-3 w-3" style={{ color: "var(--gold-400)" }} aria-hidden="true" />
+                  ) : (
+                    <span style={{ color: "var(--fg-5)" }}>·</span>
+                  )}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: "0.15em",
+                    color: isActive ? "var(--gold-400)" : "var(--fg-5)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {ex.block_code}
+                </span>
+                <span>{ex.exercise_name}</span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 10,
+                    color: "var(--fg-5)",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  {completedHere}/{ex.sets.length}×{ex.target_reps_range}
+                </span>
               </button>
-            </div>
-          </HudCard>
-        ))}
-
-        {/* Métadonnées de séance */}
-        <HudCard accent="tech" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
-          <PanelHeader code="META" title="Données de séance" accent="tech" />
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="log-duration" style={labelStyle}>
-                Durée (min)
-              </label>
-              <input
-                id="log-duration"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max="360"
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(e.target.value)}
-                className="mono"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Sets remplis</label>
-              <div
-                className="mono"
-                style={{
-                  height: 38,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "var(--glass-bg-2)",
-                  border: "1px solid var(--glass-border)",
-                  color: "var(--accent-tech)",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  clipPath:
-                    "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-                }}
-              >
-                {totalSetsLogged}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label htmlFor="log-notes" style={labelStyle}>
-              Notes (optionnel)
-            </label>
-            <textarea
-              id="log-notes"
-              rows={3}
-              value={userNotes}
-              onChange={(e) => setUserNotes(e.target.value)}
-              className="mono"
-              placeholder="Ressenti, douleur, conditions, etc."
-              style={{
-                ...inputStyle,
-                height: "auto",
-                padding: "8px 10px",
-                textAlign: "left",
-                resize: "vertical",
-                minHeight: 70,
-              }}
-            />
-          </div>
-        </HudCard>
-
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => router.push("/session")}
-            className="btn btn-ghost"
-            style={{ flex: "0 0 auto", padding: "0 24px" }}
-          >
-            Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || success || totalSetsLogged === 0}
-            className="btn btn-primary"
-            style={{ flex: 1 }}
-          >
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {submitting ? "Enregistrement..." : "Enregistrer la séance"}
-          </button>
+            );
+          })}
         </div>
-      </form>
+      </HudCard>
+
+      {/* ============ NOTES ============ */}
+      <HudCard accent="tech" chamfer="sm" style={{ padding: "1rem 1.25rem" }}>
+        <PanelHeader code="NOTES" title="Notes de séance (optionnel)" accent="tech" />
+        <textarea
+          value={userNotes}
+          onChange={(e) => setUserNotes(e.target.value)}
+          placeholder="Ressenti, conditions, douleur, etc."
+          rows={3}
+          className="mono"
+          style={{
+            width: "100%",
+            background: "var(--glass-bg-2)",
+            border: "1px solid var(--glass-border)",
+            color: "var(--fg-1)",
+            fontSize: 12,
+            padding: "8px 10px",
+            resize: "vertical",
+            minHeight: 70,
+            clipPath:
+              "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+          }}
+        />
+      </HudCard>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────
+// Helpers UI
+// ────────────────────────────────────────────────────────────────
+
+function HeaderStat({ label, value, accent }: { label: string; value: string; accent?: "gold" }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className="mono"
+        style={{
+          fontSize: 8,
+          letterSpacing: "0.25em",
+          color: "var(--fg-5)",
+          textTransform: "uppercase",
+          fontWeight: 700,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        className="mono"
+        style={{
+          fontSize: 14,
+          fontWeight: 800,
+          color: accent === "gold" ? "var(--gold-400)" : "var(--fg-1)",
+          letterSpacing: "0.05em",
+          marginTop: 2,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span
+        className="mono"
+        style={{
+          fontSize: 10,
+          color: "var(--fg-4)",
+          letterSpacing: "0.1em",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        {icon}
+        {label}
+      </span>
+      <span
+        className="mono"
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: "var(--fg-1)",
+        }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
