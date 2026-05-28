@@ -19,6 +19,7 @@ import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
+import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -35,35 +36,33 @@ export class PlanningCoach extends BaseAgent {
 
     // Profile (subset stratégique) + Goals avec durée recommandée par step 7
     let isFemale = false;
+    let profile: any = null;
     try {
-      const snap = await userRef.get();
-      const data = snap.data();
-      const profile = data?.profile;
-      const goals = data?.goals;
-      if (profile) {
-        ctx.profile = {
-          objective: profile.objective,
-          training_seniority_years: profile.training_seniority_years ?? profile.training_history,
-          weight_kg: profile.weight_kg,
-          target_weight_kg: profile.target_weight_kg,
-          sex: profile.sex,
-          age: profile.age,
-          activity_level: profile.activity_level,
-          competition_target_date: profile.competition_target_date,
-        };
-        isFemale = profile.sex === 'female';
-      }
+      profile = await getUserProfileSnapshot(input.uid);
+      ctx.profile = {
+        objective: profile.objective,
+        training_seniority_years: profile.training_seniority_years ?? profile.training_level,
+        weight_kg: profile.weight_kg,
+        target_weight_kg: profile.target_weight_kg,
+        sex: profile.sex,
+        age: profile.age,
+        activity_level: profile.activity_level,
+        competition_target_date: profile.competition_target_date,
+        // Audit #4/#5 : contexte hormonal explicite (jamais inféré).
+        hormonal_context: profile.hormonal_context,
+      };
+      isFemale = profile.sex === 'female';
       // Goals data (Step 7 onboarding) incluant la durée recommandée par le coach
-      if (goals) {
+      if (profile.goals) {
         ctx.goals = {
-          type: goals.type,
-          target_weight: goals.target_weight,
-          target_date: goals.target_date,
+          type: profile.goals.type,
+          target_weight: profile.goals.target_weight,
+          target_date: profile.goals.target_date,
           // Bornes calculées par computeRecommendedDuration au step 7 onboarding
-          recommended_weeks_min: goals.recommended_weeks_min,
-          recommended_weeks_default: goals.recommended_weeks_default,
-          recommended_weeks_max: goals.recommended_weeks_max,
-          duration_chosen_weeks: goals.duration_chosen_weeks,
+          recommended_weeks_min: profile.goals.recommended_weeks_min,
+          recommended_weeks_default: profile.goals.recommended_weeks_default,
+          recommended_weeks_max: profile.goals.recommended_weeks_max,
+          duration_chosen_weeks: profile.goals.duration_chosen_weeks,
         };
       }
     } catch (e) {
@@ -114,7 +113,7 @@ export class PlanningCoach extends BaseAgent {
         .orderBy('date', 'asc')
         .get();
       const weights = snap.docs
-        .map((d) => ({ date: d.data().date as string, weight: d.data().weight_kg as number }))
+        .map((d) => ({ date: d.data().date as string, weight: d.data().weight as number }))
         .filter((w) => typeof w.weight === 'number');
       if (weights.length >= 4) {
         const first = weights[0];
@@ -230,7 +229,7 @@ export class PlanningCoach extends BaseAgent {
           n_checkins: checkins.length,
           avg_energy: avg('energy'),
           avg_mood: avg('mood'),
-          avg_sleep_h: avg('sleep_h'),
+          avg_sleep_h: avg('sleep_hours'),
           avg_hunger: avg('hunger'),
         };
       }

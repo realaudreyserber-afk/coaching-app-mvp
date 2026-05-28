@@ -18,6 +18,7 @@ import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
+import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 import type { ProfileForRag } from '@/lib/features/rag-coach/context';
 
@@ -34,24 +35,23 @@ export class TrainingCoach extends BaseAgent {
     let profileForRag: ProfileForRag | undefined;
     let isFemale = false;
     try {
-      const snap = await userRef.get();
-      const profile = snap.data();
-      if (profile) {
-        ctx.profile = {
-          objective: profile.objective,
-          level: profile.training_level ?? profile.level,
-          equipment: profile.equipment,
-          weight_kg: profile.weight_kg,
-          age: profile.age,
-          sex: profile.sex,
-          injuries: profile.injuries,
-        };
-        profileForRag = {
-          level: profile.training_level ?? profile.level,
-          equipment: profile.equipment,
-        } as ProfileForRag;
-        isFemale = profile.sex === 'female';
-      }
+      const profile = await getUserProfileSnapshot(input.uid);
+      ctx.profile = {
+        objective: profile.objective,
+        level: profile.training_level,
+        equipment: profile.equipment,
+        weight_kg: profile.weight_kg,
+        age: profile.age,
+        sex: profile.sex,
+        injuries: profile.injuries,
+        // Audit #4/#5 : section "Sous TRT" du prompt conditionnée à ce champ.
+        hormonal_context: profile.hormonal_context,
+      };
+      profileForRag = {
+        level: profile.training_level,
+        equipment: profile.equipment,
+      } as ProfileForRag;
+      isFemale = profile.sex === 'female';
     } catch (e) {
       console.warn('[training-agent] profile fetch failed:', e);
     }

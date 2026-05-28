@@ -19,6 +19,7 @@ import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getFavoriteRecipesSnapshot } from '@/lib/features/favorite-recipes/store';
 import { getShoppingListsSnapshot } from '@/lib/features/shopping-lists/store';
+import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -32,25 +33,26 @@ export class NutritionCoach extends BaseAgent {
 
     // Profile (subset utile pour nutrition)
     let isFemale = false;
+    let profile: any = null;
     try {
-      const snap = await userRef.get();
-      const profile = snap.data();
-      if (profile) {
-        ctx.profile = {
-          objective: profile.objective,
-          weight_kg: profile.weight_kg,
-          height_cm: profile.height_cm,
-          age: profile.age,
-          sex: profile.sex,
-          activity_level: profile.activity_level,
-          dietary_restrictions: profile.dietary_restrictions,
-          dietary_preferences: profile.dietary_preferences, // Phase 9
-          allergies: profile.allergies, // Phase 9
-          dislikes: profile.dislikes, // Phase 9
-          uses_glp1: profile.uses_glp1 ?? false,
-        };
-        isFemale = profile.sex === 'female';
-      }
+      profile = await getUserProfileSnapshot(input.uid);
+      ctx.profile = {
+        objective: profile.objective,
+        weight_kg: profile.weight_kg,
+        height_cm: profile.height_cm,
+        age: profile.age,
+        sex: profile.sex,
+        activity_level: profile.activity_level,
+        dietary_restrictions: profile.dietary_restrictions,
+        dietary_preferences: profile.dietary_preferences, // Phase 9
+        allergies: profile.allergies, // Phase 9
+        dislikes: profile.dislikes, // Phase 9
+        uses_glp1: profile.uses_glp1,
+        // Audit #4/#5 : contexte hormonal explicite — la section "Sous TRT"
+        // du prompt ne s'active QUE sur ce champ (jamais d'inférence sexe/poids).
+        hormonal_context: profile.hormonal_context,
+      };
+      isFemale = profile.sex === 'female';
     } catch (e) {
       console.warn('[nutrition-agent] profile fetch failed:', e);
     }
@@ -91,19 +93,13 @@ export class NutritionCoach extends BaseAgent {
 
     // Goals avec durée recommandée — pour calibrer la sévérité du déficit
     // selon le timeline que l'user a choisi
-    try {
-      const userSnap = await userRef.get();
-      const goals = userSnap.data()?.goals;
-      if (goals) {
-        ctx.goals = {
-          type: goals.type,
-          target_weight: goals.target_weight,
-          duration_chosen_weeks: goals.duration_chosen_weeks,
-          recommended_weeks_min: goals.recommended_weeks_min,
-        };
-      }
-    } catch (e) {
-      console.warn('[nutrition-agent] goals fetch failed:', e);
+    if (profile?.goals) {
+      ctx.goals = {
+        type: profile.goals.type,
+        target_weight: profile.goals.target_weight,
+        duration_chosen_weeks: profile.goals.duration_chosen_weeks,
+        recommended_weeks_min: profile.goals.recommended_weeks_min,
+      };
     }
 
     // Today's food logs (totaux du jour + 5 dernières entries)
