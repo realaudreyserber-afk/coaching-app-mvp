@@ -1,14 +1,13 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, orderBy, limit, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, addDoc, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare, Send, ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Send } from 'lucide-react';
 import { ChatBubble } from '@/components/coach/chat-bubble';
 
 interface ChatMessage {
@@ -17,6 +16,7 @@ interface ChatMessage {
   content: string;
   sources?: any[];
   timestamp?: string;
+  feedback?: 'up' | 'down' | null;
 }
 
 /**
@@ -138,11 +138,6 @@ export default function CoachPage() {
   const router = useRouter();
   const { user, getFreshToken, loading } = useAuth();
   
-  // Greeting hardcoded en empty state. ID unique pour qu'on puisse le filtrer
-  // explicitement quand Firestore renvoie des messages (typique post-onboarding :
-  // welcome + plan_generated arrivent en async, le greeting ne doit pas s'ajouter
-  // dessus). Sans cet id, son timestamp set au mount le faisait survivre au merge
-  // timestamp-based ci-dessous.
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '__initial_greeting__',
@@ -155,52 +150,182 @@ export default function CoachPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Client context states for personalized suggestions
+  const [profileData, setProfileData] = useState<any>(null);
+  const [weeksInCut, setWeeksInCut] = useState<number>(0);
+  const [currentPhase, setCurrentPhase] = useState<string | null>(null);
+
+  // Disclaimer Modal states
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
+  const [showContextualWarning, setShowContextualWarning] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  // Wave 11D — AbortController kept in a ref so we can cancel the in-flight
-  // SSE stream when the user navigates away (prevents "setState on unmounted
-  // component" warnings + frees the server stream early). Also lets us cancel
-  // on a 2nd submit if the user wants to interrupt the IA.
   const abortRef = useRef<AbortController | null>(null);
-  // Hard timeout watchdog — if the IA hangs for 90s, we kill the stream and
-  // restore the user input so they can retry.
   const STREAM_TIMEOUT_MS = 90_000;
-  // Wave 13B — throttle scroll-to-bottom while streaming. The previous
-  // smooth-scroll on every chunk caused juddery animation on mobile.
   const lastScrollAtRef = useRef(0);
 
-  // Wave 13B — Scroll to bottom: smooth when idle, throttled-instant while
-  // streaming. Prevents the juddery animation on mobile where each chunk
-  // triggered a separate `smooth` scroll and the easing functions stacked
-  // up.
   const scrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
     if (sending) {
-      // While streaming, throttle to ~6 fps and use instant scroll so the
-      // chunks don't fight each other animating.
       const now = Date.now();
       if (now - lastScrollAtRef.current > 160) {
         lastScrollAtRef.current = now;
         scrollToBottom('auto');
       }
     } else {
-      // Final smooth scroll once the stream completes or on idle reload.
       scrollToBottom('smooth');
     }
   }, [messages, sending]);
 
-  // Wave 11D — Cleanup any in-flight stream on unmount. Without this, the
-  // reader keeps consuming chunks and the inner setMessages calls trigger
-  // React's "Can't perform a state update on an unmounted component" warning.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
     };
   }, []);
 
-  // Wave 6C : mark proactive interventions as read when user opens /coach
+  // Check disclaimer acceptance
+  useEffect(() => {
+    const accepted = localStorage.getItem('coach_disclaimer_accepted') === 'true';
+    if (!accepted) {
+      setShowDisclaimerModal(true);
+    }
+  }, []);
+
+  const handleAcceptDisclaimer = () => {
+    localStorage.setItem('coach_disclaimer_accepted', 'true');
+    setShowDisclaimerModal(false);
+  };
+
+  // Real-time Medical Disclaimer check
+  useEffect(() => {
+    const medicalRegex = /\b(trt|glp1|glp-1|bloodwork|bilan\s+sanguin|médicament|traitement|prescription|hormon|testostérone|insuline|médical)\b/i;
+    if (medicalRegex.test(inputMessage)) {
+      setShowContextualWarning(true);
+    } else {
+      setShowContextualWarning(false);
+    }
+  }, [inputMessage]);
+
+  // Fetch client profile and settings for dynamic suggestions
+  useEffect(() => {
+    if (loading || !user) return;
+    const fetchContext = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const uData = userDoc.data();
+          setProfileData(uData);
+
+          // Fetch active plan to calculate weeks in cut
+          const plansSnap = await getDocs(
+            query(
+              collection(db, 'users', user.uid, 'plans'),
+              where('active', '==', true),
+              limit(1)
+            )
+          );
+          if (!plansSnap.empty) {
+            const plan = plansSnap.docs[0].data();
+            if (plan?.date_start) {
+              const diffMs = Date.now() - new Date(plan.date_start).getTime();
+              const weeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+              setWeeksInCut(weeks);
+            }
+          }
+        }
+
+        // Fetch menstrual cycle settings & cycles
+        const settingsSnap = await getDoc(doc(db, 'users', user.uid, 'cycle_settings', 'main'));
+        if (settingsSnap.exists()) {
+          const settings = settingsSnap.data();
+          const cyclesSnap = await getDocs(
+            query(
+              collection(db, 'users', user.uid, 'cycles'),
+              orderBy('date', 'desc'),
+              limit(60)
+            )
+          );
+          if (!cyclesSnap.empty) {
+            const entries = cyclesSnap.docs.map(d => d.data());
+            const sorted = entries.sort((a: any, b: any) => (a.date < b.date ? -1 : 1));
+            let lastPeriodStart: string | null = null;
+            let inSeq = false;
+            for (const e of sorted) {
+              if (e.flow_intensity > 0) {
+                if (!inSeq) {
+                  lastPeriodStart = e.date;
+                  inSeq = true;
+                }
+              } else {
+                inSeq = false;
+              }
+            }
+
+            if (lastPeriodStart) {
+              const todayIso = new Date().toISOString().slice(0, 10);
+              const avgCycle = settings.avg_cycle_length_days ?? 28;
+              const avgPeriod = settings.avg_period_length_days ?? 5;
+              const dayDiff = Math.floor(
+                (new Date(todayIso).getTime() - new Date(lastPeriodStart).getTime()) /
+                  (24 * 60 * 60 * 1000)
+              );
+              const dayInCycle = dayDiff % avgCycle;
+              
+              let computedPhase: string = 'follicular';
+              if (dayInCycle < avgPeriod) {
+                computedPhase = 'menstrual';
+              } else if (dayInCycle >= avgCycle - 14) {
+                computedPhase = 'luteal';
+              } else if (dayInCycle >= 11 && dayInCycle <= 15) {
+                computedPhase = 'ovulatory';
+              }
+              setCurrentPhase(computedPhase);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching client context for suggestions:', err);
+      }
+    };
+    fetchContext();
+  }, [user, loading]);
+
+  // Dynamic context-aware suggestions
+  const suggestions = useMemo(() => {
+    const list: string[] = [];
+    const goalType = profileData?.goals?.type;
+    const trainingHistory = profileData?.profile?.training_history;
+
+    if (goalType === 'lose_weight' && weeksInCut > 8) {
+      list.push("Comment sortir de cut ?");
+    }
+    if (trainingHistory === 'beginner') {
+      list.push("Comment savoir si je fais bien mon squat ?");
+    }
+    if (currentPhase === 'luteal') {
+      list.push("Pourquoi j'ai si faim aujourd'hui ?");
+    }
+
+    if (list.length < 3) {
+      const fallbacks = [
+        "Quelle quantité de protéines dois-je viser ?",
+        "Comment optimiser ma récupération ?",
+        "Comment gérer ma fatigue aujourd'hui ?",
+        "Que manger avant ma séance ?"
+      ];
+      for (const fallback of fallbacks) {
+        if (!list.includes(fallback) && list.length < 3) {
+          list.push(fallback);
+        }
+      }
+    }
+    return list;
+  }, [profileData, weeksInCut, currentPhase]);
+
+  // Mark proactive interventions as read
   useEffect(() => {
     if (loading || !user) return;
     (async () => {
@@ -217,15 +342,10 @@ export default function CoachPage() {
     })();
   }, [user, loading, getFreshToken]);
 
-  // Load last 30 messages from user's chat history in Firestore if available
+  // Load chat history
   useEffect(() => {
     if (loading || !user) return;
 
-    // Wave 12 — `cancelled` guard prevents the loaded history from
-    // overwriting messages the user just sent between mount and fetch
-    // completion. If a message went out while we were fetching, the
-    // setMessages from this effect would erase it. Same flag covers
-    // unmount cleanup.
     let cancelled = false;
 
     const loadChatHistory = async () => {
@@ -239,8 +359,6 @@ export default function CoachPage() {
           const loadedHistory: ChatMessage[] = [];
           snap.forEach((doc) => {
             const data = doc.data();
-            // Strip any leftover <COACH_SAVE> blocks from legacy messages
-            // persisted before the backend started cleaning them.
             const rawContent = data.content ?? '';
             const cleanContent =
               data.role === 'assistant'
@@ -251,20 +369,13 @@ export default function CoachPage() {
               role: data.role,
               content: cleanContent,
               sources: data.sources || [],
-              timestamp: data.timestamp
+              timestamp: data.timestamp,
+              feedback: data.feedback ?? null,
             });
           });
-          // Merge instead of overwrite: keep any local message whose
-          // timestamp is more recent than the last loaded one (user typed
-          // before history arrived). Defensive on undefined timestamps —
-          // legacy docs may lack the field.
           setMessages((prev) => {
             if (loadedHistory.length === 0) return prev;
             const lastLoadedTs = loadedHistory[loadedHistory.length - 1].timestamp ?? '';
-            // Vire explicitement le greeting hardcoded (__initial_greeting__)
-            // avant le merge. Son timestamp set au mount du composant le
-            // faisait survivre au filter time-based et apparaître après les
-            // messages proactifs (welcome + plan_generated) post-onboarding.
             const newer = prev.filter(
               (m) =>
                 m.id !== '__initial_greeting__' &&
@@ -291,7 +402,6 @@ export default function CoachPage() {
     setError(null);
     setSending(true);
 
-    // 1. Add user message locally
     const userMsg: ChatMessage = {
       role: 'user',
       content: userText,
@@ -300,8 +410,6 @@ export default function CoachPage() {
     
     setMessages(prev => [...prev, userMsg]);
 
-    // Wave 11D — Declared at the function scope so the finally block can
-    // always clear it (it's assigned inside try once fetch fires).
     let watchdog: ReturnType<typeof setTimeout> | undefined;
 
     try {
@@ -312,8 +420,6 @@ export default function CoachPage() {
         timestamp: userMsg.timestamp
       });
 
-      // 2. Prepare payload for the API
-      // Send the last 6 messages to API for conversation context
       const chatContext = messages
         .concat(userMsg)
         .slice(-8)
@@ -327,10 +433,6 @@ export default function CoachPage() {
         throw new Error('Authentification requise');
       }
 
-      // Wave 11D — abort any prior in-flight stream before starting a new one,
-      // then attach a fresh AbortController whose signal both fetch + the
-      // reader loop respect. A setTimeout watchdog aborts at 90s as a safety
-      // net against server hangs.
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -357,9 +459,7 @@ export default function CoachPage() {
         try {
           const errData = await res.clone().json();
           if (errData?.error) serverMessage = errData.error;
-        } catch {
-          // body not JSON
-        }
+        } catch {}
         throw new Error(serverMessage);
       }
 
@@ -411,8 +511,6 @@ export default function CoachPage() {
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
                 if (last && last.role === 'assistant') {
-                  // Hide the <COACH_SAVE>...</COACH_SAVE> tag while streaming.
-                  // We still keep the full accumulated string for post-stream parsing.
                   const visible = stripCoachSaveTag(accumulated);
                   copy[copy.length - 1] = { ...last, content: visible };
                 }
@@ -428,22 +526,15 @@ export default function CoachPage() {
         }
       }
 
-      // Stream complete: parse <COACH_SAVE>{...}</COACH_SAVE>, push to API.
+      // Stream complete: parse tags
       await persistCoachSaveBlock(accumulated, getFreshToken).catch((err) =>
         console.warn('[coach-save] persist failed:', err),
       );
-      // Wave 6A: same for <COACH_PLAN_PATCH>{...}</COACH_PLAN_PATCH>
       await persistCoachPlanPatchBlock(accumulated, getFreshToken).catch((err) =>
         console.warn('[coach-plan-patch] persist failed:', err),
       );
 
-      // Backend now persists assistant message via streaming placeholder.
-      // No client-side write needed.
-
     } catch (err: any) {
-      // Wave 11D — Distinguish "user navigated away / cancelled" (AbortError)
-      // from real errors. AbortError on unmount must NOT touch state (component
-      // is gone) nor restore inputMessage.
       const isAbort = err?.name === 'AbortError' || err?.message === 'stream_timeout_90s';
       if (isAbort && err?.message === 'stream_timeout_90s') {
         setError("Le coach n'a pas répondu (timeout 90s). Réessaye.");
@@ -457,8 +548,78 @@ export default function CoachPage() {
         setInputMessage(userText);
       }
     } finally {
-      // Wave 11D — clear the watchdog whatever happened.
       if (watchdog) clearTimeout(watchdog);
+      setSending(false);
+    }
+  };
+
+  // Submit Feedback thumbs-up/down
+  const handleFeedback = async (messageId: string, type: 'up' | 'down') => {
+    if (!user || !messageId) return;
+    try {
+      const { updateDoc, runTransaction } = await import('firebase/firestore');
+      const msgRef = doc(db, 'users', user.uid, 'coach_messages', messageId);
+      
+      // Update message feedback field
+      await updateDoc(msgRef, { feedback: type });
+
+      // Aggregate in coach_state global stats
+      const stateRef = doc(db, 'users', user.uid, 'coach_state', 'main');
+      await runTransaction(db, async (transaction) => {
+        const stateSnap = await transaction.get(stateRef);
+        const stateData = stateSnap.data() || {};
+        const currentStats = stateData.feedback_stats || { up: 0, down: 0 };
+        const newStats = {
+          up: currentStats.up + (type === 'up' ? 1 : 0),
+          down: currentStats.down + (type === 'down' ? 1 : 0),
+        };
+        transaction.set(stateRef, { feedback_stats: newStats }, { merge: true });
+      });
+
+      // Update local UI state
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, feedback: type } : m));
+    } catch (err) {
+      console.error('Error saving feedback:', err);
+    }
+  };
+
+  // Archive and trigger a New Session
+  const handleNewSession = async () => {
+    if (!user || sending) return;
+    const confirm = window.confirm("Commencer une nouvelle session ? Vos messages actuels seront archivés.");
+    if (!confirm) return;
+
+    setSending(true);
+    try {
+      const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+      const chatRef = collection(db, 'users', user.uid, 'coach_messages');
+      const snap = await getDocs(chatRef);
+
+      if (!snap.empty) {
+        const { writeBatch } = await import('firebase/firestore');
+        const batch = writeBatch(db);
+
+        snap.forEach((chatDoc) => {
+          const backupDocRef = doc(db, 'users', user.uid, 'agent_memory_backup', sessionId, 'messages', chatDoc.id);
+          batch.set(backupDocRef, chatDoc.data());
+          batch.delete(chatDoc.ref);
+        });
+
+        await batch.commit();
+      }
+
+      setMessages([
+        {
+          id: '__initial_greeting__',
+          role: 'assistant',
+          content: "Salut. Je suis NoDream, ton coach IA. Pose-moi tes questions sur ta nutrition, ton entraînement ou ta récupération. Pas de promesse facile, pas de blabla — on va droit au but. Qu'est-ce qui te bloque aujourd'hui ?",
+          timestamp: new Date().toISOString()
+        }
+      ]);
+    } catch (err) {
+      console.error('Error starting new session:', err);
+      setError('Impossible de démarrer une nouvelle session.');
+    } finally {
       setSending(false);
     }
   };
@@ -473,75 +634,140 @@ export default function CoachPage() {
 
   return (
     <div
-      className="flex-1 flex flex-col max-w-3xl mx-auto w-full h-[calc(100dvh-4rem)] relative pb-20"
+      className="flex-1 flex flex-col max-w-3xl mx-auto w-full h-[calc(100dvh-4rem)] relative pb-[136px]"
       style={{ background: 'transparent' }}
     >
+      {/* Disclaimer Modal */}
+      {showDisclaimerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-md px-4">
+          <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-6 rounded-lg shadow-2xl relative overflow-hidden"
+               style={{
+                 clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)'
+               }}>
+            <div className="absolute top-0 left-0 w-2 h-full bg-primary" />
+            <h2 className="text-xl font-bold text-amber-500 mb-3 uppercase tracking-wide">
+              Avertissement Médical Important
+            </h2>
+            <div className="text-zinc-300 text-sm space-y-3 leading-relaxed mb-6">
+              <p>
+                NoDream OS et son module d'accompagnement <strong>ORACLE.IA</strong> fournissent des conseils d'entraînement et de nutrition à but de bien-être uniquement.
+              </p>
+              <p className="text-amber-400 font-semibold">
+                Nous ne sommes pas des professionnels de santé. Ce service n'est pas destiné à diagnostiquer, traiter ou remplacer un avis médical.
+              </p>
+              <p>
+                En particulier, tout sujet concernant les traitements médicamenteux (ex: GLP-1) ou hormonaux (ex: TRT) doit faire l'objet d'une consultation et d'un suivi régulier auprès de votre médecin spécialiste ou d'un endocrinologue agréé.
+              </p>
+            </div>
+            <Button
+              onClick={handleAcceptDisclaimer}
+              className="w-full bg-primary hover:bg-primary/95 text-zinc-950 font-bold"
+            >
+              J'ai compris
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Tactical Header — ORACLE.IA terminal */}
       <div
-        className="flex items-center space-x-3 p-4 sticky top-0 z-30"
+        className="flex items-center justify-between p-4 sticky top-0 z-30"
         style={{
           background: 'rgba(6, 3, 15, 0.92)',
           backdropFilter: 'blur(16px)',
           borderBottom: '1px solid var(--gold-tint-15)',
         }}
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/dashboard')}
-          aria-label="Retour au tableau de bord"
-          className="h-11 w-11"
-          style={{ color: 'var(--fg-2)' }}
-        >
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Button>
-        <div className="flex-1">
-          <span
-            className="mono"
-            style={{
-              fontSize: 10,
-              letterSpacing: '0.3em',
-              color: 'var(--accent-tech)',
-              opacity: 0.85,
-            }}
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/dashboard')}
+            aria-label="Retour au tableau de bord"
+            className="h-11 w-11 text-zinc-400 hover:text-zinc-200"
           >
-            [ORACLE.IA · TERMINAL-04]
-          </span>
-          <h1
-            style={{
-              fontFamily: 'var(--font-sans)',
-              fontSize: 18,
-              fontWeight: 900,
-              letterSpacing: '-0.02em',
-              color: 'var(--gold-400)',
-              textShadow: '0 0 12px rgba(212, 175, 55, 0.4)',
-              margin: 0,
-            }}
-          >
-            Coach NoDream
-          </h1>
-          <p
-            className="mono"
-            style={{
-              fontSize: 9,
-              letterSpacing: '0.18em',
-              color: 'var(--fg-4)',
-              textTransform: 'uppercase',
-              margin: '2px 0 0 0',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <span className="status-dot" style={{ marginRight: 6 }} aria-hidden="true" />
-            <span><span className="sr-only">Statut : </span>Active · Streaming</span>
-          </p>
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </Button>
+          <div>
+            <span
+              className="mono flex items-center gap-1.5"
+              style={{
+                fontSize: 10,
+                letterSpacing: '0.3em',
+                color: 'var(--accent-tech)',
+                opacity: 0.85,
+              }}
+            >
+              [ORACLE.IA · TERMINAL-04]{' '}
+              <span
+                className="font-bold uppercase select-none inline-flex items-center gap-1"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.15em',
+                  color: '#fca5a5',
+                  background: 'rgba(220, 38, 38, 0.18)',
+                  border: '1px solid rgba(220, 38, 38, 0.7)',
+                  padding: '2px 6px',
+                  marginLeft: 4,
+                  clipPath:
+                    'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)',
+                  boxShadow: '0 0 8px rgba(220, 38, 38, 0.35)',
+                  textShadow: '0 0 4px rgba(252, 165, 165, 0.5)',
+                }}
+                title="Oracle.IA n'est pas un avis médical — consulte un professionnel de santé pour tout traitement"
+                aria-label="Avertissement : Oracle.IA n'est pas un avis médical"
+              >
+                ⚠ NON MÉDICAL
+              </span>
+            </span>
+            <h1
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: 18,
+                fontWeight: 900,
+                letterSpacing: '-0.02em',
+                color: 'var(--gold-400)',
+                textShadow: '0 0 12px rgba(212, 175, 55, 0.4)',
+                margin: 0,
+              }}
+            >
+              Coach NoDream
+            </h1>
+            <p
+              className="mono"
+              style={{
+                fontSize: 9,
+                letterSpacing: '0.18em',
+                color: 'var(--fg-4)',
+                textTransform: 'uppercase',
+                margin: '2px 0 0 0',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <span className="status-dot" style={{ marginRight: 6 }} aria-hidden="true" />
+              <span><span className="sr-only">Statut : </span>Active · Streaming</span>
+            </p>
+          </div>
         </div>
+
+        {/* New Session Action */}
+        <Button
+          onClick={handleNewSession}
+          disabled={sending}
+          variant="outline"
+          className="mono border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 text-[10px] h-9 px-3"
+          style={{
+            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)'
+          }}
+        >
+          Nouvelle session
+        </Button>
       </div>
 
       {/* Chat Area */}
       <div
-        className="flex-1 overflow-y-auto p-4 space-y-4 pb-24"
+        className="flex-1 overflow-y-auto p-4 space-y-4 pb-28"
         role="log"
         aria-live="polite"
         aria-label="Conversation avec le coach"
@@ -549,9 +775,13 @@ export default function CoachPage() {
         {messages.map((m, idx) => (
           <ChatBubble
             key={idx}
+            id={m.id}
             role={m.role}
             content={m.content}
             sources={m.sources}
+            timestamp={m.timestamp}
+            feedback={m.feedback}
+            onFeedback={handleFeedback}
           />
         ))}
 
@@ -600,67 +830,103 @@ export default function CoachPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input box — terminal prompt */}
-      <form
-        onSubmit={handleSendMessage}
-        className="absolute bottom-0 left-0 right-0 p-3 flex items-center space-x-2 z-30"
-        aria-label="Envoyer un message au coach"
+      {/* Floating Actions Input Panel */}
+      <div
+        className="absolute bottom-0 left-0 right-0 p-3 z-30 flex flex-col gap-2"
         style={{
           background: 'rgba(6, 3, 15, 0.95)',
           backdropFilter: 'blur(20px)',
           borderTop: '1px solid var(--gold-tint-15)',
         }}
       >
-        <label htmlFor="coach-message-input" className="sr-only">
-          Message à envoyer au coach
-        </label>
-        <span
-          className="mono"
-          style={{
-            color: 'var(--accent-tech)',
-            fontSize: 14,
-            paddingLeft: 4,
-            textShadow: '0 0 6px var(--accent-tech)',
-          }}
-          aria-hidden="true"
+        {/* Contextual Medical Disclaimer */}
+        {showContextualWarning && (
+          <div
+            className="p-3 bg-red-950/40 border border-red-900/60 text-red-400 text-[11px] rounded leading-relaxed flex items-start gap-2 animate-pulse"
+            style={{
+              clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)'
+            }}
+          >
+            <span className="font-bold select-none text-red-500 shrink-0">[CADRE MÉDICAL]</span>
+            <span>
+              Tu mentionnes un traitement ou examen médical (TRT, GLP-1, bilan sanguin, etc.). Rappel : Oracle.IA ne remplace pas ton médecin spécialiste. Consulte un professionnel de santé pour tout traitement.
+            </span>
+          </div>
+        )}
+
+        {/* Dynamic Quick Suggestions */}
+        {!sending && suggestions.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto py-1 scrollbar-none select-none">
+            {suggestions.map((sug, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setInputMessage(sug)}
+                className="mono text-[10px] px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors whitespace-nowrap"
+              >
+                {sug}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Input box — terminal prompt */}
+        <form
+          onSubmit={handleSendMessage}
+          className="flex items-center space-x-2"
+          aria-label="Envoyer un message au coach"
         >
-          &gt;
-        </span>
-        <input
-          id="coach-message-input"
-          type="text"
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          placeholder="Saisis ta requête..."
-          disabled={sending}
-          className="mono flex-1 h-11 px-3 text-sm focus:outline-none"
-          style={{
-            background: 'var(--glass-bg-2)',
-            border: '1px solid var(--glass-border)',
-            color: 'var(--fg-1)',
-            letterSpacing: '0.02em',
-            clipPath:
-              'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--accent-tech)';
-            e.currentTarget.style.boxShadow = '0 0 12px var(--accent-tech-tint-strong)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'var(--glass-border)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        />
-        <button
-          type="submit"
-          disabled={sending || !inputMessage.trim()}
-          aria-label="Envoyer le message"
-          className="btn btn-primary flex-shrink-0"
-          style={{ height: 44, padding: '0 18px' }}
-        >
-          <Send className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </form>
+          <label htmlFor="coach-message-input" className="sr-only">
+            Message à envoyer au coach
+          </label>
+          <span
+            className="mono"
+            style={{
+              color: 'var(--accent-tech)',
+              fontSize: 14,
+              paddingLeft: 4,
+              textShadow: '0 0 6px var(--accent-tech)',
+            }}
+            aria-hidden="true"
+          >
+            &gt;
+          </span>
+          <input
+            id="coach-message-input"
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder="Saisis ta requête..."
+            disabled={sending}
+            className="mono flex-1 h-11 px-3 text-sm focus:outline-none"
+            style={{
+              background: 'var(--glass-bg-2)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--fg-1)',
+              letterSpacing: '0.02em',
+              clipPath:
+                'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent-tech)';
+              e.currentTarget.style.boxShadow = '0 0 12px var(--accent-tech-tint-strong)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'var(--glass-border)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          />
+          <button
+            type="submit"
+            disabled={sending || !inputMessage.trim()}
+            aria-label="Envoyer le message"
+            className="btn btn-primary flex-shrink-0"
+            style={{ height: 44, padding: '0 18px' }}
+          >
+            <Send className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
