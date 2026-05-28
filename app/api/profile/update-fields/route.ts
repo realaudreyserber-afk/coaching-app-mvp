@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { MEASUREMENT_FIELDS } from "@/lib/features/measurements/schema";
+import { archiveGoalsBeforeChange } from "@/lib/features/goals-history/store";
 
 type FieldValue = string | number | boolean | null | string[];
 
@@ -223,6 +224,12 @@ export async function POST(req: NextRequest) {
 
   // 4. Build dot-notation update payload + apply via admin
   try {
+    // Phase 10 data-layer : avant d'écrire un patch goals.*, snapshot l'ancien
+    // dans goals_history/ pour préserver l'historique des changements.
+    await archiveGoalsBeforeChange(uid, accepted as Record<string, unknown>).catch((e) => {
+      console.warn("[profile/update-fields] goals archive failed:", e);
+    });
+
     const userRef = adminDb.collection("users").doc(uid);
     await userRef.set(buildNestedPayload(accepted), { merge: true });
 

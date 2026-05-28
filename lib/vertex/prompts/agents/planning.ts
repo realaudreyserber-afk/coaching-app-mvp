@@ -109,6 +109,11 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
 - \`measurements\` : tendances 30j / 90j par mesure (waist, hips, etc.). Indispensable
   pour évaluer si une phase atteint ses objectifs au-delà du poids brut. Une perte
   de 3cm tour de taille sur 90j alors que poids stagne = phase réussie en recompo.
+- \`goals_history\` (Phase 10) : historique changements d'objectif. Si
+  \`is_unstable=true\` (>3 changements en 90j) → l'user n'a pas d'objectif stable,
+  recommander une période de stabilisation avant tout nouveau plan agressif.
+  "Tu as changé d'objectif 4 fois en 3 mois — avant de calibrer, on choisit
+  un cap qu'on tient au moins 8 semaines."
 
 ═══════════════════════════════════════════════
 CITATIONS
