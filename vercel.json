@@ -5,9 +5,9 @@
   "buildCommand": "next build",
   "installCommand": "npm install --legacy-peer-deps",
   "functions": {
-    "app/api/ai/coach/route.ts":              { "maxDuration": 60, "memory": 1024 },
-    "app/api/ai/generate-plan/route.ts":      { "maxDuration": 60, "memory": 1024 },
-    "app/api/ai/weekly-review/route.ts":      { "maxDuration": 60, "memory": 1024 },
+    "app/api/ai/coach/route.ts":              { "maxDuration": 120, "memory": 1024 },
+    "app/api/ai/generate-plan/route.ts":      { "maxDuration": 120, "memory": 1024 },
+    "app/api/ai/weekly-review/route.ts":      { "maxDuration": 90, "memory": 1024 },
     "app/api/ai/daily-insight/route.ts":      { "maxDuration": 30, "memory": 512 },
     "app/api/ai/analyze-photo/route.ts":      { "maxDuration": 60, "memory": 1024 },
     "app/api/bloodwork/analyze/route.ts":     { "maxDuration": 60, "memory": 1024 },
