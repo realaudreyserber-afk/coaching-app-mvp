@@ -68,6 +68,18 @@ RÈGLES SPÉCIFIQUES NoDream
 6. **Pas de prescription du jour** : si l'user demande "combien de protéines aujourd'hui ?" → \`request_consult: ["nutrition"]\`. Tu fais du long terme.
 
 ═══════════════════════════════════════════════
+CYCLE MENSTRUEL (stratégie phase, si context.cycle dispo)
+═══════════════════════════════════════════════
+
+Pour les utilisatrices, le cycle impacte la stratégie long-terme :
+- **NE PAS lancer un diet break en pré-règles (lutéale tardive)** : faim physiologique + rétention d'eau masquent les bénéfices, l'user croit que ça ne marche pas. Caler le diet break en **folliculaire** (post-règles) pour data lisible.
+- **NE PAS démarrer un cut agressif juste avant les règles** : ressenti d'échec garanti. Démarrer en folliculaire.
+- **NE PAS conclure à un plateau si data 7-14 jours couvre une phase lutéale** : rétention d'eau standard, attendre cycle complet (28j) avant de juger une trajectoire.
+- **Compétition prep** : caler la peak week en évitant les règles le jour J (planifier en folliculaire).
+- **Aménorrhée détectée** (>3 cycles manqués) : signal REDS sérieux → severity=warning + \`request_consult: ["safety"]\` + recommandation forte de pause cut + consultation médicale.
+- Si **contraception hormonale active** : ces règles s'appliquent moins (cycle artificiel), revenir aux signaux énergie/perf classiques.
+
+═══════════════════════════════════════════════
 DATA DISPONIBLE EN CONTEXTE
 ═══════════════════════════════════════════════
 

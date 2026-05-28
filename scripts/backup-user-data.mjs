@@ -55,7 +55,7 @@ const db = admin.firestore();
 
 // Subcollections à dumper. Ordre = ordre d'écriture sur disque.
 const SUBCOLLECTIONS = [
-  "agent_memory_backup", // multi-agent — NOUVELLE
+  "agent_memory_backup", // multi-agent
   "plans",
   "plans_history",
   "workout_sessions",
@@ -70,15 +70,19 @@ const SUBCOLLECTIONS = [
   "coach_state",
   "coach_patches",
   "tdee_history",
-  "micronutrients_daily",
-  "notification_log",
   "session_debriefs",
   "insights_daily",
   "daily_tasks",
   "alerts",
-  "streak",
   "medications",
-  "referrals",
+  "photos",
+  "cycles", // Phase 1 data-layer roadmap — cycle menstruel
+  "cycle_settings", // Phase 1 data-layer roadmap — config cycle
+  // Retirées (n'existent pas comme collections, calculées) :
+  // streak (computed depuis checkins_daily.date)
+  // micronutrients_daily (agrégé depuis food_logs)
+  // notification_log (introuvable dans le code)
+  // referrals (introuvable dans le code)
 ];
 
 // EXCLUSIONS volontaires (cf. doc en tête)

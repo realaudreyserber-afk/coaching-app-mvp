@@ -14,6 +14,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
+import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import type { AgentInput, SubAgentName } from '../types';
 import type { ProfileForRag } from '@/lib/features/rag-coach/context';
 
@@ -28,6 +29,7 @@ export class TrainingCoach extends BaseAgent {
 
     // Profile subset utile pour training
     let profileForRag: ProfileForRag | undefined;
+    let isFemale = false;
     try {
       const snap = await userRef.get();
       const profile = snap.data();
@@ -45,9 +47,20 @@ export class TrainingCoach extends BaseAgent {
           level: profile.training_level ?? profile.level,
           equipment: profile.equipment,
         } as ProfileForRag;
+        isFemale = profile.sex === 'female';
       }
     } catch (e) {
       console.warn('[training-agent] profile fetch failed:', e);
+    }
+
+    // Cycle menstruel (si féminin) — phase = adapter recommandation intensité/volume
+    if (isFemale) {
+      try {
+        const cycle = await getCycleSnapshot(input.uid);
+        if (cycle) ctx.cycle = cycle;
+      } catch (e) {
+        console.warn('[training-agent] cycle fetch failed:', e);
+      }
     }
 
     // active_plan.training

@@ -13,6 +13,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { NUTRITION_SYSTEM_PROMPT } from '../../prompts/agents/nutrition';
 import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corpus';
+import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -25,6 +26,7 @@ export class NutritionCoach extends BaseAgent {
     const userRef = adminDb.collection('users').doc(input.uid);
 
     // Profile (subset utile pour nutrition)
+    let isFemale = false;
     try {
       const snap = await userRef.get();
       const profile = snap.data();
@@ -40,9 +42,20 @@ export class NutritionCoach extends BaseAgent {
           uses_glp1: profile.uses_glp1 ?? false,
           allergies: profile.allergies,
         };
+        isFemale = profile.sex === 'female';
       }
     } catch (e) {
       console.warn('[nutrition-agent] profile fetch failed:', e);
+    }
+
+    // Cycle menstruel (uniquement si féminin) — adapter macros + cravings selon phase
+    if (isFemale) {
+      try {
+        const cycle = await getCycleSnapshot(input.uid);
+        if (cycle) ctx.cycle = cycle;
+      } catch (e) {
+        console.warn('[nutrition-agent] cycle fetch failed:', e);
+      }
     }
 
     // Active plan (kcal + macros + meals_template subset)

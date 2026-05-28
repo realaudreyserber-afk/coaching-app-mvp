@@ -14,6 +14,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { PLANNING_SYSTEM_PROMPT } from '../../prompts/agents/planning';
+import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -29,6 +30,7 @@ export class PlanningCoach extends BaseAgent {
     const userRef = adminDb.collection('users').doc(input.uid);
 
     // Profile (subset stratégique)
+    let isFemale = false;
     try {
       const snap = await userRef.get();
       const profile = snap.data();
@@ -43,9 +45,20 @@ export class PlanningCoach extends BaseAgent {
           activity_level: profile.activity_level,
           competition_target_date: profile.competition_target_date,
         };
+        isFemale = profile.sex === 'female';
       }
     } catch (e) {
       console.warn('[planning-agent] profile fetch failed:', e);
+    }
+
+    // Cycle menstruel (si féminin) — éviter diet break en pré-règles, adapter cut long
+    if (isFemale) {
+      try {
+        const cycle = await getCycleSnapshot(input.uid);
+        if (cycle) ctx.cycle = cycle;
+      } catch (e) {
+        console.warn('[planning-agent] cycle fetch failed:', e);
+      }
     }
 
     // active_plan + phase déclarée

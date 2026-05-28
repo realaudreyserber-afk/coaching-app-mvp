@@ -15,6 +15,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { MENTAL_SYSTEM_PROMPT } from '../../prompts/agents/mental';
+import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -63,6 +64,17 @@ export class MentalCoach extends BaseAgent {
     // Recent_chat est déjà dans input — exposer en context pour clarté
     if (input.recent_chat && input.recent_chat.length > 0) {
       ctx.recent_chat = input.recent_chat;
+    }
+
+    // Cycle menstruel (si féminin) — valider fluctuations mood comme physiologiques
+    try {
+      const profileSnap = await adminDb.collection('users').doc(input.uid).get();
+      if (profileSnap.data()?.profile?.sex === 'female') {
+        const cycle = await getCycleSnapshot(input.uid);
+        if (cycle) ctx.cycle = cycle;
+      }
+    } catch (e) {
+      console.warn('[mental-agent] cycle fetch failed:', e);
     }
 
     return ctx;
