@@ -20,6 +20,7 @@ import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
+import { getHabitsSnapshot } from '@/lib/features/habits/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -111,6 +112,14 @@ export class MentalCoach extends BaseAgent {
       if (goalsHistory) ctx.goals_history = goalsHistory;
     } catch (e) {
       console.warn('[mental-agent] goals_history fetch failed:', e);
+    }
+
+    // Habits — Phase 11 (streaks + adherence pattern)
+    try {
+      const habits = await getHabitsSnapshot(input.uid);
+      if (habits) ctx.habits = habits;
+    } catch (e) {
+      console.warn('[mental-agent] habits fetch failed:', e);
     }
 
     return ctx;

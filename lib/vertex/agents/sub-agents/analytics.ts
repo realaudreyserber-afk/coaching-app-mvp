@@ -19,6 +19,7 @@ import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getProgressPhotosSnapshot } from '@/lib/features/progress-photos/store';
+import { getHabitsSnapshot } from '@/lib/features/habits/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -173,6 +174,14 @@ export class AnalyticsCoach extends BaseAgent {
       if (photos) ctx.progress_photos = photos;
     } catch (e) {
       console.warn('[analytics-agent] progress_photos fetch failed:', e);
+    }
+
+    // Habits — Phase 11 (adherence corrélée à composition)
+    try {
+      const habits = await getHabitsSnapshot(input.uid);
+      if (habits) ctx.habits = habits;
+    } catch (e) {
+      console.warn('[analytics-agent] habits fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)
