@@ -17,6 +17,8 @@ import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
+import { getFavoriteRecipesSnapshot } from '@/lib/features/favorite-recipes/store';
+import { getShoppingListsSnapshot } from '@/lib/features/shopping-lists/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -155,6 +157,22 @@ export class NutritionCoach extends BaseAgent {
       if (cravings) ctx.cravings = cravings;
     } catch (e) {
       console.warn('[nutrition-agent] cravings fetch failed:', e);
+    }
+
+    // Favorite recipes — Phase 12 (suggérer en priorité ce que l'user aime)
+    try {
+      const favRecipes = await getFavoriteRecipesSnapshot(input.uid);
+      if (favRecipes) ctx.favorite_recipes = favRecipes;
+    } catch (e) {
+      console.warn('[nutrition-agent] favorite_recipes fetch failed:', e);
+    }
+
+    // Shopping lists — Phase 13 (état liste active)
+    try {
+      const shopping = await getShoppingListsSnapshot(input.uid);
+      if (shopping) ctx.shopping_lists = shopping;
+    } catch (e) {
+      console.warn('[nutrition-agent] shopping_lists fetch failed:', e);
     }
 
     return ctx;
