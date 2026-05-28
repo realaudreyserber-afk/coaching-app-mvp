@@ -3,14 +3,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, runTransaction } from 'firebase/firestore';
-import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Loader2, CheckCircle2, AlertTriangle, Copy, Share2, Users, Gift } from 'lucide-react';
-import { generateReferralCode, applyReferralCode } from '@/lib/features/referral/referral-service';
+import { ensureReferralData, applyReferralCode } from '@/lib/features/referral/referral-service';
 
 export default function ReferralPage() {
   const router = useRouter();
@@ -51,35 +49,14 @@ export default function ReferralPage() {
       }
 
       try {
-        const userRef = doc(db, 'users', user.uid);
-        // Wave 11E — Use a transaction so two parallel tabs don't both
-        // generate a referral code and last-write-wins overwrites the first.
-        // The transaction re-reads the doc inside the critical section and
-        // only writes a new code if none exists yet.
-        const result = await runTransaction(db, async (tx) => {
-          const snap = await tx.get(userRef);
-          if (!snap.exists()) {
-            return { code: '', referredBy: null, referredUsers: [], premiumCredits: 0 };
-          }
-          const refInfo = snap.data().referral;
-          if (refInfo?.code) {
-            return refInfo;
-          }
-          const newCode = generateReferralCode();
-          tx.update(userRef, {
-            'referral.code': newCode,
-            'referral.referredBy': null,
-            'referral.referredUsers': [],
-            'referral.premiumCredits': 0,
-            'referral.updatedAt': new Date().toISOString(),
-          });
-          return { code: newCode, referredBy: null, referredUsers: [], premiumCredits: 0 };
-        });
-
-        setCode(result.code);
-        setReferredBy(result.referredBy || null);
-        setReferredCount(result.referredUsers?.length || 0);
-        setCredits(result.premiumCredits || 0);
+        // Audit #2 : génération + lecture désormais côté serveur (/api/referral).
+        // Plus de transaction client ni de désync camelCase/snake_case.
+        const token = await user.getIdToken();
+        const data = await ensureReferralData(token);
+        setCode(data.code);
+        setReferredBy(data.referred_by);
+        setReferredCount(data.referred_count);
+        setCredits(data.premium_credits);
       } catch (err) {
         console.error('Error loading referral data:', err);
       } finally {
@@ -117,7 +94,8 @@ export default function ReferralPage() {
     }
 
     try {
-      const res = await applyReferralCode(user.uid, inputCode.trim());
+      const token = await user.getIdToken();
+      const res = await applyReferralCode(token, inputCode.trim());
       setReferredBy('applied');
       setCredits(prev => prev + 1);
       setSuccessMsg(`Félicitations ! Code validé, tu es parrainé par ${res.referrer_name}.`);

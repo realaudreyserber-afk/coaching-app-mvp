@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, addDoc, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
@@ -145,20 +145,18 @@ export default function BloodworkUploadPage() {
 
   const handleSaveResult = async () => {
     if (!user || !result) return;
+    // Audit 2026-05-28 #3 : l'écriture client `addDoc(users/{uid}/bloodwork)`
+    // était bloquée par firestore.rules (`bloodwork` = write:false, server-only)
+    // → PermissionDenied systématique en prod. Or /api/bloodwork/analyze a DÉJÀ
+    // persisté le résultat côté serveur (admin SDK) au moment de l'analyse.
+    // On retire donc l'écriture client cassée ; ce bouton ne fait plus que
+    // confirmer + rafraîchir l'historique local.
     setSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
-
     try {
-      await addDoc(collection(db, 'users', user.uid, 'bloodwork'), {
-        ...result,
-        createdAt: new Date().toISOString()
-      });
-      setSuccessMsg("L'analyse sanguine a été enregistrée avec succès dans ton historique.");
+      setSuccessMsg("L'analyse sanguine est enregistrée dans ton historique.");
       setHistory(prev => [result, ...prev].slice(0, 5));
-    } catch (err: any) {
-      console.error('Save bloodwork error:', err);
-      setErrorMsg('Impossible d\'enregistrer les résultats.');
     } finally {
       setSaving(false);
     }

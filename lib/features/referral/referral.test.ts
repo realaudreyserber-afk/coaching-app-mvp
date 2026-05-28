@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateReferralCode } from './referral-service';
+import { generateReferralCode } from './code';
 
 describe('Referral Service Code Generator', () => {
   it('should generate valid 6-character codes with INS prefix', () => {

@@ -23,7 +23,22 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow write: if isOwner(uid) || isAdmin();
+      // Audit 2026-05-28 #1/#2 — Anti mass-assignment sur le doc racine.
+      // Faille corrigée : `allow write: if isOwner` laissait le client
+      // s'octroyer `subscription.tier='premium'` (Premium gratuit, lu par
+      // lib/stripe/hooks.ts) et manipuler `referral.premium_credits`.
+      // Désormais : `subscription` (entitlement Stripe) et `referral` (crédits)
+      // sont gérés EXCLUSIVEMENT côté serveur (admin SDK bypasse les rules).
+      // Le client peut créer son doc avec subscription.tier=='free' mais ne
+      // peut JAMAIS passer à premium ni toucher referral.
+      allow create: if isAdmin() || (isOwner(uid)
+        && (!('subscription' in request.resource.data)
+            || request.resource.data.subscription.tier == 'free')
+        && !('referral' in request.resource.data));
+      allow update: if isAdmin() || (isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['subscription', 'referral']));
+      allow delete: if isOwner(uid) || isAdmin();
 
       // ── Client-writable sub-collections ───────────────────────────
       // These are written directly from the front-end (check-ins, food
