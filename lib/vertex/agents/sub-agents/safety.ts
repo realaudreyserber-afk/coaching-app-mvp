@@ -17,6 +17,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { SAFETY_SYSTEM_PROMPT } from '../../prompts/agents/safety';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
+import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -117,6 +118,14 @@ export class SafetyCoach extends BaseAgent {
       if (hydration) ctx.hydration = hydration;
     } catch (e) {
       console.warn('[safety-agent] hydration fetch failed:', e);
+    }
+
+    // Substances — détection patterns problématiques (binge alcool, nicotine pattern)
+    try {
+      const substances = await getSubstancesSnapshot(input.uid);
+      if (substances) ctx.substances = substances;
+    } catch (e) {
+      console.warn('[safety-agent] substances fetch failed:', e);
     }
 
     // Weight history 30j — détection perte rapide

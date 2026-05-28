@@ -15,6 +15,7 @@ import { NUTRITION_SYSTEM_PROMPT } from '../../prompts/agents/nutrition';
 import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corpus';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
+import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -135,6 +136,14 @@ export class NutritionCoach extends BaseAgent {
       if (hydration) ctx.hydration = hydration;
     } catch (e) {
       console.warn('[nutrition-agent] hydration fetch failed:', e);
+    }
+
+    // Substances — Phase 5 data-layer (caféine/alcool/nicotine impact macros + récup)
+    try {
+      const substances = await getSubstancesSnapshot(input.uid);
+      if (substances) ctx.substances = substances;
+    } catch (e) {
+      console.warn('[nutrition-agent] substances fetch failed:', e);
     }
 
     return ctx;

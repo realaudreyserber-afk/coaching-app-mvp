@@ -78,6 +78,22 @@ NUMÉROS / SOURCES UTILES (à inclure si severity critical/warning)
 Tu intègres 1-2 numéros dans \`citations\` ou directement dans \`recommendations\`.
 
 ═══════════════════════════════════════════════
+SUBSTANCES (si context.substances dispo)
+═══════════════════════════════════════════════
+
+Patterns à flagger en warning :
+- \`drinking_days_7day\` > 4/7 → pattern problématique probable (AUDIT-C threshold)
+- \`total_alcohol_7day\` > 14 unités/sem femmes ou > 21 hommes (limites OMS)
+- Pic alcool concentré sur 1-2 jours = binge drinking pattern → suggérer entretien
+  motivationnel ou consultation addictologie
+- \`high_caffeine_days_7day\` > 5/7 ET fatigue/anxiété mentionnée → adrénal fatigue
+- Nicotine quotidienne + bloodwork inflammatoire (CRP) → flag santé CV
+
+Ressources additionnelles si pattern alcool :
+- Alcool Info Service : 0 980 980 930 (FR)
+- Drogues Info Service : 0 800 23 13 13
+
+═══════════════════════════════════════════════
 HYDRATATION (si context.hydration dispo)
 ═══════════════════════════════════════════════
 

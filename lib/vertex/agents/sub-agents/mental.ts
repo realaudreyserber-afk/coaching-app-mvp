@@ -16,6 +16,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { MENTAL_SYSTEM_PROMPT } from '../../prompts/agents/mental';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
+import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -75,6 +76,14 @@ export class MentalCoach extends BaseAgent {
       }
     } catch (e) {
       console.warn('[mental-agent] cycle fetch failed:', e);
+    }
+
+    // Substances — caféine excessive impacte cortisol + anxiété ; alcool = depressant
+    try {
+      const substances = await getSubstancesSnapshot(input.uid);
+      if (substances) ctx.substances = substances;
+    } catch (e) {
+      console.warn('[mental-agent] substances fetch failed:', e);
     }
 
     return ctx;
