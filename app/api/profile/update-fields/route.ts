@@ -102,6 +102,18 @@ const ALLOWED_FIELDS: Record<string, FieldSpec> = {
   "profile.medical_notes": { type: "string", max: 1000 },
   "profile.tdee_theoretical": { type: "number", min: 800, max: 6000 },
   "profile.tdee_adaptive": { type: "number", min: 800, max: 6000 },
+  // Phase 9 data-layer : préférences alimentaires et allergies
+  "profile.dietary_preferences": {
+    type: "string_array",
+    maxItems: 8,
+    maxItemLen: 30,
+    itemEnum: [
+      "vegetarian", "vegan", "pescetarian", "halal", "kosher",
+      "gluten_free", "lactose_free", "low_fodmap", "keto",
+    ],
+  },
+  "profile.allergies": { type: "string_array", maxItems: 20, maxItemLen: 50 },
+  "profile.dislikes": { type: "string_array", maxItems: 30, maxItemLen: 50 },
   // baseline
   "baseline.weight": { type: "number", min: 30, max: 300 },
   "baseline.bf_pct": { type: "number", min: 3, max: 60 },

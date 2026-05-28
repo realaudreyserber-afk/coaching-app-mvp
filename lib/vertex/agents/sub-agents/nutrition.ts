@@ -42,8 +42,10 @@ export class NutritionCoach extends BaseAgent {
           sex: profile.sex,
           activity_level: profile.activity_level,
           dietary_restrictions: profile.dietary_restrictions,
+          dietary_preferences: profile.dietary_preferences, // Phase 9
+          allergies: profile.allergies, // Phase 9
+          dislikes: profile.dislikes, // Phase 9
           uses_glp1: profile.uses_glp1 ?? false,
-          allergies: profile.allergies,
         };
         isFemale = profile.sex === 'female';
       }
