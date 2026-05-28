@@ -7,7 +7,7 @@ import { collection, query, orderBy, limit, getDocs, addDoc, doc, getDoc, where 
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Send, Search, Pin, Download, X } from 'lucide-react';
 import { ChatBubble } from '@/components/coach/chat-bubble';
 
 interface ChatMessage {
@@ -17,6 +17,8 @@ interface ChatMessage {
   sources?: any[];
   timestamp?: string;
   feedback?: 'up' | 'down' | null;
+  /** Audit COACH 2026-05-28 #17 : épinglage messages clés */
+  pinned?: boolean;
 }
 
 /**
@@ -149,6 +151,11 @@ export default function CoachPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Audit COACH 2026-05-28 — #16 recherche, #17 pinning, #19 export RGPD
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showOnlyPinned, setShowOnlyPinned] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Client context states for personalized suggestions
   const [profileData, setProfileData] = useState<any>(null);
@@ -583,6 +590,70 @@ export default function CoachPage() {
     }
   };
 
+  // Audit COACH #17 : toggle épinglage d'un message
+  const handleTogglePin = async (messageId: string, currentlyPinned: boolean) => {
+    if (!user || !messageId || messageId === '__initial_greeting__') return;
+    const newPinned = !currentlyPinned;
+    try {
+      const { updateDoc } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'users', user.uid, 'coach_messages', messageId), {
+        pinned: newPinned,
+      });
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pinned: newPinned } : m));
+    } catch (err) {
+      console.error('Error toggling pin:', err);
+    }
+  };
+
+  // Audit COACH #19 : export RGPD de la conversation en cours (markdown)
+  const handleExportConversation = () => {
+    setExporting(true);
+    try {
+      const lines: string[] = [
+        `# Conversation Coach NoDream`,
+        `Export du ${new Date().toLocaleString('fr-FR')}`,
+        ``,
+        `---`,
+        ``,
+      ];
+      messages.forEach((m) => {
+        const ts = m.timestamp ? new Date(m.timestamp).toLocaleString('fr-FR') : '';
+        const role = m.role === 'user' ? '👤 Toi' : '🤖 ORACLE.IA';
+        lines.push(`## ${role}${ts ? ` — ${ts}` : ''}${m.pinned ? ' 📌' : ''}`);
+        lines.push('');
+        lines.push(m.content);
+        lines.push('');
+      });
+      const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `coach-nodream-${new Date().toISOString().slice(0, 10)}.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setError("Échec de l'export. Réessaie.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Audit COACH #16 + #17 : filtres affichés
+  const filteredMessages = React.useMemo(() => {
+    let filtered = messages;
+    if (showOnlyPinned) {
+      filtered = filtered.filter(m => m.pinned === true);
+    }
+    if (searchQuery.trim().length >= 2) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(m => m.content.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [messages, showOnlyPinned, searchQuery]);
+
   // Archive and trigger a New Session
   const handleNewSession = async () => {
     if (!user || sending) return;
@@ -751,18 +822,73 @@ export default function CoachPage() {
           </div>
         </div>
 
-        {/* New Session Action */}
-        <Button
-          onClick={handleNewSession}
-          disabled={sending}
-          variant="outline"
-          className="mono border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 text-[10px] h-9 px-3"
-          style={{
-            clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)'
-          }}
-        >
-          Nouvelle session
-        </Button>
+        {/* Toolbar Actions — Audit COACH 2026-05-28 : #16 search, #17 pin filter, #19 export */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowOnlyPinned(!showOnlyPinned)}
+            className={`mono h-9 px-2.5 text-[10px] flex items-center gap-1.5 border ${
+              showOnlyPinned
+                ? 'border-amber-500 text-amber-400 bg-amber-950/20'
+                : 'border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+            }`}
+            style={{ clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }}
+            title={showOnlyPinned ? 'Tout afficher' : 'Filtrer épinglés uniquement'}
+            aria-pressed={showOnlyPinned}
+          >
+            <Pin className="w-3 h-3" /> {showOnlyPinned ? 'Épinglés' : 'Filtre'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportConversation}
+            disabled={exporting || messages.length === 0}
+            className="mono h-9 px-2.5 text-[10px] flex items-center gap-1.5 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 disabled:opacity-50"
+            style={{ clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }}
+            title="Exporter la conversation (RGPD)"
+          >
+            <Download className="w-3 h-3" /> Export
+          </button>
+
+          {/* New Session Action */}
+          <Button
+            onClick={handleNewSession}
+            disabled={sending}
+            variant="outline"
+            className="mono border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 text-[10px] h-9 px-3"
+            style={{
+              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)'
+            }}
+          >
+            Nouvelle session
+          </Button>
+        </div>
+      </div>
+
+      {/* Search bar — Audit COACH #16 : se déploie sous le header si query active */}
+      <div className="px-4 py-2 border-b border-zinc-900/50 bg-zinc-950/60">
+        <div className="relative max-w-md">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Rechercher dans la conversation…"
+            className="mono w-full pl-8 pr-8 h-8 bg-zinc-900/70 border border-zinc-800 text-zinc-300 placeholder-zinc-600 text-[11px] focus:outline-none focus:border-zinc-700"
+            style={{ clipPath: 'polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)' }}
+            aria-label="Rechercher dans la conversation"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              aria-label="Effacer la recherche"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Chat Area */}
@@ -772,9 +898,17 @@ export default function CoachPage() {
         aria-live="polite"
         aria-label="Conversation avec le coach"
       >
-        {messages.map((m, idx) => (
+        {filteredMessages.length === 0 && (showOnlyPinned || searchQuery.trim().length >= 2) && (
+          <div
+            className="mono text-center text-zinc-500 py-8"
+            style={{ fontSize: 11, letterSpacing: '0.1em' }}
+          >
+            {showOnlyPinned ? 'Aucun message épinglé.' : `Aucun message ne contient « ${searchQuery} ».`}
+          </div>
+        )}
+        {filteredMessages.map((m, idx) => (
           <ChatBubble
-            key={idx}
+            key={m.id || idx}
             id={m.id}
             role={m.role}
             content={m.content}
@@ -782,6 +916,9 @@ export default function CoachPage() {
             timestamp={m.timestamp}
             feedback={m.feedback}
             onFeedback={handleFeedback}
+            pinned={m.pinned}
+            onTogglePin={handleTogglePin}
+            searchQuery={searchQuery.trim().length >= 2 ? searchQuery.trim() : undefined}
           />
         ))}
 
