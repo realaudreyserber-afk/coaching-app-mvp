@@ -140,8 +140,53 @@ interface StepperProps {
 }
 
 function Stepper({ label, unit, value, step, min, max, onChange, decimals = 0 }: StepperProps) {
-  const decrement = () => onChange(Math.max(min, +(value - step).toFixed(decimals)));
-  const increment = () => onChange(Math.min(max, +(value + step).toFixed(decimals)));
+  // Audit UX 2026-05-28 : incrément fixe à +2.5 kg = 40 clics pour aller à 100 kg.
+  // Fix : long-press (>=500ms) déclenche un repeat accéléré (1 step / 80ms).
+  // De plus, après ~2s, on passe à step×4 pour aller VRAIMENT vite sur les
+  // charges élevées sans configurer manuellement.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const repeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fastStepRef = useRef(step);
+
+  const stopRepeat = () => {
+    if (repeatTimerRef.current) {
+      clearInterval(repeatTimerRef.current);
+      repeatTimerRef.current = null;
+    }
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (accelTimerRef.current) {
+      clearTimeout(accelTimerRef.current);
+      accelTimerRef.current = null;
+    }
+    fastStepRef.current = step;
+  };
+
+  const applyDelta = (delta: number) => {
+    const next = +(valueRef.current + delta).toFixed(decimals);
+    onChange(Math.max(min, Math.min(max, next)));
+  };
+
+  const startHold = (dir: -1 | 1) => {
+    // Single click immédiat
+    applyDelta(dir * step);
+    // Long-press : après 500ms, repeat ; après 2s, accélération
+    longPressTimerRef.current = setTimeout(() => {
+      fastStepRef.current = step;
+      repeatTimerRef.current = setInterval(() => {
+        applyDelta(dir * fastStepRef.current);
+      }, 80);
+      accelTimerRef.current = setTimeout(() => {
+        fastStepRef.current = step * 4;
+      }, 2000);
+    }, 500);
+  };
+
   return (
     <div
       style={{
@@ -169,8 +214,13 @@ function Stepper({ label, unit, value, step, min, max, onChange, decimals = 0 }:
       <div className="flex items-center justify-between gap-1">
         <button
           type="button"
-          onClick={decrement}
-          aria-label={`Diminuer ${label}`}
+          onMouseDown={() => startHold(-1)}
+          onMouseUp={stopRepeat}
+          onMouseLeave={stopRepeat}
+          onTouchStart={() => startHold(-1)}
+          onTouchEnd={stopRepeat}
+          onTouchCancel={stopRepeat}
+          aria-label={`Diminuer ${label} (maintenir pour accélérer)`}
           className="mono cursor-pointer"
           style={{
             width: 28,
@@ -202,8 +252,13 @@ function Stepper({ label, unit, value, step, min, max, onChange, decimals = 0 }:
         </div>
         <button
           type="button"
-          onClick={increment}
-          aria-label={`Augmenter ${label}`}
+          onMouseDown={() => startHold(1)}
+          onMouseUp={stopRepeat}
+          onMouseLeave={stopRepeat}
+          onTouchStart={() => startHold(1)}
+          onTouchEnd={stopRepeat}
+          onTouchCancel={stopRepeat}
+          aria-label={`Augmenter ${label} (maintenir pour accélérer)`}
           className="mono cursor-pointer"
           style={{
             width: 28,
@@ -268,6 +323,69 @@ export default function LogSessionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Audit UX 2026-05-28 : timer de repos visible avec son + vibration
+  const [restRemainingSec, setRestRemainingSec] = useState(0);
+  const restEndAtRef = useRef<number>(0);
+
+  // Beep via Web Audio API — pas de fichier audio, marche partout
+  const playBeep = useCallback((freq = 800, durationMs = 250) => {
+    try {
+      const AudioCtx = (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durationMs / 1000);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + durationMs / 1000);
+    } catch {
+      // Audio context bloqué (autoplay policy / contexte non-user-gesture) — silent fail
+    }
+  }, []);
+
+  const startRestTimer = useCallback(
+    (seconds: number) => {
+      if (seconds <= 0) return;
+      restEndAtRef.current = Date.now() + seconds * 1000;
+      setRestRemainingSec(seconds);
+    },
+    [],
+  );
+
+  const skipRestTimer = useCallback(() => {
+    restEndAtRef.current = 0;
+    setRestRemainingSec(0);
+  }, []);
+
+  // Tick le countdown chaque seconde quand rest actif
+  useEffect(() => {
+    if (restRemainingSec <= 0) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.round((restEndAtRef.current - Date.now()) / 1000));
+      setRestRemainingSec(remaining);
+      // Beep + vibration à 5s restants et à la fin
+      if (remaining === 5) {
+        playBeep(600, 150);
+      }
+      if (remaining === 0) {
+        playBeep(1000, 400);
+        if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+          try {
+            navigator.vibrate([200, 100, 200]);
+          } catch {
+            /* ignore */
+          }
+        }
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [restRemainingSec, playBeep]);
 
   // Tick chaque seconde pour la durée et les stats live
   useEffect(() => {
@@ -360,7 +478,11 @@ export default function LogSessionPage() {
   const durationMin = durationSec / 60;
   const densitySetsPerMin =
     durationMin > 0 ? Math.round((setsCompleted / durationMin) * 100) / 100 : 0;
-  const caloriesEst = Math.round(5 * userWeightKg * (durationSec / 3600));
+  // Audit UX 2026-05-28 : ancienne formule basée sur durée → dérivait sans set
+  // validé. Nouvelle formule : approx. 0.05 kcal par kg-rep de volume (sources :
+  // estimation moyenne resistance training, Vezina 2014). Ne progresse que sur
+  // travail effectif.
+  const caloriesEst = Math.round(volumeKg * 0.05);
 
   const exosTouched = useMemo(
     () => exercises.filter((e) => e.sets.some((s) => s.completed)).length,
@@ -389,14 +511,32 @@ export default function LogSessionPage() {
 
   const validateSet = useCallback(() => {
     if (!activeExo) return;
+    const justCompleted = activeExo.sets[activeSetIdx];
     setExercises((prev) =>
       prev.map((ex, i) =>
         i === activeExoIdx
           ? {
               ...ex,
-              sets: ex.sets.map((s, j) =>
-                j === activeSetIdx ? { ...s, completed: true } : s,
-              ),
+              sets: ex.sets.map((s, j) => {
+                if (j === activeSetIdx) return { ...s, completed: true };
+                // Audit UX 2026-05-28 : pré-remplir le set suivant avec les valeurs
+                // du set qu'on vient de valider, seulement si pas encore touché
+                // manuellement (weight_kg === 0 = init par défaut).
+                if (
+                  j === activeSetIdx + 1 &&
+                  !s.completed &&
+                  s.weight_kg === 0 &&
+                  justCompleted
+                ) {
+                  return {
+                    ...s,
+                    weight_kg: justCompleted.weight_kg,
+                    reps_done: justCompleted.reps_done,
+                    rpe_felt: justCompleted.rpe_felt,
+                  };
+                }
+                return s;
+              }),
             }
           : ex,
       ),
@@ -404,9 +544,13 @@ export default function LogSessionPage() {
     // Navigate to next set ; if last set, next exo set 0 ; if last exo, stay
     if (activeSetIdx + 1 < activeExo.sets.length) {
       setActiveSetIdx(activeSetIdx + 1);
+      // Démarre le timer de repos (Phase audit UX 2026-05-28)
+      startRestTimer(activeExo.target_rest_seconds);
     } else if (activeExoIdx + 1 < exercises.length) {
       setActiveExoIdx(activeExoIdx + 1);
       setActiveSetIdx(0);
+      // Repos inter-exo (souvent plus court mais on garde la même valeur)
+      startRestTimer(activeExo.target_rest_seconds);
     }
   }, [activeExo, activeExoIdx, activeSetIdx, exercises.length]);
 
@@ -556,6 +700,10 @@ export default function LogSessionPage() {
 
   if (!block || !activeExo) return null;
 
+  // Audit UX 2026-05-28 : `V??` était un placeholder jamais bindé. Le vrai
+  // session_code est généré server-side par /api/sessions/log-full au final POST
+  // (compteur des sessions de même opération). On affiche "LIVE" pour signaler
+  // que la séance est en cours et que le numéro sera attribué à la fin.
   const sessionCodeDisplay = (() => {
     const op = (block.name ?? "SESS")
       .normalize("NFD")
@@ -564,7 +712,7 @@ export default function LogSessionPage() {
       .trim()
       .split(/[^A-Z]+/)
       .filter((w) => w.length > 2)[0];
-    return `${(op ?? "SESS").slice(0, 5)}-V??`;
+    return `${(op ?? "SESS").slice(0, 5)}-LIVE`;
   })();
 
   return (
@@ -635,6 +783,51 @@ export default function LogSessionPage() {
           </div>
         </div>
       </HudCard>
+
+      {/* Audit UX 2026-05-28 : timer de repos visible, beep à 5s et fin, vibration à 0 */}
+      {restRemainingSec > 0 && (
+        <div
+          role="timer"
+          aria-live="polite"
+          aria-label={`Repos ${restRemainingSec} secondes restantes`}
+          className="mono flex items-center justify-between gap-3"
+          style={{
+            padding: "12px 16px",
+            background: restRemainingSec <= 5 ? "var(--accent-tech-tint)" : "var(--glass-bg-2)",
+            border: `2px solid ${restRemainingSec <= 5 ? "var(--accent-tech)" : "var(--gold-400)"}`,
+            color: restRemainingSec <= 5 ? "var(--accent-tech)" : "var(--gold-400)",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            clipPath:
+              "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <TimerReset className="h-5 w-5" aria-hidden="true" />
+            <span>REPOS · {String(Math.floor(restRemainingSec / 60)).padStart(2, "0")}:{String(restRemainingSec % 60).padStart(2, "0")}</span>
+          </div>
+          <button
+            type="button"
+            onClick={skipRestTimer}
+            className="mono"
+            style={{
+              padding: "4px 10px",
+              background: "transparent",
+              border: "1px solid currentColor",
+              color: "inherit",
+              fontSize: 10,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+            aria-label="Sauter le repos"
+          >
+            Skip
+          </button>
+        </div>
+      )}
 
       {success && (
         <div

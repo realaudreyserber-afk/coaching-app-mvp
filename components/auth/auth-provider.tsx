@@ -78,11 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.localStorage.getItem('mock_user') !== null) &&
       process.env.NODE_ENV !== 'production';
 
-    console.log("[AuthProvider] mockAuthEnabled:", mockAuthEnabled);
-    console.log("[AuthProvider] window:", typeof window !== 'undefined');
-    console.log("[AuthProvider] localStorage mock_user:", typeof window !== 'undefined' ? window.localStorage.getItem('mock_user') : null);
-    console.log("[AuthProvider] process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH:", process.env.NEXT_PUBLIC_ENABLE_MOCK_AUTH);
-    console.log("[AuthProvider] process.env.NODE_ENV:", process.env.NODE_ENV);
+    // Audit UX 2026-05-28 : retiré 5 console.log debug qui polluaient la console
+    // en prod sans valeur ajoutée. Les console.error restent (signal réel d'erreur).
 
     if (mockAuthEnabled) {
       try {
