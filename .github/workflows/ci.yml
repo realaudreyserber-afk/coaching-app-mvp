@@ -1,0 +1,43 @@
+# CI — type-check + tests unitaires (audit QA : la CI ne lançait que les
+# rules-tests ; aucune barrière TS/logique avant Vercel). Ce workflow ajoute :
+#  - tsc --noEmit (bloquant) : attrape les régressions de types avant le build.
+#  - vitest run (bloquant, hors rules/e2e — cf. vitest.config.ts exclude).
+#  - eslint (NON bloquant : continue-on-error, pour ne pas casser la CI sur des
+#    warnings pré-existants ; sert de signal, pas de gate, tant que la base n'est
+#    pas nettoyée).
+# Les rules-tests (émulateur) restent dans rules-tests.yml.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Type-check (tsc --noEmit)
+        run: npx tsc --noEmit
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Lint (non-blocking)
+        run: npm run lint
+        continue-on-error: true

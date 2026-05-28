@@ -314,7 +314,7 @@ function buildAggregatePrompt(
  * Parse + valide le RoutingDecision retourné par Gemini.
  * Fallback safe si parse fail : on consulte personne et on dit qu'on a pas compris.
  */
-function parseRoutingDecision(raw: string): RoutingDecision {
+export function parseRoutingDecision(raw: string): RoutingDecision {
   try {
     const parsed = parseLLMJson<{
       sub_agents?: unknown;
@@ -362,7 +362,7 @@ function parseRoutingDecision(raw: string): RoutingDecision {
  *  - Si plusieurs agents disent severity=critical (rare mais possible) → on note
  *  - Phase 5 ajoutera désaccord détection (recos contradictoires nutrition vs training)
  */
-function arbitrateOutputs(
+export function arbitrateOutputs(
   outputs: Partial<Record<SubAgentName, AgentOutput>>,
 ): SessionRecord['arbitration'] | undefined {
   const disagreements: string[] = [];

@@ -29,7 +29,7 @@ import type {
  * Sans ça, persistSessionRecord échoue silencieusement dès qu'un agent met
  * un champ optionnel à undefined dans raw_data / facts / arbitration.
  */
-function stripUndefined<T>(value: T): T {
+export function stripUndefined<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
     return value

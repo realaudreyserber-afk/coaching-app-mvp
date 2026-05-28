@@ -237,7 +237,7 @@ async function persistAssistantMessage(
  * les POST vers les endpoints dédiés ; on ne veut pas qu'elles polluent
  * l'historique chat (l'user ne doit pas voir le JSON brut).
  */
-function stripCoachTags(text: string): string {
+export function stripCoachTags(text: string): string {
   let out = text.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
   out = out.replace(/<COACH_PLAN_PATCH>[\s\S]*?<\/COACH_PLAN_PATCH>/g, '');
   // Cas où une balise ouvrante n'a pas de fermante (génération coupée) — strip jusqu'à la fin
