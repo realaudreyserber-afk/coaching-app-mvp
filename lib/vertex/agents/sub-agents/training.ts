@@ -16,6 +16,8 @@ import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
+import { getSleepSnapshot } from '@/lib/features/sleep/store';
+import { getHrvSnapshot } from '@/lib/features/hrv/store';
 import type { AgentInput, SubAgentName } from '../types';
 import type { ProfileForRag } from '@/lib/features/rag-coach/context';
 
@@ -131,12 +133,20 @@ export class TrainingCoach extends BaseAgent {
       console.warn('[training-agent] rag fetch failed:', e);
     }
 
-    // Personal Records — progression force sur exos clés
+    // Sleep — Phase 14 (récup)
     try {
-      const prs = await getPrsSnapshot(input.uid);
-      if (prs) ctx.prs = prs;
+      const sleep = await getSleepSnapshot(input.uid);
+      if (sleep) ctx.sleep = sleep;
     } catch (e) {
-      console.warn('[training-agent] prs fetch failed:', e);
+      console.warn('[training-agent] sleep fetch failed:', e);
+    }
+
+    // HRV — Phase 15 (deload timing, fatigue cumulative)
+    try {
+      const hrv = await getHrvSnapshot(input.uid);
+      if (hrv) ctx.hrv = hrv;
+    } catch (e) {
+      console.warn('[training-agent] hrv fetch failed:', e);
     }
 
     return ctx;

@@ -88,6 +88,8 @@ const SUBCOLLECTIONS = [
   "habit_logs", // Phase 11 data-layer roadmap — log par habit × jour
   "favorite_recipes", // Phase 12 data-layer roadmap — recettes favorites user
   "shopping_lists", // Phase 13 data-layer roadmap — listes de courses
+  "sleep_log", // Phase 14 data-layer roadmap — log sommeil manuel
+  "hrv_log", // Phase 15 data-layer roadmap — log HRV/stress manuel
   // Retirées (n'existent pas comme collections, calculées) :
   // streak (computed depuis checkins_daily.date)
   // micronutrients_daily (agrégé depuis food_logs)

@@ -19,6 +19,8 @@ import { SAFETY_SYSTEM_PROMPT } from '../../prompts/agents/safety';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
+import { getSleepSnapshot } from '@/lib/features/sleep/store';
+import { getHrvSnapshot } from '@/lib/features/hrv/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -135,6 +137,20 @@ export class SafetyCoach extends BaseAgent {
       if (lifeEvents) ctx.life_events = lifeEvents;
     } catch (e) {
       console.warn('[safety-agent] life_events fetch failed:', e);
+    }
+
+    // Sleep + HRV — Phases 14+15 (signaux burnout/dépression)
+    try {
+      const sleep = await getSleepSnapshot(input.uid);
+      if (sleep) ctx.sleep = sleep;
+    } catch (e) {
+      console.warn('[safety-agent] sleep fetch failed:', e);
+    }
+    try {
+      const hrv = await getHrvSnapshot(input.uid);
+      if (hrv) ctx.hrv = hrv;
+    } catch (e) {
+      console.warn('[safety-agent] hrv fetch failed:', e);
     }
 
     // Weight history 30j — détection perte rapide

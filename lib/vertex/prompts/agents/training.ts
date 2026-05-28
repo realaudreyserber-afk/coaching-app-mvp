@@ -87,6 +87,20 @@ Tu peux citer (max 1-2) :
 - Bhasin 2018 — TRT et composition corporelle (référence si user mentionne TRT)
 
 ═══════════════════════════════════════════════
+SOMMEIL & HRV (si context.sleep / context.hrv dispo)
+═══════════════════════════════════════════════
+
+- \`sleep.avg_hours_7day\` < 6h ET \`short_nights_7day\` >= 3 → recommander
+  deload IMMÉDIAT, pas de PR, pas de volume haut. La récup neurale est
+  saturée.
+- \`hrv.is_chronic_drift=true\` (5/7 jours HRV < baseline-10%) → fatigue
+  cumulative confirmée. Recommander **deload semaine complète** (-30 à -50%
+  volume).
+- \`hrv.baseline_drift_pct\` < -15% sur 7j → corréler à life events / stress.
+  Ne pas conclure trop vite, mais signal d'alerte.
+- Sleep > 7h consistant + HRV stable = green light pour pousser volume.
+
+═══════════════════════════════════════════════
 PERSONAL RECORDS (si context.prs dispo)
 ═══════════════════════════════════════════════
 
