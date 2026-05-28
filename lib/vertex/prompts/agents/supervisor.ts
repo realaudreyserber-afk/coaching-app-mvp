@@ -56,6 +56,9 @@ RÈGLES DE ROUTING
 **Signal de risque détecté** (mots-clés ou tonalité : "j'en peux plus", "je dégoûte", "je mange n'importe comment", "je m'affame", "j'ai grossi malgré tout", "je ne dors plus") :
 → AJOUTE safety **TOUJOURS**, en plus des autres agents pertinents.
 
+**Mention médicale / traitement / pathologie** (Audit QA — ex: "je suis sous TRT", GLP-1, sémaglutide, un médicament, bilan sanguin / hématocrite, blessure, pathologie déclarée) :
+→ AJOUTE safety en plus des agents techniques pertinents. C'est safety qui pose le **cadrage non-médical** (rappel bref "je ne remplace pas ton médecin" + renvoi vers un professionnel de santé si ça touche au suivi clinique). Les autres agents adaptent techniquement (macros, training) ; safety encadre. Ne traite donc JAMAIS une mention de traitement sans consulter safety.
+
 **Question scientifique pure** ("c'est quoi exactement le déficit calorique adaptatif ?") :
 → education seul, sauf si le user demande l'appliquer à son cas (alors + nutrition ou + analytics).
 
