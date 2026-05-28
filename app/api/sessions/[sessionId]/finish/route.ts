@@ -17,6 +17,7 @@ import {
   computeSessionMetrics,
   findTopLift,
 } from "@/lib/features/sessions/session-utils";
+import { detectPrsFromSession } from "@/lib/features/personal-records/store";
 import type { SessionDoc, LastSessionSummary } from "@/types/session";
 
 export const runtime = "nodejs";
@@ -107,6 +108,25 @@ export async function POST(
 
       return lastSummary;
     });
+
+    // Phase 3 data-layer : détection auto des PR depuis cette session.
+    // Best-effort : si ça throw, on log mais on ne casse pas la réponse user
+    // (la session est déjà persistée comme completed).
+    try {
+      const fresh = await sessionRef.get();
+      const data = fresh.data();
+      if (data) {
+        const detected = await detectPrsFromSession(uid, sessionId, {
+          date: data.date as string | undefined,
+          exercises: data.exercises as Array<Record<string, unknown>> | undefined,
+        });
+        if (detected > 0) {
+          console.log(`[sessions/finish] ${detected} new PR(s) detected for ${uid}`);
+        }
+      }
+    } catch (prErr) {
+      console.warn("[sessions/finish] PR detection failed (non-blocking):", prErr);
+    }
 
     return NextResponse.json({ ok: true, summary });
   } catch (err: unknown) {

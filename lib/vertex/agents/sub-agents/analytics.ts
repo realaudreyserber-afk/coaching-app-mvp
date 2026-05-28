@@ -15,6 +15,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/agents/analytics';
 import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
+import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -137,6 +138,14 @@ export class AnalyticsCoach extends BaseAgent {
       if (measurements) ctx.measurements = measurements;
     } catch (e) {
       console.warn('[analytics-agent] measurements fetch failed:', e);
+    }
+
+    // Personal Records — progression force
+    try {
+      const prs = await getPrsSnapshot(input.uid);
+      if (prs) ctx.prs = prs;
+    } catch (e) {
+      console.warn('[analytics-agent] prs fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)

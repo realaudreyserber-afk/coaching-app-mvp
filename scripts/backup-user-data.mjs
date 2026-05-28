@@ -79,6 +79,7 @@ const SUBCOLLECTIONS = [
   "cycles", // Phase 1 data-layer roadmap — cycle menstruel
   "cycle_settings", // Phase 1 data-layer roadmap — config cycle
   "measurements", // Phase 2 data-layer roadmap — mensurations time-series
+  "prs", // Phase 3 data-layer roadmap — personal records par exo
   // Retirées (n'existent pas comme collections, calculées) :
   // streak (computed depuis checkins_daily.date)
   // micronutrients_daily (agrégé depuis food_logs)

@@ -78,6 +78,9 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
   delta 30j et 90j par champ (waist, neck, hips, shoulder, chest, arm, etc.).
   EXPLOITATION CRITIQUE : si poids stagne mais waist baisse → recomposition en cours,
   garder cap. Si poids baisse mais waist stagne → perte musculaire probable, alerter.
+- \`prs\` (Phase 3 data-layer) : top exos avec 1RM estimé + progression 90j.
+  Exploitation : si poids baisse + 1RM en hausse = recompo réussie. Si poids
+  baisse + 1RM en baisse = perte musculaire (cut trop agressif), alerter.
 
 ═══════════════════════════════════════════════
 CITATIONS

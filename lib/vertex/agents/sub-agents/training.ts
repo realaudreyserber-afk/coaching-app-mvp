@@ -15,6 +15,7 @@ import { BaseAgent } from './base';
 import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
 import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
+import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import type { AgentInput, SubAgentName } from '../types';
 import type { ProfileForRag } from '@/lib/features/rag-coach/context';
 
@@ -128,6 +129,14 @@ export class TrainingCoach extends BaseAgent {
       if (rag) ctx.rag_exercises = rag;
     } catch (e) {
       console.warn('[training-agent] rag fetch failed:', e);
+    }
+
+    // Personal Records — progression force sur exos clés
+    try {
+      const prs = await getPrsSnapshot(input.uid);
+      if (prs) ctx.prs = prs;
+    } catch (e) {
+      console.warn('[training-agent] prs fetch failed:', e);
     }
 
     return ctx;
