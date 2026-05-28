@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/lib/firebase/hooks";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface StepProps {
   userData: any;
@@ -21,6 +22,7 @@ export function Step1Identity({ userData, onNext }: Omit<StepProps, "onPrev">) {
   const [name, setName] = useState(userData?.profile?.name || "");
   const [sex, setSex] = useState(userData?.profile?.sex || "");
   const [error, setError] = useState("");
+  const confirm = useConfirm();
   // Audit PLAN 2026-05-28 #5 : régression Homme→Femme observée lors d'une
   // re-génération de plan. On capture le sexe initial pour avertir le user
   // s'il change accidentellement — le sexe est critique pour BMR/TDEE et
@@ -47,9 +49,13 @@ export function Step1Identity({ userData, onNext }: Omit<StepProps, "onPrev">) {
     // enregistré → confirmation explicite obligatoire (impact direct sur
     // toutes les formules métaboliques + macros).
     if (sexChanged) {
-      const confirmed = window.confirm(
-        `Tu changes ton sexe biologique de "${initialSexRef.current === 'male' ? 'Homme' : 'Femme'}" à "${sex === 'male' ? 'Homme' : 'Femme'}". Ce paramètre recalcule entièrement ton métabolisme et ton plan nutritionnel. Confirmer ce changement ?`,
-      );
+      const confirmed = await confirm({
+        title: "Changer le sexe biologique",
+        message: `Tu passes de « ${initialSexRef.current === 'male' ? 'Homme' : 'Femme'} » à « ${sex === 'male' ? 'Homme' : 'Femme'} ». Ce paramètre recalcule entièrement ton métabolisme et ton plan nutritionnel. Confirmer ce changement ?`,
+        confirmLabel: "Confirmer",
+        cancelLabel: "Annuler",
+        danger: true,
+      });
       if (!confirmed) return;
     }
 

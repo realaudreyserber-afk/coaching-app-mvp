@@ -4,6 +4,27 @@ import { withAuth } from "@/lib/firebase/auth-middleware";
 
 interface DocLike { id: string; data: () => Record<string, unknown> }
 
+// Audit QA sécurité : l'export RGPD listait dynamiquement TOUTES les
+// sous-collections (dont `tokens/` = refresh tokens OAuth) et renvoyait le doc
+// profil brut (avec wearable.*.access_token/refresh_token en clair). On rédige
+// donc toute clé de type secret et on exclut la sous-collection de tokens.
+// (Les tokens OAuth sont des secrets d'infra, pas des données personnelles que
+// l'utilisateur a besoin de récupérer — leur exposer serait une fuite.)
+const SECRET_KEY = /(_token$|^access_token$|^refresh_token$|^id_token$|secret|api_key|client_secret)/i;
+const EXCLUDED_SUBCOLLECTIONS = new Set(["tokens"]);
+
+function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SECRET_KEY.test(k) ? "[REDACTED]" : redactSecrets(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 export async function GET(req: NextRequest) {
   return withAuth(req, async (_authReq, user) => {
     try {
@@ -18,16 +39,19 @@ export async function GET(req: NextRequest) {
       const exportData: Record<string, unknown> = {
         exportedAt: new Date().toISOString(),
         uid,
-        profile: userSnap.data(),
+        profile: redactSecrets(userSnap.data()),
       };
 
       const subcollections = await userRef.listCollections();
       const collectionEntries = await Promise.all(
         subcollections.map(async (sub) => {
+          if (EXCLUDED_SUBCOLLECTIONS.has(sub.id)) {
+            return [sub.id, "[exclu de l'export — secrets OAuth, non exportables]"] as const;
+          }
           const docs = await sub.get();
           return [
             sub.id,
-            docs.docs.map((d: DocLike) => ({ id: d.id, ...d.data() })),
+            docs.docs.map((d: DocLike) => redactSecrets({ id: d.id, ...d.data() })),
           ] as const;
         })
       );
