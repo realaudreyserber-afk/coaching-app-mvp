@@ -80,7 +80,9 @@ export function LandingPage() {
   const { user, loading } = useAuth();
   const isAuthed = !loading && !!user && !user.isAnonymous;
 
-  const primaryHref = isAuthed ? "/dashboard" : "/login";
+  // CTA principal "Commencer" → inscription directe (sinon un nouvel arrivant
+  // tombe sur le formulaire de connexion). "Se connecter" garde le défaut signin.
+  const primaryHref = isAuthed ? "/dashboard" : "/login?mode=signup";
   const primaryLabel = isAuthed ? "Accéder à mon espace" : "Commencer";
 
   return (

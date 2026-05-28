@@ -74,7 +74,15 @@ function LoginInner() {
     return r;
   })();
 
-  const [mode, setMode] = useState<Mode>("signin");
+  // Audit UX 2026-05-28 : ?mode= présélectionne le formulaire. La landing
+  // envoie "Commencer" → ?mode=signup (sinon un nouvel arrivant tombait sur
+  // le formulaire de connexion). Défaut "signin" pour les visiteurs directs.
+  const modeParam: Mode = (() => {
+    const m = searchParams?.get("mode");
+    return m === "signup" || m === "reset" ? m : "signin";
+  })();
+
+  const [mode, setMode] = useState<Mode>(modeParam);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false); // Audit #5 toggle visibilité
