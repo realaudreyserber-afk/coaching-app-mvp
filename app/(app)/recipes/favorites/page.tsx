@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { collection, query, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { RECIPES } from '@/content/recipes/library';
 import Link from 'next/link';
 
@@ -34,6 +35,7 @@ interface FavoriteRecipeDoc {
 
 export default function FavoriteRecipesPage() {
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState<FavoriteRecipeDoc[]>([]);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -83,7 +85,12 @@ export default function FavoriteRecipesPage() {
 
   async function removeFav(fav: FavoriteRecipeDoc) {
     if (!user) return;
-    if (!confirm('Retirer ce favori ?')) return;
+    if (!(await confirm({
+      title: 'Retirer le favori',
+      message: 'Retirer cette recette de tes favoris ?',
+      confirmLabel: 'Retirer',
+      danger: true,
+    }))) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'favorite_recipes', fav.id));
       setFavorites(favorites.filter((f) => f.id !== fav.id));

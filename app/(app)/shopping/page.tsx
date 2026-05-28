@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface ShoppingItem {
   name: string;
@@ -42,6 +43,7 @@ interface ShoppingListDoc {
 
 export default function ShoppingPage() {
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [activeList, setActiveList] = useState<ShoppingListDoc | null>(null);
@@ -147,7 +149,11 @@ export default function ShoppingPage() {
 
   async function archiveAndCreateNew() {
     if (!user || !activeList) return;
-    if (!confirm('Archiver cette liste et démarrer une nouvelle ?')) return;
+    if (!(await confirm({
+      title: 'Archiver la liste',
+      message: 'Archiver cette liste de courses et en démarrer une nouvelle ?',
+      confirmLabel: 'Archiver',
+    }))) return;
     try {
       await updateDoc(doc(db, 'users', user.uid, 'shopping_lists', activeList.id), {
         status: 'archived',

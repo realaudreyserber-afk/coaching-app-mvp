@@ -8,6 +8,7 @@ import { doc, getDoc, collection, query, orderBy, limit, getDocs } from "firebas
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Loader } from "@/components/ui/loader";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { HudCard, PanelHeader, Tag, Corners } from "@/components/nodream";
 import {
   Plus,
@@ -336,6 +337,7 @@ export default function LogSessionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const confirm = useConfirm();
 
   // Audit UX 2026-05-28 : timer de repos visible avec son + vibration
   const [restRemainingSec, setRestRemainingSec] = useState(0);
@@ -883,10 +885,15 @@ export default function LogSessionPage() {
             <HeaderStat label="Prog" value={`${completionPct}%`} accent="gold" />
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 // Audit #6 : confirmation avant abandon (évite la perte
                 // accidentelle de la séance) + purge du brouillon local.
-                if (!window.confirm("Abandonner cette séance ? Les sets non enregistrés seront perdus.")) return;
+                if (!(await confirm({
+                  title: "Abandonner la séance",
+                  message: "Les sets non enregistrés seront perdus.",
+                  confirmLabel: "Abandonner",
+                  danger: true,
+                }))) return;
                 try {
                   if (user) localStorage.removeItem(sessionDraftKey(user.uid, planId, blockIndex));
                 } catch { /* non bloquant */ }

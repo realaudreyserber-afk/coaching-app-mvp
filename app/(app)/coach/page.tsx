@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Send, Search, Pin, Download, X } from 'lucide-react';
 import { ChatBubble } from '@/components/coach/chat-bubble';
 import { SessionHistory } from '@/components/coach/session-history';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface ChatMessage {
   id?: string;
@@ -153,6 +154,7 @@ export default function CoachPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const confirm = useConfirm();
 
   // Audit COACH 2026-05-28 — #16 recherche, #17 pinning, #19 export RGPD
   const [searchQuery, setSearchQuery] = useState('');
@@ -659,7 +661,11 @@ export default function CoachPage() {
   // Archive and trigger a New Session
   const handleNewSession = async () => {
     if (!user || sending) return;
-    const ok = window.confirm("Commencer une nouvelle session ? La conversation actuelle sera archivée (consultable dans l'historique).");
+    const ok = await confirm({
+      title: "Nouvelle session",
+      message: "La conversation actuelle sera archivée (tu pourras la consulter dans l'historique). Démarrer une nouvelle session ?",
+      confirmLabel: "Archiver & démarrer",
+    });
     if (!ok) return;
 
     setSending(true);

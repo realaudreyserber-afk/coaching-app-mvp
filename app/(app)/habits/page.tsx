@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface HabitDoc {
   id: string;
@@ -63,6 +64,7 @@ function yesterdayIso(): string {
 
 export default function HabitsPage() {
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [habits, setHabits] = useState<HabitDoc[]>([]);
@@ -133,7 +135,12 @@ export default function HabitsPage() {
 
   async function deleteHabit(habitId: string) {
     if (!user) return;
-    if (!confirm('Supprimer cette habitude (et son historique sera détaché) ?')) return;
+    if (!(await confirm({
+      title: 'Supprimer l\'habitude',
+      message: 'Son historique sera détaché. Confirmer la suppression ?',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    }))) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'habits', habitId));
       await reloadAll();

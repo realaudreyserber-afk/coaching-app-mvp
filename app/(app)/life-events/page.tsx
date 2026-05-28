@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { collection, query, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 const TYPES: Array<{ key: string; label: string }> = [
   { key: 'move', label: 'Déménagement' },
@@ -58,6 +59,7 @@ function todayIso(): string {
 
 export default function LifeEventsPage() {
   const { user, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -135,7 +137,12 @@ export default function LifeEventsPage() {
 
   async function removeEvent(eventId: string) {
     if (!user) return;
-    if (!confirm('Supprimer cet événement ?')) return;
+    if (!(await confirm({
+      title: 'Supprimer l\'événement',
+      message: 'Confirmer la suppression de cet événement ?',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    }))) return;
     try {
       await deleteDoc(doc(db, 'users', user.uid, 'life_events', eventId));
       setEvents(events.filter((e) => e.id !== eventId));

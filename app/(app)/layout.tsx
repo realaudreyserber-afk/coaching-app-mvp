@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/firebase/hooks";
 
 import { TacticalHeader } from "@/components/nodream/tactical-header";
 import { TacticalBottomNav } from "@/components/nodream/tactical-bottom-nav";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, hasProfile } = useAuth();
@@ -65,22 +66,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hideBottomNav = isOnboarding || isLiveSession;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-zinc-950 focus:font-semibold focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-      >
-        Aller au contenu principal
-      </a>
-      {!hideChrome && <TacticalHeader />}
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className={`flex-1 flex flex-col relative z-10 ${!hideBottomNav ? "pb-20" : ""}`}
-      >
-        {children}
-      </main>
-      {!hideBottomNav && <TacticalBottomNav />}
-    </div>
+    <ConfirmProvider>
+      <div className="min-h-screen flex flex-col bg-background">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-zinc-950 focus:font-semibold focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+        >
+          Aller au contenu principal
+        </a>
+        {!hideChrome && <TacticalHeader />}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className={`flex-1 flex flex-col relative z-10 ${!hideBottomNav ? "pb-20" : ""}`}
+        >
+          {children}
+        </main>
+        {!hideBottomNav && <TacticalBottomNav />}
+      </div>
+    </ConfirmProvider>
   );
 }
