@@ -138,7 +138,7 @@ async function detectPlateauForUser(
       };
       if (!stateSnap.exists) {
         Object.assign(statePatch, {
-          welcome_sent: false,
+          welcome_with_plan_sent: false,
           plan_debrief_sent: false,
           topics_discussed: [],
           pending_followups: [],

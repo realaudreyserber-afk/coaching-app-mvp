@@ -8,7 +8,7 @@
  * so /dashboard surfaces a badge.
  *
  * Idempotent guards:
- *  - welcome : only fires if coach_state.welcome_sent === false → flips to true
+ *  - welcome : only fires if coach_state.welcome_with_plan_sent === false → flips to true
  *  - plan_generated : only fires if coach_state.plan_debrief_sent === false
  *  - others : always fires (each session_finished is unique)
  *

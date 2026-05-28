@@ -33,11 +33,13 @@ export async function loadCoachState(uid: string): Promise<CoachState> {
   const snap = await ref(uid).get(); // let exception propagate
   if (snap.exists) {
     const data = snap.data() as Partial<CoachState>;
+    const welcomeWithPlanSent = data.welcome_with_plan_sent ?? (data as any).welcome_sent ?? false;
     return {
       ...DEFAULT_COACH_STATE,
       created_at: data.created_at ?? new Date().toISOString(),
       updated_at: data.updated_at ?? new Date().toISOString(),
       ...data,
+      welcome_with_plan_sent: welcomeWithPlanSent,
     } as CoachState;
   }
   const now = new Date().toISOString();

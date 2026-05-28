@@ -35,7 +35,7 @@ export interface CoachState {
   /** Learned tone preference */
   response_style: CoachResponseStyle;
   /** First-login welcome already sent? */
-  welcome_sent: boolean;
+  welcome_with_plan_sent: boolean;
   /** Post-onboarding plan-debrief already sent? */
   plan_debrief_sent: boolean;
   /** Free-text personality calibration notes (coach writes this itself) */
@@ -49,7 +49,7 @@ export const DEFAULT_COACH_STATE: Omit<CoachState, 'created_at' | 'updated_at'> 
   topics_discussed: [],
   pending_followups: [],
   response_style: 'mixed',
-  welcome_sent: false,
+  welcome_with_plan_sent: false,
   plan_debrief_sent: false,
 };
 

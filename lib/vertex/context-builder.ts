@@ -263,7 +263,7 @@ export interface CoachStateContext {
   topics_discussed?: string[];
   pending_followups?: Array<{ topic: string; due_at: string; done?: boolean }>;
   response_style?: 'short' | 'verbose' | 'data_driven' | 'mixed';
-  welcome_sent?: boolean;
+  welcome_with_plan_sent?: boolean;
   plan_debrief_sent?: boolean;
   personality_notes?: string;
 }
