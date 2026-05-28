@@ -751,8 +751,9 @@ export default function CoachPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push('/dashboard')}
-            aria-label="Retour au tableau de bord"
+            onClick={() => setShowHistory(true)}
+            aria-label="Voir l'historique des conversations"
+            title="Historique des conversations"
             className="h-11 w-11 text-zinc-400 hover:text-zinc-200"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -847,18 +848,6 @@ export default function CoachPage() {
           >
             <Download className="w-3 h-3" /> Export
           </button>
-
-          {/* Historique des sessions archivées (lecture seule) */}
-          <Button
-            onClick={() => setShowHistory(true)}
-            variant="outline"
-            className="mono border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 text-[10px] h-9 px-3"
-            style={{
-              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)'
-            }}
-          >
-            Historique
-          </Button>
 
           {/* New Session Action */}
           <Button
