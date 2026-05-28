@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { FirebaseError } from "firebase/app";
+import { setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 import { useAuth } from "@/lib/firebase/hooks";
+import { auth } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Loader } from "@/components/ui/loader";
 import { HudCard, PanelHeader } from "@/components/nodream";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -43,7 +40,18 @@ function friendlyFirebaseError(err: unknown): string {
   return "Une erreur est survenue. Réessaie.";
 }
 
+// Audit UX 2026-05-28 : useSearchParams() requiert Suspense boundary en Next 13+.
+// On wrap LoginInner dans Suspense pour pouvoir préfetch ?redirect= sans crash
+// du prerender static.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<Loader size="fullscreen" message="Chargement..." />}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
   const {
     user,
     loading,
@@ -54,10 +62,23 @@ export default function LoginPage() {
     loginWithGoogle,
   } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Audit UX 2026-05-28 #15 : honorer ?redirect=/some/path après login.
+  // Sécurité : on n'accepte que les paths relatifs commençant par "/" pour
+  // éviter open redirect vers domaine externe.
+  const redirectParam = (() => {
+    const r = searchParams?.get("redirect");
+    if (!r) return null;
+    // Whitelist : path interne uniquement, pas d'URL externe
+    if (!r.startsWith("/") || r.startsWith("//")) return null;
+    return r;
+  })();
 
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Audit #5 toggle visibilité
+  const [rememberMe, setRememberMe] = useState(true); // Audit #6 "Se souvenir de moi"
   const [authError, setAuthError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -68,9 +89,15 @@ export default function LoginPage() {
     // AuthProvider creates a user object as soon as the app mounts, which
     // would otherwise short-circuit the whole login flow.
     if (!loading && user && !user.isAnonymous) {
-      router.push(hasProfile ? "/dashboard" : "/onboarding");
+      // Audit UX 2026-05-28 #15 : si ?redirect= valide, on l'utilise.
+      // Sinon fallback historique (dashboard si profil, onboarding sinon).
+      if (redirectParam) {
+        router.push(redirectParam);
+      } else {
+        router.push(hasProfile ? "/dashboard" : "/onboarding");
+      }
     }
-  }, [user, loading, hasProfile, router]);
+  }, [user, loading, hasProfile, router, redirectParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +105,19 @@ export default function LoginPage() {
     setInfo(null);
     setSubmitting(true);
     try {
+      // Audit UX 2026-05-28 #6 : appliquer la persistance AVANT login.
+      // Remember me coché = local (survit fermeture navigateur).
+      // Décoché = session (s'efface à la fermeture).
+      if (mode !== "reset") {
+        try {
+          await setPersistence(
+            auth,
+            rememberMe ? browserLocalPersistence : browserSessionPersistence,
+          );
+        } catch (persistErr) {
+          console.warn("[login] setPersistence failed (non-blocking):", persistErr);
+        }
+      }
       if (mode === "signin") {
         await loginWithEmail(email, password);
       } else if (mode === "signup") {
@@ -191,9 +231,12 @@ export default function LoginPage() {
               marginBottom: 16,
             }}
           >
+            {/* Audit UX 2026-05-28 #7 : "Identification militaire chiffrée" → claim
+                non vérifiable et juridiquement risqué. Remplacé par formulation
+                factuelle (authentification Firebase + chiffrement TLS). */}
             {mode === "reset"
               ? "Renseigne ton email, on t'envoie un lien de réinitialisation."
-              : "Authentification requise pour accéder à l'OS tactique. Identification militaire chiffrée."}
+              : "Authentification requise pour accéder à l'OS tactique. Chiffrement TLS de bout en bout."}
           </p>
           <div className="space-y-4">
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -223,18 +266,35 @@ export default function LoginPage() {
                   >
                     Mot de passe
                   </label>
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete={
-                      mode === "signin" ? "current-password" : "new-password"
-                    }
-                    minLength={6}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full h-11 px-3 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                  {/* Audit UX 2026-05-28 #5 : toggle afficher/masquer mot de passe */}
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete={
+                        mode === "signin" ? "current-password" : "new-password"
+                      }
+                      minLength={6}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full h-11 pl-3 pr-10 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((s) => !s)}
+                      aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      aria-pressed={showPassword}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <Eye className="h-4 w-4" aria-hidden />
+                      )}
+                    </button>
+                  </div>
                   {mode === "signup" && (
                     <p className="mt-1 text-[10px] text-muted-foreground">
                       Minimum 6 caractères.
@@ -243,13 +303,27 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {/* Audit UX 2026-05-28 #6 : Se souvenir de moi (Firebase persistence) */}
+              {mode === "signin" && (
+                <label className="flex items-center gap-2 text-xs text-foreground/70 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  Se souvenir de moi sur cet appareil
+                </label>
+              )}
+
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full h-11 rounded-md text-sm font-medium"
+                className="w-full h-11 rounded-md text-sm font-medium flex items-center justify-center gap-2"
               >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {submitting
-                  ? "..."
+                  ? "Connexion…"
                   : mode === "signin"
                     ? "Se connecter"
                     : mode === "signup"
@@ -258,13 +332,23 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* Audit UX 2026-05-28 #3 : zone erreur sémantique avec role="alert"
+                pour annonce immédiate au lecteur d'écran. */}
             {authError && (
-              <p className="text-center text-xs text-red-500 font-medium bg-red-50 dark:bg-red-950/20 py-2 rounded-md">
+              <p
+                role="alert"
+                aria-live="assertive"
+                className="text-center text-xs text-red-500 font-medium bg-red-50 dark:bg-red-950/20 py-2 rounded-md"
+              >
                 {authError}
               </p>
             )}
             {info && (
-              <p className="text-center text-xs text-green-700 font-medium bg-green-50 dark:bg-green-950/20 py-2 rounded-md">
+              <p
+                role="status"
+                aria-live="polite"
+                className="text-center text-xs text-green-700 font-medium bg-green-50 dark:bg-green-950/20 py-2 rounded-md"
+              >
                 {info}
               </p>
             )}
@@ -329,20 +413,30 @@ export default function LoginPage() {
               variant="outline"
               className="w-full h-11 flex items-center justify-center gap-3 rounded-md text-sm font-medium"
             >
-              <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+              {/* Audit UX 2026-05-28 #16 : logo Google officiel 4 couleurs
+                  (Google brand guidelines). Source officielle SVG. */}
+              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
               Continuer avec Google
             </Button>
 
-            <div className="pt-2 text-center">
-              <span className="text-[10px] text-muted-foreground">
-                {
-                  "En te connectant, tu acceptes nos conditions d'utilisation et notre politique de confidentialité RGPD."
-                }
+            {/* Audit UX 2026-05-28 #1+#2 : liens cliquables vers /legal/terms et
+                /legal/privacy + break-words pour éviter overflow */}
+            <div className="pt-2 text-center break-words">
+              <span className="text-[10px] text-muted-foreground leading-relaxed">
+                En te connectant, tu acceptes nos{' '}
+                <Link href="/legal/terms" className="underline hover:text-foreground">
+                  conditions d'utilisation
+                </Link>
+                {' '}et notre{' '}
+                <Link href="/legal/privacy" className="underline hover:text-foreground">
+                  politique de confidentialité RGPD
+                </Link>
+                .
               </span>
             </div>
           </div>
