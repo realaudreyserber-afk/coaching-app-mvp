@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/firebase/hooks';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2, Send, Search, Pin, Download, X } from 'lucide-react';
 import { ChatBubble } from '@/components/coach/chat-bubble';
+import { SessionHistory } from '@/components/coach/session-history';
 
 interface ChatMessage {
   id?: string;
@@ -151,6 +152,7 @@ export default function CoachPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Audit COACH 2026-05-28 — #16 recherche, #17 pinning, #19 export RGPD
   const [searchQuery, setSearchQuery] = useState('');
@@ -657,26 +659,22 @@ export default function CoachPage() {
   // Archive and trigger a New Session
   const handleNewSession = async () => {
     if (!user || sending) return;
-    const confirm = window.confirm("Commencer une nouvelle session ? Vos messages actuels seront archivés.");
-    if (!confirm) return;
+    const ok = window.confirm("Commencer une nouvelle session ? La conversation actuelle sera archivée (consultable dans l'historique).");
+    if (!ok) return;
 
     setSending(true);
+    setError(null);
     try {
-      const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
-      const chatRef = collection(db, 'users', user.uid, 'coach_messages');
-      const snap = await getDocs(chatRef);
-
-      if (!snap.empty) {
-        const { writeBatch } = await import('firebase/firestore');
-        const batch = writeBatch(db);
-
-        snap.forEach((chatDoc) => {
-          const backupDocRef = doc(db, 'users', user.uid, 'agent_memory_backup', sessionId, 'messages', chatDoc.id);
-          batch.set(backupDocRef, chatDoc.data());
-          batch.delete(chatDoc.ref);
-        });
-
-        await batch.commit();
+      // L'archivage passe désormais côté serveur (collection dédiée
+      // coach_sessions, doc parent listable, chunké sans limite de batch).
+      const token = await user.getIdToken();
+      const res = await fetch('/api/coach/sessions/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'archive_failed');
       }
 
       setMessages([
@@ -849,6 +847,18 @@ export default function CoachPage() {
           >
             <Download className="w-3 h-3" /> Export
           </button>
+
+          {/* Historique des sessions archivées (lecture seule) */}
+          <Button
+            onClick={() => setShowHistory(true)}
+            variant="outline"
+            className="mono border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 text-[10px] h-9 px-3"
+            style={{
+              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)'
+            }}
+          >
+            Historique
+          </Button>
 
           {/* New Session Action */}
           <Button
@@ -1064,6 +1074,10 @@ export default function CoachPage() {
           </button>
         </form>
       </div>
+
+      {showHistory && user && (
+        <SessionHistory uid={user.uid} onClose={() => setShowHistory(false)} />
+      )}
     </div>
   );
 }
