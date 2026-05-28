@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -618,11 +618,131 @@ export function Step6Lifestyle({ userData, onPrev, onNext }: StepProps) {
 // ==========================================
 // STEP 7: GOALS (Objectif principal & Target)
 // ==========================================
+/**
+ * Calcule la durée recommandée d'une phase à partir des données user + des règles
+ * scientifiques du coach. Mêmes règles que les agents Planning/Nutrition.
+ *
+ * - Lose weight : 0.5-0.7% poids/sem (Helms 2014, Garthe 2011). Conservateur = 0.5%,
+ *   recommandé = 0.6%, agressif = 0.7%. Plafond 12 sem cut continu (Trexler 2014
+ *   adaptation métabolique forte au-delà).
+ * - Gain muscle (lean bulk) : 0.25-0.5%/sem max pour profil intermédiaire/avancé,
+ *   jusqu'à 0.7%/sem pour débutant (newbie gains). Pas de gain net possible <8 sem.
+ * - Recomposition : phase longue par nature (16-24+ sem min). Pas de raccourci.
+ */
+function computeRecommendedDuration(
+  currentWeight: number,
+  targetWeight: number,
+  goalType: string,
+  trainingHistory?: string,
+): {
+  min_weeks: number;
+  recommended_weeks: number;
+  max_weeks: number;
+  rationale: string;
+  warning?: string;
+} | null {
+  if (!currentWeight || !targetWeight || currentWeight <= 0 || targetWeight <= 0) return null;
+  const delta = currentWeight - targetWeight; // > 0 = perte, < 0 = prise
+
+  if (goalType === "lose_weight") {
+    if (delta <= 0) {
+      return {
+        min_weeks: 8,
+        recommended_weeks: 12,
+        max_weeks: 16,
+        rationale: "Ton poids cible est ≥ ton poids actuel — un objectif de perte demande un poids cible inférieur.",
+        warning: "Vérifie ton poids cible.",
+      };
+    }
+    // 0.6%/sem recommandé, 0.5%/sem conservateur, 0.7%/sem agressif
+    const recRate = currentWeight * 0.006;
+    const safeRate = currentWeight * 0.005;
+    const aggressiveRate = currentWeight * 0.007;
+    let recommended = Math.ceil(delta / recRate);
+    const min = Math.ceil(delta / aggressiveRate);
+    const max = Math.ceil(delta / safeRate);
+
+    // Plafond cut continu : si > 12 sem, suggérer de découper avec diet break.
+    let warning: string | undefined;
+    if (recommended > 12) {
+      warning = `Au-delà de 12 sem en cut continu, l'adaptation métabolique freine la perte (Trexler 2014). Tu pourrais découper en blocs de 8-10 sem avec diet breaks (2 sem à maintenance entre).`;
+    }
+    // Limites globales
+    recommended = Math.max(4, Math.min(40, recommended));
+
+    return {
+      min_weeks: Math.max(4, min),
+      recommended_weeks: recommended,
+      max_weeks: Math.min(52, max),
+      rationale: `Sur la base d'une perte de 0.5-0.7%/sem (Helms 2014, Garthe 2011) — sweet spot pour limiter la perte de muscle.`,
+      warning,
+    };
+  }
+
+  if (goalType === "gain_muscle") {
+    if (delta >= 0) {
+      return {
+        min_weeks: 8,
+        recommended_weeks: 16,
+        max_weeks: 24,
+        rationale: "Ton poids cible est ≤ ton poids actuel — un objectif de prise de muscle demande un poids cible supérieur.",
+        warning: "Vérifie ton poids cible.",
+      };
+    }
+    const gainKg = Math.abs(delta);
+    // Débutant peut prendre 0.7%/sem, intermédiaire/avancé plus proche de 0.25-0.5%
+    const isBeginner = trainingHistory === "beginner";
+    const recRate = currentWeight * (isBeginner ? 0.005 : 0.0035);
+    const min = Math.ceil(gainKg / (currentWeight * (isBeginner ? 0.007 : 0.005)));
+    const max = Math.ceil(gainKg / (currentWeight * 0.002));
+    const recommended = Math.max(8, Math.ceil(gainKg / recRate));
+
+    return {
+      min_weeks: Math.max(8, min),
+      recommended_weeks: Math.min(40, recommended),
+      max_weeks: Math.min(80, max),
+      rationale: isBeginner
+        ? `Sur la base de 0.25-0.7%/sem pour un débutant (newbie gains soutenus).`
+        : `Sur la base de 0.2-0.5%/sem pour un profil ${trainingHistory ?? "intermédiaire/avancé"} — gain net plus lent qu'un débutant.`,
+    };
+  }
+
+  // Recomposition : long-terme par nature, pas de raccourci
+  return {
+    min_weeks: 16,
+    recommended_weeks: 24,
+    max_weeks: 52,
+    rationale: `La recomposition (perte de gras + gain muscle simultané) demande du temps : 16+ sem minimum. Le poids bouge peu, la composition oui — métriques = mensurations, photos, perfs.`,
+  };
+}
+
 export function Step7Goals({ userData, onPrev, onNext }: StepProps) {
   const [goalType, setGoalType] = useState(userData?.goals?.type || "lose_weight");
   const [targetWeight, setTargetWeight] = useState(userData?.goals?.target_weight || "");
-  const [weeks, setWeeks] = useState(12);
   const [error, setError] = useState("");
+
+  const currentWeightKg = (() => {
+    const w = userData?.profile?.weight ?? userData?.baseline?.weight;
+    return typeof w === "number" ? w : 0;
+  })();
+  const trainingHistory = userData?.profile?.training_history as string | undefined;
+
+  // Recommandation calculée à partir des règles scientifiques (mêmes que les agents)
+  const duration = useMemo(() => {
+    const targetNum = parseFloat(String(targetWeight));
+    if (!targetNum || isNaN(targetNum)) return null;
+    return computeRecommendedDuration(currentWeightKg, targetNum, goalType, trainingHistory);
+  }, [currentWeightKg, targetWeight, goalType, trainingHistory]);
+
+  // weeks = pilotage user, initialisé à la reco mais ajustable dans [min, max]
+  const [weeks, setWeeks] = useState<number>(12);
+
+  // Quand la reco change (changement d'objectif/poids cible), on s'aligne sur le recommended
+  useEffect(() => {
+    if (duration) {
+      setWeeks(duration.recommended_weeks);
+    }
+  }, [duration?.recommended_weeks]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -639,6 +759,13 @@ export function Step7Goals({ userData, onPrev, onNext }: StepProps) {
         type: goalType,
         target_weight: wNum,
         target_date: targetDate.toISOString().split('T')[0],
+        // Persistance des bornes recommandées par le coach pour traçabilité.
+        // Le PlanningCoach + AnalyticsCoach les liront pour évaluer si l'user
+        // tient le rythme prévu vs son rythme réel.
+        recommended_weeks_min: duration?.min_weeks ?? null,
+        recommended_weeks_default: duration?.recommended_weeks ?? null,
+        recommended_weeks_max: duration?.max_weeks ?? null,
+        duration_chosen_weeks: weeks,
       }
     });
   };
@@ -704,20 +831,64 @@ export function Step7Goals({ userData, onPrev, onNext }: StepProps) {
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Durée estimée de la phase</label>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min="6"
-                max="24"
-                step="2"
-                value={weeks}
-                onChange={(e) => setWeeks(parseInt(e.target.value))}
-                className="w-full accent-primary"
-              />
-              <span className="font-semibold text-lg whitespace-nowrap">{weeks} semaines</span>
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <label className="text-sm font-medium">Durée estimée par le coach</label>
+              {duration && (
+                <span className="text-xs text-muted-foreground">
+                  cadre : {duration.min_weeks}–{duration.max_weeks} sem
+                </span>
+              )}
             </div>
+
+            {!duration && (
+              <p className="text-xs text-muted-foreground italic">
+                Indique ton poids cible ci-dessus pour que le coach estime la durée.
+              </p>
+            )}
+
+            {duration && (
+              <>
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Recommandation coach
+                    </span>
+                    <span className="text-lg font-bold text-primary">
+                      {duration.recommended_weeks} semaines
+                    </span>
+                  </div>
+                  <p className="text-xs text-foreground/70 leading-relaxed">
+                    {duration.rationale}
+                  </p>
+                  {duration.warning && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed mt-1">
+                      ⚠ {duration.warning}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min={duration.min_weeks}
+                    max={duration.max_weeks}
+                    step={1}
+                    value={weeks}
+                    onChange={(e) => setWeeks(parseInt(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <span className="font-semibold text-lg whitespace-nowrap min-w-[5rem] text-right">
+                    {weeks} sem
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground italic">
+                  Tu peux ajuster dans la fourchette physiologiquement sûre. Hors zone =
+                  perte de muscle (trop rapide) ou démotivation (trop lent).
+                </p>
+              </>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
