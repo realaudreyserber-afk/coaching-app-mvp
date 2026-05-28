@@ -63,6 +63,25 @@ export default function WeightChart({ data }: WeightChartProps) {
     setMounted(true);
   }, []);
 
+  // ⚠️ CRASH FIX (React #310) : TOUS les hooks doivent être appelés AVANT tout
+  // early-return. Auparavant ce useMemo était APRÈS les `if (!mounted) return`
+  // et `if (data.length === 0) return` → quand la donnée passait de vide à
+  // présente (1er check-in), le nombre de hooks changeait entre deux renders
+  // ("rendered more hooks than during the previous render") → Dashboard ET Suivi
+  // tombaient en page blanche. On filtre les poids non-finis au passage
+  // (un check-in sans `weight` ne doit pas produire NaN sur l'axe).
+  // Wave 13C — Memoize pour éviter de re-scanner l'array à chaque re-render.
+  const { yMin, yMax } = useMemo(() => {
+    const weights = data.map((d) => d.weight).filter((w) => Number.isFinite(w));
+    if (weights.length === 0) return { yMin: 0, yMax: 0 };
+    const minWeight = Math.min(...weights);
+    const maxWeight = Math.max(...weights);
+    return {
+      yMin: Math.max(0, Math.floor(minWeight - 2)),
+      yMax: Math.ceil(maxWeight + 2),
+    };
+  }, [data]);
+
   if (!mounted) {
     return (
       <HudCard accent="gold" chamfer="sm" style={{ height: 256, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -85,19 +104,6 @@ export default function WeightChart({ data }: WeightChartProps) {
       </HudCard>
     );
   }
-
-  // Wave 13C — Memoize the domain calc so re-renders (parent state changes
-  // unrelated to data) don't re-scan the array. Cheap but on low-end mobile
-  // every avoided re-render counts.
-  const { yMin, yMax } = useMemo(() => {
-    const weights = data.map((d) => d.weight);
-    const minWeight = Math.min(...weights);
-    const maxWeight = Math.max(...weights);
-    return {
-      yMin: Math.max(0, Math.floor(minWeight - 2)),
-      yMax: Math.ceil(maxWeight + 2),
-    };
-  }, [data]);
 
   // Use computed CSS values for proper SSR-safe theming
   const gridColor = 'rgba(255, 255, 255, 0.06)';
