@@ -1292,7 +1292,7 @@ export default function SettingsPage() {
           style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.04em', margin: '12px 0' }}
         >
           Re-saisis ton BF%, ton niveau d&apos;entraînement et ton environnement pour recalibrer
-          ton plan via Katch-McArdle. L&apos;ancien plan reste archivé (active: false).
+          ton plan via Katch-McArdle. Ton ancien plan reste consultable dans l&apos;historique.
         </p>
         <button
           type="button"

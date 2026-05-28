@@ -156,7 +156,16 @@ export default function ProgressPage() {
       const todayStr = new Date().toISOString().split("T")[0];
       await setDoc(
         doc(db, "users", user.uid, "checkins_daily", todayStr),
-        { weight: w, date: todayStr, updated_at: serverTimestamp() },
+        {
+          weight: w,
+          date: todayStr,
+          // Audit QA #6 : l'« Historique quotidien » et la courbe trient par
+          // `created_at` (orderBy) → un doc sans ce champ est EXCLU de la query
+          // (la pesée n'apparaissait pas). On l'écrit donc aussi. Si un check-in
+          // complet existe déjà ce jour, le merge ne fait que rafraîchir l'horodatage.
+          created_at: new Date().toISOString(),
+          updated_at: serverTimestamp(),
+        },
         { merge: true },
       );
       setWeighInput("");
