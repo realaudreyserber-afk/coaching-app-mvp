@@ -38,6 +38,7 @@ import {
   generateSessionCode,
 } from "@/lib/features/sessions/session-utils";
 import { checkRateLimit } from "@/lib/firebase/rate-limit";
+import { detectPrsFromSession } from "@/lib/features/personal-records/store";
 import type {
   SessionDoc,
   ExerciseSlot,
@@ -291,8 +292,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Audit 2026-05-28 #9 : détection PR auto. Vivait UNIQUEMENT dans l'ancien
+  // /finish (plus appelé par l'UI) → /progress/prs restait vide à vie. Le
+  // détecteur attend des sets {weight_kg, reps} ; on mappe depuis sets_logged
+  // (reps_done). Best-effort : un échec ici ne casse PAS la séance loggée.
+  let prsDetected = 0;
+  try {
+    prsDetected = await detectPrsFromSession(uid, sessionRef.id, {
+      date: finishedAt.toISOString(),
+      exercises: exerciseSlots.map((slot) => ({
+        exercise_name: slot.exercise_name,
+        sets: slot.sets_logged.map((s) => ({ weight_kg: s.weight_kg, reps: s.reps_done })),
+      })),
+    });
+  } catch (err) {
+    console.warn("[sessions/log-full] PR detection failed (non-blocking):", err);
+  }
+
   return NextResponse.json(
-    { ok: true, session_id: sessionRef.id, metrics, top_lift: topLift ?? null },
+    { ok: true, session_id: sessionRef.id, metrics, top_lift: topLift ?? null, prs_detected: prsDetected },
     { status: 201 },
   );
 }

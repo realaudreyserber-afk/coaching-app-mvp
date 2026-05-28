@@ -299,6 +299,19 @@ function Stepper({ label, unit, value, step, min, max, onChange, decimals = 0 }:
 // Page principale
 // ────────────────────────────────────────────────────────────────
 
+/**
+ * Audit 2026-05-28 #6 : persistance locale de la séance en cours.
+ * Tout l'état séance vivait en React state → refresh / back / onglet tué =
+ * 1h de muscu perdue. On snapshote un brouillon en localStorage à chaque
+ * mutation, restauré au remontage, purgé après POST 201 ou abandon.
+ */
+const SESSION_DRAFT_PREFIX = "nodream:session-log:";
+const SESSION_DRAFT_TTL_MS = 12 * 60 * 60 * 1000; // 12h : au-delà, brouillon périmé
+
+function sessionDraftKey(uid: string, planId: string, blockIndex: number): string {
+  return `${SESSION_DRAFT_PREFIX}${uid}:${planId}:${blockIndex}`;
+}
+
 export default function LogSessionPage() {
   const { user, loading, getFreshToken } = useAuth();
   const router = useRouter();
@@ -445,6 +458,41 @@ export default function LogSessionPage() {
         });
         setExercises(initExos);
 
+        // Audit #6 : restaure un brouillon de séance en cours s'il existe et
+        // qu'il correspond structurellement au bloc (même nb d'exos + ids).
+        try {
+          const draftRaw = localStorage.getItem(sessionDraftKey(user.uid, planId, blockIndex));
+          if (draftRaw) {
+            const draft = JSON.parse(draftRaw) as {
+              exercises?: LocalExercise[];
+              userNotes?: string;
+              startedAtMs?: number;
+              activeExoIdx?: number;
+              activeSetIdx?: number;
+              savedAt?: number;
+            };
+            const fresh =
+              typeof draft.savedAt === "number" && Date.now() - draft.savedAt < SESSION_DRAFT_TTL_MS;
+            const matches =
+              Array.isArray(draft.exercises) &&
+              draft.exercises.length === initExos.length &&
+              draft.exercises.every((d, i) => d.exercise_id === initExos[i].exercise_id);
+            if (fresh && matches && draft.exercises) {
+              setExercises(draft.exercises);
+              if (typeof draft.userNotes === "string") setUserNotes(draft.userNotes);
+              if (typeof draft.startedAtMs === "number" && draft.startedAtMs > 0) {
+                startedAtMs.current = draft.startedAtMs;
+              }
+              if (typeof draft.activeExoIdx === "number") setActiveExoIdx(draft.activeExoIdx);
+              if (typeof draft.activeSetIdx === "number") setActiveSetIdx(draft.activeSetIdx);
+            } else if (!fresh) {
+              localStorage.removeItem(sessionDraftKey(user.uid, planId, blockIndex));
+            }
+          }
+        } catch (draftErr) {
+          console.warn("[session/log] draft restore failed (non-blocking):", draftErr);
+        }
+
         // User weight pour calcul calories MET-based
         const uw = (userSnap.data()?.profile?.weight as number) ?? userWeightKg;
         if (typeof uw === "number" && uw > 0) setUserWeightKg(uw);
@@ -500,6 +548,27 @@ export default function LogSessionPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, planId, blockIndex]);
+
+  // Audit #6 : snapshot le brouillon à chaque mutation (restauré au refresh).
+  // Non bloquant : un échec localStorage (quota / navigation privée) est ignoré.
+  useEffect(() => {
+    if (fetching || success || !user || !planId || exercises.length === 0) return;
+    try {
+      localStorage.setItem(
+        sessionDraftKey(user.uid, planId, blockIndex),
+        JSON.stringify({
+          exercises,
+          userNotes,
+          startedAtMs: startedAtMs.current,
+          activeExoIdx,
+          activeSetIdx,
+          savedAt: Date.now(),
+        }),
+      );
+    } catch {
+      /* quota / private mode — non bloquant */
+    }
+  }, [exercises, userNotes, activeExoIdx, activeSetIdx, fetching, success, user, planId, blockIndex]);
 
   // ─── Derived stats (useMemo) ───────────────────────────────────
 
@@ -707,6 +776,10 @@ export default function LogSessionPage() {
       if (!res.ok) throw new Error(data?.error ?? "Enregistrement échoué");
 
       setSuccess(true);
+      // Audit #6 : séance persistée côté serveur → purge le brouillon local.
+      try {
+        if (user) localStorage.removeItem(sessionDraftKey(user.uid, planId, blockIndex));
+      } catch { /* non bloquant */ }
       // Redirige vers /workout/summary qui auto-fire le debrief Vertex via
       // /api/ai/coach-session-debrief. La séance elle-même n'a pas besoin
       // de Vertex (juste Firestore) — l'analyse coach se fait là.
@@ -810,7 +883,15 @@ export default function LogSessionPage() {
             <HeaderStat label="Prog" value={`${completionPct}%`} accent="gold" />
             <button
               type="button"
-              onClick={() => router.push("/session")}
+              onClick={() => {
+                // Audit #6 : confirmation avant abandon (évite la perte
+                // accidentelle de la séance) + purge du brouillon local.
+                if (!window.confirm("Abandonner cette séance ? Les sets non enregistrés seront perdus.")) return;
+                try {
+                  if (user) localStorage.removeItem(sessionDraftKey(user.uid, planId, blockIndex));
+                } catch { /* non bloquant */ }
+                router.push("/session");
+              }}
               className="mono cursor-pointer"
               style={{
                 padding: "6px 12px",

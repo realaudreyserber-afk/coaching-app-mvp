@@ -59,6 +59,12 @@ export default function DailyCheckinPage() {
       const checkinRef = doc(db, "users", user.uid, "checkins_daily", todayStr);
 
       const payload = {
+        // Audit 2026-05-28 #7 : le champ `date` n'était JAMAIS écrit (seul le
+        // doc-id valait le jour). Or weekly-review, cravings/store et l'alerte
+        // humeur filtrent/trient sur `date` → Firestore exclut SILENCIEUSEMENT
+        // les docs sans ce champ : bilan hebdo vide, cravings snapshot null,
+        // alerte humeur jamais déclenchée. On l'écrit désormais explicitement.
+        date: todayStr,
         weight: wNum,
         sleep_hours: Number(sleep),
         sleep_quality: Number(sleepQuality),

@@ -46,8 +46,13 @@ export async function POST(req: NextRequest) {
       const activePlan = planSnap.empty ? null : planSnap.docs[0].data();
 
       const body = await req.json().catch(() => ({}));
-      const weeklyMeasurements = body.measurements ?? null;
-      const userNotes = body.notes ?? '';
+      // Audit 2026-05-28 #8 : le client POST `{ checkin: {...}, week }`. L'ancienne
+      // lecture `body.measurements`/`body.notes` (top-level) valait TOUJOURS
+      // null/'' → l'IA n'analysait jamais les mensurations saisies. On lit
+      // désormais sous `body.checkin` (fallback top-level pour rétro-compat).
+      const checkin = body.checkin ?? {};
+      const weeklyMeasurements = checkin.measurements ?? body.measurements ?? null;
+      const userNotes = checkin.free_notes ?? checkin.notes ?? body.notes ?? '';
 
       // Enrichissement contextuel (Phase 1B) : last_session, streak, body_scan,
       // recent_form_checks. Permet à l'IA de référencer les sessions terminées
@@ -85,13 +90,20 @@ export async function POST(req: NextRequest) {
         const week = Math.ceil(((now.getTime() - onejan.getTime()) / 86400000 + onejan.getDay() + 1) / 7);
         return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
       })();
+      // Audit #8 : utiliser le MÊME doc-id que le client (body.week via
+      // getISOWeekString) — sinon l'IA écrit dans un doc différent du bilan
+      // saisi. Fallback sur le calcul local si absent.
+      const weekId = typeof body.week === 'string' && body.week ? body.week : yearWeek;
 
-      await userRef.collection('checkins_weekly').doc(yearWeek).set({
-        week: yearWeek,
+      // Audit #8 : NE PAS réécrire measurements/free_notes ici. Le client a déjà
+      // persisté le payload complet (mensurations + photos + notes) dans ce doc.
+      // L'ancienne écriture `measurements: weeklyMeasurements` (=null) avec
+      // merge:true ÉCRASAIT les mensurations que l'user venait de saisir.
+      // On n'ajoute que l'analyse IA.
+      await userRef.collection('checkins_weekly').doc(weekId).set({
+        week: weekId,
         ai_analysis: parsed,
-        measurements: weeklyMeasurements,
-        free_notes: userNotes,
-        created_at: new Date().toISOString(),
+        reviewed_at: new Date().toISOString(),
       }, { merge: true });
 
       return NextResponse.json({ success: true, review: parsed }, { status: 200 });
