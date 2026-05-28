@@ -17,6 +17,7 @@ import { BaseAgent } from './base';
 import { MENTAL_SYSTEM_PROMPT } from '../../prompts/agents/mental';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
+import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -84,6 +85,14 @@ export class MentalCoach extends BaseAgent {
       if (substances) ctx.substances = substances;
     } catch (e) {
       console.warn('[mental-agent] substances fetch failed:', e);
+    }
+
+    // Cravings — pattern triggers émotionnels (stress, soir, post-séance)
+    try {
+      const cravings = await getCravingsSnapshot(input.uid);
+      if (cravings) ctx.cravings = cravings;
+    } catch (e) {
+      console.warn('[mental-agent] cravings fetch failed:', e);
     }
 
     return ctx;

@@ -17,6 +17,7 @@ import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/agents/analytics';
 import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
+import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -155,6 +156,14 @@ export class AnalyticsCoach extends BaseAgent {
       if (hydration) ctx.hydration = hydration;
     } catch (e) {
       console.warn('[analytics-agent] hydration fetch failed:', e);
+    }
+
+    // Cravings patterns
+    try {
+      const cravings = await getCravingsSnapshot(input.uid);
+      if (cravings) ctx.cravings = cravings;
+    } catch (e) {
+      console.warn('[analytics-agent] cravings fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)

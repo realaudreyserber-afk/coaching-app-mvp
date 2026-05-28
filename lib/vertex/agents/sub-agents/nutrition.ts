@@ -16,6 +16,7 @@ import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corp
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
+import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -144,6 +145,14 @@ export class NutritionCoach extends BaseAgent {
       if (substances) ctx.substances = substances;
     } catch (e) {
       console.warn('[nutrition-agent] substances fetch failed:', e);
+    }
+
+    // Cravings granulaires — Phase 6 data-layer (extension checkins_daily)
+    try {
+      const cravings = await getCravingsSnapshot(input.uid);
+      if (cravings) ctx.cravings = cravings;
+    } catch (e) {
+      console.warn('[nutrition-agent] cravings fetch failed:', e);
     }
 
     return ctx;

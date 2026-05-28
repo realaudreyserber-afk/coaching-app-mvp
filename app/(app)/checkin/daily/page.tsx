@@ -29,6 +29,10 @@ export default function DailyCheckinPage() {
   const [trainingDone, setTrainingDone] = useState(false);
   const [steps, setSteps] = useState("");
   const [notes, setNotes] = useState("");
+  // Phase 6 data-layer : cravings granulaires
+  const [cravingsTypes, setCravingsTypes] = useState<string[]>([]);
+  const [cravingsIntensity, setCravingsIntensity] = useState(0);
+  const [cravingsTrigger, setCravingsTrigger] = useState("");
 
   // AI Insight response state
   const [aiInsight, setAiInsight] = useState<string | null>(null);
@@ -65,6 +69,10 @@ export default function DailyCheckinPage() {
         training_done: trainingDone,
         steps: stepsNum,
         notes: notes.trim(),
+        // Phase 6 data-layer : cravings granulaires (sucré/salé/gras/etc.)
+        cravings_types: cravingsTypes,
+        cravings_intensity: Number(cravingsIntensity),
+        cravings_trigger: cravingsTrigger.trim().slice(0, 200),
         created_at: new Date().toISOString(),
       };
 
@@ -296,6 +304,68 @@ export default function DailyCheckinPage() {
               <label htmlFor="trainingDone" className="text-sm font-medium select-none cursor-pointer">
                 J'ai validé ma séance d'entraînement aujourd'hui
               </label>
+            </div>
+
+            {/* Cravings — Phase 6 data-layer */}
+            <div className="space-y-2 p-3 bg-muted/30 rounded-md border border-border">
+              <div className="text-sm font-medium">Cravings aujourd'hui (facultatif)</div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { key: 'sweet', label: 'Sucré' },
+                  { key: 'salty', label: 'Salé' },
+                  { key: 'fatty', label: 'Gras' },
+                  { key: 'caffeine', label: 'Caféine' },
+                  { key: 'alcohol', label: 'Alcool' },
+                  { key: 'specific_food', label: 'Aliment précis' },
+                ].map((c) => {
+                  const active = cravingsTypes.includes(c.key);
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => {
+                        const s = new Set(cravingsTypes);
+                        if (active) s.delete(c.key);
+                        else s.add(c.key);
+                        setCravingsTypes(Array.from(s));
+                      }}
+                      className={`px-2 py-1 rounded-full text-xs border ${
+                        active
+                          ? 'bg-amber-100 border-amber-400 text-amber-800'
+                          : 'bg-transparent border-border text-muted-foreground'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {cravingsTypes.length > 0 && (
+                <>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span>Intensité</span>
+                      <span className="text-primary">{cravingsIntensity}/10</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      value={cravingsIntensity}
+                      onChange={(e) => setCravingsIntensity(parseInt(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={cravingsTrigger}
+                    onChange={(e) => setCravingsTrigger(e.target.value)}
+                    placeholder="Déclencheur ? (ex: stress travail, soir après dîner, après séance)"
+                    maxLength={200}
+                    className="w-full p-2 rounded-md border border-border bg-transparent focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                  />
+                </>
+              )}
             </div>
 
             {/* Free Notes */}

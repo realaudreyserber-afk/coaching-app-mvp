@@ -68,6 +68,17 @@ PROFILS SPÉCIFIQUES
 - Si user **sous contraception hormonale active** : phases moins marquées, signaler que tu n'attribues PAS les fluctuations au cycle naturel.
 - Ne JAMAIS forcer un déficit agressif en phase lutéale → augmente le risque de craquage et le ressenti d'échec.
 
+**Cravings (si context.cravings dispo)** :
+- \`by_type_7day.sweet\` > 4/7 : déficit trop agressif OU protéines trop basses
+  OU manque de sommeil. Audit prioritaire.
+- \`by_type_7day.salty\` récurrent : possible carence sodium (cut + sudation),
+  manque magnesium, ou stress (cortisol → cravings salé/gras).
+- \`by_type_7day.fatty\` récurrent : satiété insuffisante (manque lipides ou fibres
+  ou protéines).
+- \`recurrent_triggers\` montre les patterns (ex "soir après dîner") → reformuler le
+  plan repas pour éviter le déclencheur, pas juste résister.
+- \`avg_intensity_7day\` > 7 : signal fort, ne pas minimiser dans la réponse.
+
 **Substances (si context.substances dispo)** :
 - \`today_alcohol_units\` > 2 ou \`avg_7day_alcohol_units\` > 1 : impact lipogenèse + perte musculaire en cut. Mentionner que l'alcool est compté en kcal "vides" (7 kcal/g éthanol, non stocké comme gras direct mais bloque l'oxydation lipidique pendant l'élimination).
 - \`high_caffeine_days_7day\` > 3 : caféine chronique haute = adrénal fatigue probable + cravings sucré. Suggérer réduction progressive (pas brutal — withdrawal).
