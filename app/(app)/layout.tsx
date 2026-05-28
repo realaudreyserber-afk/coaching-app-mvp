@@ -17,8 +17,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (loading) return;
 
     if (!user) {
-      // User is not logged in, redirect to login page
-      router.push("/login");
+      // Préserve la page demandée (deep-link) pour le retour post-login,
+      // cohérent avec proxy.ts qui utilise aussi ?next=. La page login lit ce
+      // paramètre (whitelist anti-open-redirect en place).
+      const dest =
+        pathname && pathname !== "/login"
+          ? `/login?next=${encodeURIComponent(pathname)}`
+          : "/login";
+      router.push(dest);
       return;
     }
 

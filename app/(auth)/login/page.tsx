@@ -67,7 +67,10 @@ function LoginInner() {
   // Sécurité : on n'accepte que les paths relatifs commençant par "/" pour
   // éviter open redirect vers domaine externe.
   const redirectParam = (() => {
-    const r = searchParams?.get("redirect");
+    // Audit : le proxy (server-gate Next 16, proxy.ts) redirige vers
+    // /login?next=<path>. On lit `next` en priorité (param canonique), avec
+    // `redirect` en repli pour la rétro-compat des anciens liens.
+    const r = searchParams?.get("next") ?? searchParams?.get("redirect");
     if (!r) return null;
     // Whitelist : path interne uniquement, pas d'URL externe
     if (!r.startsWith("/") || r.startsWith("//")) return null;
