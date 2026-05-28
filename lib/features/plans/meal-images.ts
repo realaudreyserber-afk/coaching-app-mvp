@@ -70,6 +70,9 @@ export function getRecipeForMealName(mealName: string, mealDescription = ""): Re
   if (combined.includes("yaourt") || combined.includes("skyr")) {
     return RECIPES.find(r => r.id === "yaourt-fruits-noix");
   }
+  if (combined.includes("coucher") || combined.includes("tisane") || combined.includes("chocolat") || combined.includes("nuit")) {
+    return RECIPES.find(r => r.id === "collation-coucher");
+  }
 
   // Fallback to direct name contains
   return RECIPES.find((recipe) => {

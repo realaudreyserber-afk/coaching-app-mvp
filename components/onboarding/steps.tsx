@@ -1213,26 +1213,41 @@ export function Step10Nutrition({ userData, onPrev, onNext }: StepProps) {
 export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) {
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
-  const [progressMsg, setProgressMsg] = useState("Prêt à lancer le calcul...");
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0); // 0: ready, 1..4: steps, 5: finalization
   const { getFreshToken, refreshProfileStatus } = useAuth();
   const router = useRouter();
 
   const handleGeneratePlan = async () => {
     setGenerating(true);
     setGenerationError("");
-    setProgressMsg("Connexion à Vertex AI...");
+    setStepIndex(1);
+    setProgressPercent(5);
     
+    const startTime = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      let percent = 5 + (elapsed / 30) * 90;
+      if (percent > 95) {
+        percent = 95;
+      }
+      const roundedPercent = Math.round(percent);
+      setProgressPercent(roundedPercent);
+
+      if (roundedPercent >= 90) {
+        setStepIndex(4);
+      } else if (roundedPercent >= 65) {
+        setStepIndex(3);
+      } else if (roundedPercent >= 35) {
+        setStepIndex(2);
+      } else if (roundedPercent >= 15) {
+        setStepIndex(1);
+      }
+    }, 200);
+
     try {
       const token = await getFreshToken();
       if (!token) throw new Error("Impossible de récupérer la session utilisateur.");
-
-      setProgressMsg("Calcul de ta dépense énergétique (Mifflin-St Jeor)...");
-      await new Promise(r => setTimeout(r, 800));
-
-      setProgressMsg("Calibration de tes macro-nutriments (Protéines, Glucides, Lipides)...");
-      await new Promise(r => setTimeout(r, 800));
-
-      setProgressMsg("Génération de ton programme d'entraînement adapté...");
 
       const response = await fetch("/api/ai/generate-plan", {
         method: "POST",
@@ -1243,9 +1258,6 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
       });
 
       if (!response.ok) {
-        // Vercel timeout (60s) renvoie du HTML/texte, pas du JSON.
-        // On lit en text() puis on tente JSON.parse — si ça échoue, on déduit
-        // de response.status le bon message pour l'utilisateur.
         const text = await response.text();
         let errMsg = "La génération a échoué.";
         try {
@@ -1258,15 +1270,15 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
         throw new Error(errMsg);
       }
 
-      setProgressMsg("Enregistrement du plan dans Firestore...");
+      // Finish progression immediately
+      clearInterval(timer);
+      setProgressPercent(100);
+      setStepIndex(5);
 
       // Update local profile complete marker
       await refreshProfileStatus();
 
       // Wave 6C : déclenche ORACLE.IA en proactif (welcome + plan_generated).
-      // Fire-and-forget — pas bloquant pour la redirection, l'utilisateur verra
-      // les messages la prochaine fois qu'il ouvre /coach + le badge dashboard.
-      setProgressMsg("ORACLE.IA prépare ton briefing...");
       try {
         await Promise.all([
           fetch("/api/coach/proactive", {
@@ -1290,12 +1302,11 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
         console.warn("[onboarding] proactive coach trigger failed (non-blocking):", e);
       }
 
-      setProgressMsg("Plan créé avec succès ! Préparation de ton dashboard...");
       await new Promise(r => setTimeout(r, 600));
-
-      router.push("/dashboard");
+      router.push("/plan");
 
     } catch (err: any) {
+      clearInterval(timer);
       console.error(err);
       setGenerationError(err.message || "Une erreur réseau est survenue.");
       setGenerating(false);
@@ -1312,9 +1323,60 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
       </CardHeader>
       <CardContent className="space-y-6">
         {generating ? (
-          <div className="text-center space-y-4 py-8">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-            <p className="font-serif italic text-primary font-medium animate-pulse">{progressMsg}</p>
+          <div className="space-y-6 py-4">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold mono text-muted-foreground uppercase tracking-wider">
+                <span>{stepIndex === 5 ? "Plan finalisé avec succès !" : "Calibration en cours..."}</span>
+                <span className="text-primary font-bold">{progressPercent}%</span>
+              </div>
+              <div className="w-full bg-muted h-2.5 rounded-full overflow-hidden border border-border">
+                <div 
+                  className="bg-primary h-full transition-all duration-300 shadow-[0_0_10px_rgba(234,179,8,0.3)]"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Checklist of Steps */}
+            <div className="space-y-3 bg-muted/30 p-4 rounded-md border border-border">
+              {([
+                { idx: 1, label: "1/4 Calcul du métabolisme (BMR & TDEE)" },
+                { idx: 2, label: "2/4 Calibration des macro-nutriments" },
+                { idx: 3, label: "3/4 Composition des repas personnalisés" },
+                { idx: 4, label: "4/4 Programmation de l'entraînement" },
+              ] as const).map((step) => {
+                const isCompleted = stepIndex > step.idx || stepIndex === 5;
+                const isCurrent = stepIndex === step.idx;
+                
+                return (
+                  <div key={step.idx} className="flex items-center gap-3 text-sm mono">
+                    {isCompleted ? (
+                      <div className="flex items-center justify-center h-5 w-5 rounded bg-green-500/20 border border-green-500 text-green-500 font-bold text-xs">
+                        ✓
+                      </div>
+                    ) : isCurrent ? (
+                      <div className="flex items-center justify-center h-5 w-5 rounded border border-primary text-primary font-bold text-xs animate-pulse">
+                        ⌛
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-5 w-5 rounded border border-border text-muted-foreground/30 font-bold text-xs">
+                        ·
+                      </div>
+                    )}
+                    <span className={isCompleted ? "text-muted-foreground line-through decoration-muted-foreground/35" : isCurrent ? "text-primary font-semibold" : "text-muted-foreground/50"}>
+                      {step.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Background notification check */}
+            <div className="text-[10px] text-muted-foreground border-t border-border/40 pt-3 text-center leading-relaxed">
+              {"L'opération prend en moyenne 25 à 30 secondes."}<br />
+              <span className="text-primary/75">{"Tu peux quitter la page si besoin, le processus se terminera en arrière-plan."}</span>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">

@@ -109,8 +109,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const currentWeight = userContext.profile?.weight ?? userContext.baseline?.weight;
+
       const safety = await checkUserBaseline({
-        weightKg: userContext.baseline?.weight ?? userContext.profile?.weight,
+        weightKg: currentWeight,
         heightCm: userContext.profile?.height,
       });
       if (safety.flagged) {
@@ -169,6 +171,10 @@ Adapte le plan pour que les repas soient concentrés dans cette fenêtre. Suggè
       const promptText = `
 Génère un plan personnalisé complet basé sur les données de l'utilisateur suivantes :
 ${JSON.stringify(userContext, null, 2)}
+
+IMPORTANT : Calibre TOUS les calculs énergétiques (BMR, TDEE, déficit, cible kcal, macros) en utilisant le poids actuel de l'utilisateur : ${currentWeight} kg.
+Ne te base pas sur le poids de départ (baseline.weight) s'il est différent.
+Le sexe biologique déclaré de l'utilisateur est : ${userContext.profile?.sex === 'female' ? 'female (femme)' : 'male (homme)'}. Respecte scrupuleusement ce sexe biologique dans tes justifications.
       `;
 
       const responseText = await generateText({

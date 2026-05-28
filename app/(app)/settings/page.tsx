@@ -112,6 +112,8 @@ export default function SettingsPage() {
 
   // Profile settings
   const [name, setName] = useState("");
+  const [sex, setSex] = useState<"male" | "female">("male");
+  const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [activityLevel, setActivityLevel] = useState<UserProfile["activity_level"]>("sedentary");
   const [trainingEnvironment, setTrainingEnvironment] = useState<TrainingEnvironment>("gym");
@@ -165,6 +167,14 @@ export default function SettingsPage() {
           const uData = snap.data();
           if (uData.profile) {
             setName(uData.profile.name || "");
+            setSex(uData.profile.sex || "male");
+            setWeight(
+              uData.profile.weight
+                ? String(uData.profile.weight)
+                : uData.baseline?.weight
+                ? String(uData.baseline.weight)
+                : ""
+            );
             setHeight(uData.profile.height ? String(uData.profile.height) : "");
             setActivityLevel(uData.profile.activity_level || "sedentary");
             setTrainingEnvironment(uData.profile.training_environment || "gym");
@@ -228,6 +238,12 @@ export default function SettingsPage() {
       return;
     }
 
+    const weightNum = parseFloat(weight);
+    if (isNaN(weightNum) || weightNum < 30 || weightNum > 300) {
+      setErrorMsg("Spécifie un poids valide en kg (entre 30 et 300).");
+      return;
+    }
+
     // BF connu — optionnel. Si saisi : range strict + méthode obligatoire.
     let bfPctNum: number | null = null;
     if (bfPct.trim() !== "") {
@@ -254,7 +270,9 @@ export default function SettingsPage() {
         const updatedProfile = {
           ...currentData.profile,
           name: name.trim(),
+          sex: sex,
           height: heightNum,
+          weight: weightNum,
           activity_level: activityLevel,
           training_environment: trainingEnvironment,
           // Mémorise la méthode seulement si une mesure BF est fournie ce coup-ci
@@ -528,6 +546,63 @@ export default function SettingsPage() {
                 style={inputBase}
                 required
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span id="settings-sex-label" style={labelStyle}>Sexe biologique</span>
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="settings-sex-label">
+                  <button
+                    type="button"
+                    onClick={() => setSex("male")}
+                    className="mono cursor-pointer transition-all h-[40px] flex items-center justify-center"
+                    style={{
+                      background: sex === "male" ? "var(--gold-tint-15)" : "var(--glass-bg-2)",
+                      color: sex === "male" ? "var(--gold-400)" : "var(--fg-3)",
+                      border: `1px solid ${sex === "male" ? "var(--gold-tint-35)" : "var(--glass-border)"}`,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      clipPath: "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                    }}
+                    role="radio"
+                    aria-checked={sex === "male"}
+                  >
+                    Homme
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSex("female")}
+                    className="mono cursor-pointer transition-all h-[40px] flex items-center justify-center"
+                    style={{
+                      background: sex === "female" ? "var(--gold-tint-15)" : "var(--glass-bg-2)",
+                      color: sex === "female" ? "var(--gold-400)" : "var(--fg-3)",
+                      border: `1px solid ${sex === "female" ? "var(--gold-tint-35)" : "var(--glass-border)"}`,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      clipPath: "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                    }}
+                    role="radio"
+                    aria-checked={sex === "female"}
+                  >
+                    Femme
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="settings-poids-kg" style={labelStyle}>Poids actuel (kg)</label>
+                <input
+                  id="settings-poids-kg"
+                  type="number"
+                  step="0.1"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  className="mono"
+                  style={inputBase}
+                  required
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

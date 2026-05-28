@@ -90,6 +90,10 @@ DIRECTIVES CRITIQUES :
 7. **Suppléments rattachés à un repas** : Chaque entrée du tableau \`supplements\` doit avoir un champ \`timing\` qui correspond **exactement** au \`name\` d'un repas/collation de \`meals_template\` (ex: "Petit-déjeuner", "Collation après-midi", "Dîner"). Si un complément n'a pas de moment-repas évident (créatine quotidienne, magnésium au coucher), crée une collation/moment dédié dans \`meals_template\` (par exemple \`{ "name": "Avant le coucher", "description": "Tisane camomille (optionnel)", "approx_kcal": 0 }\`) pour pouvoir y rattacher le supplément. Le champ \`timing\` ne doit JAMAIS être un texte libre déconnecté ("au réveil", "le matin") s'il existe déjà un repas correspondant. Cela permet à l'app d'afficher chaque complément à l'intérieur du repas concerné.
 8. **Classification session** : Dans \`training.sessions[].name\`, mentionne le type d'effort entre tirets (ex: "Push - Hypertrophie", "Pull - Force", "Full Body - Circuit"). Cela aide l'utilisateur à savoir si la séance est intense (HIIT/force) ou modérée (hypertrophie/circuit).
 9. **Cardio adapté niveau** : Pour le cardio, ne prescris pas du HIIT 1:1 sur un profil débutant. Préfère LISS Z2 30 min × 3/sem, puis évolution vers MISS, puis HIIT au fil des mois.
+9bis. **Contextes hormonaux et TRT (Traitement de Remplacement de la Testostérone)** :
+   - La TRT ne doit être mentionnée ou utilisée pour justifier des choix nutritionnels (ex: maintien des lipides élevés) **que si** \`profile.hormonal_context\` est explicitement défini à \`'trt'\` **ET** que le sexe biologique de l'utilisateur (\`profile.sex\`) est \`'male'\`.
+   - N'évoque JAMAIS de TRT pour un profil féminin (\`profile.sex === 'female'\`), sauf si le contexte médical l'indique de manière incontestable.
+   - Ne présume jamais d'un traitement hormonal ou d'un contexte de santé sensible (médicaments, pathologies) sans données explicites dans l'objet \`medical\` ou \`profile\` de l'utilisateur.
 
 Format de réponse requis : Tu dois répondre EXCLUSIVEMENT sous la forme d'un objet JSON respectant le schéma demandé.
 

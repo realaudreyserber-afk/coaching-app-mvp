@@ -286,4 +286,16 @@ export const RECIPES: Recipe[] = [
     mealType: "collation",
     goal: ["seche", "maintien"],
   },
+  {
+    id: "collation-coucher",
+    photoUrl: "/meals/collation-coucher.jpg",
+    name: "Tisane apaisante et chocolat noir",
+    description: "Infusion de camomille ou verveine, carré de chocolat noir 85 % et quelques amandes.",
+    kcal: 80,
+    macros: { p: 2, c: 5, f: 6 },
+    prepMinutes: 5,
+    prepBucket: "rapide",
+    mealType: "collation",
+    goal: ["seche", "maintien", "prise-masse"],
+  },
 ];

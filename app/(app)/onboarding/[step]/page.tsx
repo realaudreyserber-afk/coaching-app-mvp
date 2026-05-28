@@ -65,6 +65,19 @@ const STEP_PHOTOS: Record<number, { src: string; alt: string }> = {
   },
 };
 
+function flattenObject(obj: Record<string, any>, prefix = ""): Record<string, any> {
+  const flattened: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const prefixedKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+      Object.assign(flattened, flattenObject(value, prefixedKey));
+    } else {
+      flattened[prefixedKey] = value;
+    }
+  }
+  return flattened;
+}
+
 export default function OnboardingStepPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -141,13 +154,22 @@ export default function OnboardingStepPage() {
         payload.onboarding_step = nextStep;
       }
 
-      await updateDoc(userDocRef, payload);
+      // Flatten the nested fields (e.g. profile.height) to prevent overwriting other fields in map
+      const flatPayload = flattenObject(payload);
+      await updateDoc(userDocRef, flatPayload);
       
-      // Update local state to reflect new data
-      setUserData((prev) => ({
-        ...prev,
-        ...payload,
-      }));
+      // Update local state to reflect new data without wiping out other properties
+      setUserData((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          ...payload,
+          profile: { ...(prev.profile || {}), ...(updatedFields.profile as any || {}) },
+          baseline: { ...(prev.baseline || {}), ...(updatedFields.baseline as any || {}) },
+          goals: { ...(prev.goals || {}), ...(updatedFields.goals as any || {}) },
+          medical: { ...(prev.medical || {}), ...(updatedFields.medical as any || {}) },
+        };
+      });
 
       router.push(`/onboarding/${nextStep}`);
     } catch (error) {

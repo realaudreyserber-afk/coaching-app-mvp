@@ -23,6 +23,7 @@ export default function PlanPage() {
   const [activeTab, setActiveTab] = useState<"nutrition" | "training">("nutrition");
   const [plan, setPlan] = useState<PlanDoc | null>(null);
   const [fetching, setFetching] = useState(true);
+  const [dyslexicFriendly, setDyslexicFriendly] = useState(false);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -559,19 +560,34 @@ export default function PlanPage() {
           <PanelHeader
             code="ORACLE.IA · STRATÉGIE"
             title={
-              <span className="flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
-                Justification du plan
+              <span className="flex items-center justify-between w-full pr-2">
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+                  Justification du plan
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDyslexicFriendly((prev) => !prev)}
+                  className="mono cursor-pointer transition-all hover:text-accent-tech px-2 py-0.5 text-[9px] uppercase border border-glass-border rounded"
+                  style={{
+                    background: dyslexicFriendly ? "var(--accent-tech-tint)" : "transparent",
+                    color: dyslexicFriendly ? "var(--accent-tech)" : "var(--fg-4)",
+                    borderColor: dyslexicFriendly ? "var(--accent-tech)" : "var(--glass-border)",
+                  }}
+                >
+                  Mode lecture
+                </button>
               </span>
             }
             accent="tech"
           />
           <p
             style={{
-              fontFamily: 'var(--font-serif)',
-              fontStyle: 'italic',
+              fontFamily: dyslexicFriendly ? 'var(--font-sans)' : 'var(--font-serif)',
+              fontStyle: dyslexicFriendly ? 'normal' : 'italic',
               fontSize: 'var(--type-body)',
               lineHeight: 1.6,
+              letterSpacing: dyslexicFriendly ? '0.02em' : 'normal',
               color: 'var(--fg-2)',
               margin: 0,
             }}
