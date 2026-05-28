@@ -18,6 +18,7 @@ import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
+import { getProgressPhotosSnapshot } from '@/lib/features/progress-photos/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -164,6 +165,14 @@ export class AnalyticsCoach extends BaseAgent {
       if (cravings) ctx.cravings = cravings;
     } catch (e) {
       console.warn('[analytics-agent] cravings fetch failed:', e);
+    }
+
+    // Photos progression — Phase 7 (snapshot count + suggestion refaire)
+    try {
+      const photos = await getProgressPhotosSnapshot(input.uid);
+      if (photos) ctx.progress_photos = photos;
+    } catch (e) {
+      console.warn('[analytics-agent] progress_photos fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)
