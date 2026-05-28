@@ -18,6 +18,7 @@ import { BaseAgent } from './base';
 import { SAFETY_SYSTEM_PROMPT } from '../../prompts/agents/safety';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
+import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -126,6 +127,14 @@ export class SafetyCoach extends BaseAgent {
       if (substances) ctx.substances = substances;
     } catch (e) {
       console.warn('[safety-agent] substances fetch failed:', e);
+    }
+
+    // Life events — Phase 8 (deuil/rupture récents = vigilance dépression)
+    try {
+      const lifeEvents = await getLifeEventsSnapshot(input.uid);
+      if (lifeEvents) ctx.life_events = lifeEvents;
+    } catch (e) {
+      console.warn('[safety-agent] life_events fetch failed:', e);
     }
 
     // Weight history 30j — détection perte rapide

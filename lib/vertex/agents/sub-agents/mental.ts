@@ -18,6 +18,7 @@ import { MENTAL_SYSTEM_PROMPT } from '../../prompts/agents/mental';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
+import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -93,6 +94,14 @@ export class MentalCoach extends BaseAgent {
       if (cravings) ctx.cravings = cravings;
     } catch (e) {
       console.warn('[mental-agent] cravings fetch failed:', e);
+    }
+
+    // Life events — Phase 8 (contexte burnout, deuil, déménagement, etc.)
+    try {
+      const lifeEvents = await getLifeEventsSnapshot(input.uid);
+      if (lifeEvents) ctx.life_events = lifeEvents;
+    } catch (e) {
+      console.warn('[mental-agent] life_events fetch failed:', e);
     }
 
     return ctx;

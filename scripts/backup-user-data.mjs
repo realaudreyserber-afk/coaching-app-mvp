@@ -82,6 +82,7 @@ const SUBCOLLECTIONS = [
   "prs", // Phase 3 data-layer roadmap — personal records par exo
   "hydration_log", // Phase 4 data-layer roadmap — log hydratation par jour
   "substances_log", // Phase 5 data-layer roadmap — log caféine/alcool/nicotine
+  "life_events", // Phase 8 data-layer roadmap — événements de vie
   // Retirées (n'existent pas comme collections, calculées) :
   // streak (computed depuis checkins_daily.date)
   // micronutrients_daily (agrégé depuis food_logs)

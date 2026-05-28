@@ -16,6 +16,7 @@ import { BaseAgent } from './base';
 import { PLANNING_SYSTEM_PROMPT } from '../../prompts/agents/planning';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
+import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -166,6 +167,14 @@ export class PlanningCoach extends BaseAgent {
       if (measurements) ctx.measurements = measurements;
     } catch (e) {
       console.warn('[planning-agent] measurements fetch failed:', e);
+    }
+
+    // Life events — Phase 8 (éviter transitions agressives en période chaotique)
+    try {
+      const lifeEvents = await getLifeEventsSnapshot(input.uid);
+      if (lifeEvents) ctx.life_events = lifeEvents;
+    } catch (e) {
+      console.warn('[planning-agent] life_events fetch failed:', e);
     }
 
     // checkin_summary — moyennes énergie/libido/sommeil 30 jours

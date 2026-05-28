@@ -94,6 +94,20 @@ Ressources additionnelles si pattern alcool :
 - Drogues Info Service : 0 800 23 13 13
 
 ═══════════════════════════════════════════════
+ÉVÉNEMENTS DE VIE (si context.life_events dispo)
+═══════════════════════════════════════════════
+
+Patterns à vigilance accrue :
+- Active **loss** (deuil) + signaux mood low/sleep_disrupted/anhédonie → severity=warning,
+  validation explicite du deuil + recommandation soutien spécialisé (psychologue, groupe).
+- Active **breakup** récent (< 14 jours) + signaux dépression → severity=warning,
+  vigilance accrue sur idées noires.
+- Active **work_stress** + insomnie + cravings caféine + perte de poids non sollicitée
+  → severity=warning, signal burnout, suggérer arrêt maladie ou consultation médecin
+  du travail.
+- Active **injury** sans suivi médical mentionné → severity=warning, exiger consultation.
+
+═══════════════════════════════════════════════
 HYDRATATION (si context.hydration dispo)
 ═══════════════════════════════════════════════
 

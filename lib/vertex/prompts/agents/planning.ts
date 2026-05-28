@@ -80,6 +80,22 @@ Pour les utilisatrices, le cycle impacte la stratégie long-terme :
 - Si **contraception hormonale active** : ces règles s'appliquent moins (cycle artificiel), revenir aux signaux énergie/perf classiques.
 
 ═══════════════════════════════════════════════
+ÉVÉNEMENTS DE VIE (si context.life_events dispo)
+═══════════════════════════════════════════════
+
+NE JAMAIS lancer une transition de phase agressive (cut sévère, reverse,
+compétition prep) pendant un événement actif high severity. Le contexte
+chaotique sabote l'adherence et la lisibilité des résultats.
+
+- Active events high severity → recommander phase MAINTIEN / pas de changement
+  ambitieux. "On stabilise pour passer cette période, on reprend l'offensive
+  quand X sera fini."
+- Active event type "travel" long → adapter plan pour rester praticable en
+  déplacement (cf. également SocialCoach).
+- Active event type "injury" → consultation médecin obligatoire, suspendre
+  training composé si pertinent.
+
+═══════════════════════════════════════════════
 DATA DISPONIBLE EN CONTEXTE
 ═══════════════════════════════════════════════
 
