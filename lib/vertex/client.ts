@@ -62,6 +62,13 @@ interface GenerateOptions {
   responseSchema?: object;
   signal?: AbortSignal;
   /**
+   * Audit COACH 2026-05-28 #3 : sans cap explicite, Gemini Flash applique
+   * sa valeur par défaut (variable selon version, parfois ~2k tokens) ce qui
+   * coupe des réponses coach longues en plein milieu. Default explicite à
+   * 8192 tokens (~6000 mots français) pour éviter les troncatures visibles.
+   */
+  maxOutputTokens?: number;
+  /**
    * Optional cached content reference (Gemini explicit caching).
    * Format : "cachedContents/{id}" returned by ai.caches.create().
    * When provided, the cache's systemInstruction + contents are reused,
@@ -72,6 +79,8 @@ interface GenerateOptions {
    */
   cachedContentName?: string;
 }
+
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
@@ -136,6 +145,9 @@ export async function generateTextWithUsage(options: GenerateOptions): Promise<G
         temperature: options.temperature ?? 0.3,
         responseMimeType: options.responseMimeType,
         responseSchema: options.responseSchema,
+        // Audit COACH 2026-05-28 #3 : explicite maxOutputTokens pour éviter
+        // les troncatures sur réponses coach longues (multi-agent aggregate).
+        maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         // Cache et systemInstruction sont mutuellement exclusifs :
         // si un cache est fourni, son systemInstruction prime.
         ...(options.cachedContentName
@@ -160,6 +172,8 @@ export async function generateTextWithUsage(options: GenerateOptions): Promise<G
     generationConfig: {
       temperature: options.temperature ?? 0.3,
       responseMimeType: options.responseMimeType,
+      // Audit COACH 2026-05-28 #3 : pareil pour le path Vertex AI
+      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       ...(options.responseSchema ? { responseSchema: options.responseSchema as any } : {}),
     },
     systemInstruction: options.systemInstruction
@@ -219,6 +233,8 @@ export async function* generateTextStream(options: GenerateOptions): AsyncGenera
       config: {
         temperature: options.temperature ?? 0.3,
         responseMimeType: options.responseMimeType,
+        // Audit COACH 2026-05-28 #3 : explicite cap pour éviter troncatures
+        maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
         // Cache et systemInstruction sont mutuellement exclusifs (cf. generateText).
         ...(options.cachedContentName
           ? { cachedContent: options.cachedContentName }
@@ -240,6 +256,7 @@ export async function* generateTextStream(options: GenerateOptions): AsyncGenera
     generationConfig: {
       temperature: options.temperature ?? 0.3,
       responseMimeType: options.responseMimeType,
+      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
     },
     systemInstruction: options.systemInstruction
       ? { role: 'system', parts: [{ text: options.systemInstruction }] }

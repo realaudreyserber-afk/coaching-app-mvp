@@ -29,7 +29,7 @@ import { DEFAULT_COACH_STATE, MAX_TOPICS_DISCUSSED } from '@/lib/features/coach-
 export const runtime = 'nodejs';
 
 const PROACTIVE_INSTRUCTIONS: Record<string, string> = {
-  welcome: `Tu démarres la conversation avec un utilisateur qui vient de finir l'onboarding NoDream. Message court (50-90 mots), tutoiement, ton tactical sec. Présente-toi en 1 phrase ("Je suis ORACLE.IA, coach NoDream"), récapitule en 1 phrase ce que tu as compris de son profil (sexe, âge, objectif), pose UNE question d'ouverture précise pour le faire bouger (ex : "tu as déjà mesuré ton BF avec une méthode autre que la balance ?"). Pas de checklist, pas de "bienvenue" creux. Ne demande pas plusieurs choses à la fois.`,
+  welcome: `Tu démarres la conversation avec un utilisateur qui vient de finir l'onboarding NoDream. Présente-toi d'abord brièvement ("Je suis ORACLE.IA, coach NoDream"). Si un plan actif (context.active_plan) est présent : commente synthétiquement le plan en expliquant la cible kcal, les macros (p/c/f) et la stratégie (déficit/surplus/maintien), puis donne un conseil d'action précis pour démarrer cette première semaine. Si aucun plan n'est présent (context.active_plan === undefined) : explique poliment que la génération du plan a échoué ou n'est pas finalisée et suggère de réessayer la génération. Termine par une question d'ouverture précise pour lancer la discussion. Règles strictes : Tutoiement, ton tactical sec, direct, sans flatterie, 80-140 mots.`,
   plan_generated: `L'utilisateur vient de recevoir son premier plan généré. Tu commentes le plan en 70-120 mots : annonce la cible kcal + macros, explique la stratégie (déficit/maintenance/surplus + ratio macros + cardio), termine par 1 phrase actionnable pour la première semaine. Tutoiement, ton sec, factuel, pas de flatterie.`,
   session_finished: `L'utilisateur vient de terminer une séance de musculation. Message court (40-70 mots) : reconnais la séance, mentionne un point factuel (top lift OU complétion OU progression), termine par 1 conseil micro pour la récup (étirements, hydratation, sommeil). Tutoiement, ton sec.`,
   plateau_detected: `Le poids de l'utilisateur stagne depuis 14+ jours. Message direct (60-100 mots) : reconnais le plateau sans dramatiser, propose 1 hypothèse concrète à vérifier (déficit insuffisant, sommeil dégradé, surévaluation activité), suggère 1 action précise (recalibrer TDEE adaptatif, ajouter cardio LISS, recompter macros sur 3 jours). Pas de "ne lâche rien".`,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     const state = await loadCoachState(uid);
 
     // Idempotency guards
-    if (body.trigger === 'welcome' && state.welcome_sent) {
+    if (body.trigger === 'welcome' && state.welcome_with_plan_sent) {
       return NextResponse.json({ ok: true, skipped: 'welcome_already_sent' });
     }
     if (body.trigger === 'plan_generated' && state.plan_debrief_sent) {
@@ -151,7 +151,10 @@ export async function POST(req: NextRequest) {
       temperature: 0.55,
     });
 
-    const cleaned = (text ?? '').trim().slice(0, 1500);
+    // Audit COACH 2026-05-28 #3 : 1500 chars coupait des phrases en plein milieu
+    // (visible dans welcome avec plan détaillé). Élargi à 4000 chars — couvre
+    // 99% des welcome/plan_debrief sans risque de troncature mid-phrase.
+    const cleaned = (text ?? '').trim().slice(0, 4000);
     if (!cleaned) {
       return NextResponse.json({ error: 'empty_message' }, { status: 502 });
     }
@@ -190,7 +193,7 @@ export async function POST(req: NextRequest) {
         if (!stateSnap.exists) {
           Object.assign(statePatch, DEFAULT_COACH_STATE, { created_at: now });
         }
-        if (body.trigger === 'welcome') statePatch.welcome_sent = true;
+        if (body.trigger === 'welcome') statePatch.welcome_with_plan_sent = true;
         if (body.trigger === 'plan_generated') statePatch.plan_debrief_sent = true;
         tx.set(stateRef, statePatch, { merge: true });
       });
