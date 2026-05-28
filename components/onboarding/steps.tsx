@@ -21,12 +21,38 @@ export function Step1Identity({ userData, onNext }: Omit<StepProps, "onPrev">) {
   const [name, setName] = useState(userData?.profile?.name || "");
   const [sex, setSex] = useState(userData?.profile?.sex || "");
   const [error, setError] = useState("");
+  // Audit PLAN 2026-05-28 #5 : régression Homme→Femme observée lors d'une
+  // re-génération de plan. On capture le sexe initial pour avertir le user
+  // s'il change accidentellement — le sexe est critique pour BMR/TDEE et
+  // un mauvais choix invalide tout le plan nutritionnel.
+  const initialSexRef = React.useRef(userData?.profile?.sex || "");
+
+  useEffect(() => {
+    if (userData?.profile?.name) {
+      setName(userData.profile.name);
+    }
+    if (userData?.profile?.sex) {
+      setSex(userData.profile.sex);
+      if (!initialSexRef.current) initialSexRef.current = userData.profile.sex;
+    }
+  }, [userData?.profile?.name, userData?.profile?.sex]);
+
+  const sexChanged = initialSexRef.current && sex && sex !== initialSexRef.current;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError("S'il te plaît, écris ton prénom.");
     if (!sex) return setError("S'il te plaît, choisis ton sexe biologique.");
-    
+    // Garde-fou : si le user change de sexe alors qu'un sexe était déjà
+    // enregistré → confirmation explicite obligatoire (impact direct sur
+    // toutes les formules métaboliques + macros).
+    if (sexChanged) {
+      const confirmed = window.confirm(
+        `Tu changes ton sexe biologique de "${initialSexRef.current === 'male' ? 'Homme' : 'Femme'}" à "${sex === 'male' ? 'Homme' : 'Femme'}". Ce paramètre recalcule entièrement ton métabolisme et ton plan nutritionnel. Confirmer ce changement ?`,
+      );
+      if (!confirmed) return;
+    }
+
     setError("");
     await onNext({
       profile: {
@@ -1278,26 +1304,16 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
       // Update local profile complete marker
       await refreshProfileStatus();
 
-      // Wave 6C : déclenche ORACLE.IA en proactif (welcome + plan_generated).
+      // Déclenche ORACLE.IA en proactif (welcome avec plan debrief intégré).
       try {
-        await Promise.all([
-          fetch("/api/coach/proactive", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
-            },
-            body: JSON.stringify({ trigger: "welcome" }),
-          }),
-          fetch("/api/coach/proactive", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
-            },
-            body: JSON.stringify({ trigger: "plan_generated" }),
-          }),
-        ]);
+        await fetch("/api/coach/proactive", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({ trigger: "welcome" }),
+        });
       } catch (e) {
         console.warn("[onboarding] proactive coach trigger failed (non-blocking):", e);
       }
@@ -1381,7 +1397,7 @@ export function Step11Generate({ userData, onPrev }: Omit<StepProps, "onNext">) 
         ) : (
           <div className="space-y-4">
             <div className="bg-muted p-4 rounded-md text-sm space-y-2 border border-border">
-              <div><strong>Profil :</strong> {userData?.profile?.name} ({userData?.profile?.sex === "male" ? "Homme" : "Femme"})</div>
+              <div><strong>Profil :</strong> {userData?.profile?.name} ({userData?.profile?.sex === "male" ? "Homme" : userData?.profile?.sex === "female" ? "Femme" : "Non spécifié"})</div>
               <div><strong>Objectif :</strong> {userData?.goals?.type === "lose_weight" ? "Perte de poids" : userData?.goals?.type === "recomposition" ? "Recomposition" : "Prise de muscle"}</div>
               <div><strong>Mensurations :</strong> {userData?.baseline?.weight} kg pour {userData?.profile?.height} cm</div>
             </div>

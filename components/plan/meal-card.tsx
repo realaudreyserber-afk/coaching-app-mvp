@@ -51,12 +51,31 @@ interface MealCardProps {
   className?: string;
 }
 
+/**
+ * Audit PLAN 2026-05-28 #4 : si aucun matching recipe → photoUrl undefined →
+ * MealPhotoPlaceholder affichait la 1re lettre du nom (le fameux "A" hostile
+ * sur "Avant le coucher"). On utilise désormais default-snack.jpg comme fallback
+ * gracieux. Le placeholder lettre n'est gardé qu'en cas d'échec absolu (default
+ * image elle-même introuvable).
+ */
+const DEFAULT_MEAL_IMAGE = "/meals/default-snack.jpg";
+
 export function MealCard({
   meal,
   onAdd,
   ctaLabel = "Ajouter",
   className = "",
 }: MealCardProps) {
+  const [imgSrc, setImgSrc] = React.useState<string | null>(
+    meal.photoUrl || DEFAULT_MEAL_IMAGE,
+  );
+  const [imgFailed, setImgFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgSrc(meal.photoUrl || DEFAULT_MEAL_IMAGE);
+    setImgFailed(false);
+  }, [meal.photoUrl]);
+
   return (
     <HudCard
       accent="gold"
@@ -72,14 +91,22 @@ export function MealCard({
           borderBottom: "1px solid var(--gold-tint-15)",
         }}
       >
-        {meal.photoUrl ? (
+        {imgSrc && !imgFailed ? (
           <Image
-            src={meal.photoUrl}
+            src={imgSrc}
             alt={meal.name}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105"
             style={{ filter: "grayscale(0.2) contrast(1.05)" }}
+            onError={() => {
+              // Si on était déjà sur default → c'est cassé, on bascule sur placeholder
+              if (imgSrc === DEFAULT_MEAL_IMAGE) {
+                setImgFailed(true);
+              } else {
+                setImgSrc(DEFAULT_MEAL_IMAGE);
+              }
+            }}
           />
         ) : (
           <MealPhotoPlaceholder name={meal.name} />
