@@ -18,10 +18,29 @@ export interface PlanSupplement {
   timing: string;
 }
 
+/**
+ * Audit 2026-05-28 #10 : item d'un repas calibré par l'IA (généré par
+ * generate-plan, kcal recalculé serveur). Le type doit porter items + macros
+ * pour qu'ils survivent au passage par groupSupplementsByMeal et atteignent
+ * la MealCard — sinon la carte n'affiche que les macros statiques de la
+ * librairie de recettes (décoratives), pas la calibration réelle du plan.
+ */
+export interface PlanMealItem {
+  food: string;
+  grams: number;
+  state?: 'cru' | 'cuit';
+  kcal: number;
+  p: number;
+  c: number;
+  f: number;
+}
+
 export interface PlanMeal {
   name: string;
   description: string;
   approx_kcal: number;
+  items?: PlanMealItem[];
+  macros?: { p?: number; c?: number; f?: number };
 }
 
 export interface MealWithSupplements extends PlanMeal {

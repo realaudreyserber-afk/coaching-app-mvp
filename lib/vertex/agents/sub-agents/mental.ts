@@ -33,8 +33,11 @@ export class MentalCoach extends BaseAgent {
     const userRef = adminDb.collection('users').doc(input.uid);
 
     // coach_state.response_style
+    // Audit 2026-05-28 #12 : doc-id était 'state' alors que tout le reste de la
+    // codebase (store, proactive, plateau-detector) lit/écrit doc('main') →
+    // response_style/do_not_repeat toujours vides, règle mental §3 morte.
     try {
-      const snap = await userRef.collection('coach_state').doc('state').get();
+      const snap = await userRef.collection('coach_state').doc('main').get();
       const state = snap.data();
       if (state) {
         ctx.coach_state = {

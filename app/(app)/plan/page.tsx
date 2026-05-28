@@ -235,11 +235,13 @@ export default function PlanPage() {
                 </div>
               </div>
 
-              {/* Macros cibles */}
+              {/* Macros cibles — Audit #11 : optional chaining (un plan legacy
+                  ou partiel sans `macros` faisait crash plein écran ; la page
+                  history gardait déjà, pas celle-ci). */}
               <div className="space-y-3 mt-4">
-                <MacroBar label="Protéines" value={plan.macros.p} />
-                <MacroBar label="Glucides" value={plan.macros.c} />
-                <MacroBar label="Lipides" value={plan.macros.f} />
+                <MacroBar label="Protéines" value={plan.macros?.p ?? 0} />
+                <MacroBar label="Glucides" value={plan.macros?.c ?? 0} />
+                <MacroBar label="Lipides" value={plan.macros?.f ?? 0} />
               </div>
               <p
                 className="mono mt-3"
@@ -256,7 +258,7 @@ export default function PlanPage() {
               </p>
             </HudCard>
 
-            <MealCalculator planKcal={plan.kcal} planMacros={plan.macros} />
+            {plan.macros && <MealCalculator planKcal={plan.kcal} planMacros={plan.macros} />}
           </div>
 
           {/* RIGHT: repas (grille de cartes sur desktop) */}
@@ -302,7 +304,11 @@ export default function PlanPage() {
                              approxKcal: meal.approx_kcal,
                              supplements: meal.supplements,
                              photoUrl: recipe?.photoUrl,
-                             macros: recipe?.macros,
+                             // Audit #10 : priorité aux items + macros calibrés par
+                             // l'IA (meal.*) ; la librairie de recettes ne sert que
+                             // de fallback décoratif si le plan n'a pas le détail.
+                             items: meal.items,
+                             macros: meal.macros ?? recipe?.macros,
                            }}
                          />
                        );
@@ -411,7 +417,7 @@ export default function PlanPage() {
                 Programme sportif
               </h3>
             </div>
-            {plan.training.sessions.map((session, sIdx) => (
+            {(plan.training?.sessions ?? []).map((session, sIdx) => (
               <section key={sIdx} className="space-y-3">
                 <HudCard accent="gold" chamfer="sm" style={{ padding: '0.85rem 1rem' }}>
                   <div className="flex items-baseline justify-between gap-3">
