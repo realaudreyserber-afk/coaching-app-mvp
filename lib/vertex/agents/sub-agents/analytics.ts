@@ -14,6 +14,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/agents/analytics';
+import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -128,6 +129,14 @@ export class AnalyticsCoach extends BaseAgent {
       });
     } catch (e) {
       console.warn('[analytics-agent] coach_patches fetch failed:', e);
+    }
+
+    // Mensurations évolutives (tendances 30j / 90j)
+    try {
+      const measurements = await getMeasurementsSnapshot(input.uid);
+      if (measurements) ctx.measurements = measurements;
+    } catch (e) {
+      console.warn('[analytics-agent] measurements fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)

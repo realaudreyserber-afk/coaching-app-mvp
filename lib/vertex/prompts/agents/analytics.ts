@@ -74,6 +74,10 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
 - \`active_plan\` : kcal cible, macros cibles
 - \`food_logs_summary\` : compteurs cumulés des 7 derniers jours
 - \`body_scan_recent\` : dernier scan composition si dispo
+- \`measurements\` (Phase 2 data-layer) : snapshot historique mensurations avec
+  delta 30j et 90j par champ (waist, neck, hips, shoulder, chest, arm, etc.).
+  EXPLOITATION CRITIQUE : si poids stagne mais waist baisse → recomposition en cours,
+  garder cap. Si poids baisse mais waist stagne → perte musculaire probable, alerter.
 
 ═══════════════════════════════════════════════
 CITATIONS

@@ -90,6 +90,9 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
 - \`plans_history\` : historique des phases précédentes (combien de temps en cut, etc.)
 - \`tdee_history\` : drift métabolique sur le temps long
 - \`checkin_summary\` : signaux long-terme énergie/libido/sommeil moyennés
+- \`measurements\` : tendances 30j / 90j par mesure (waist, hips, etc.). Indispensable
+  pour évaluer si une phase atteint ses objectifs au-delà du poids brut. Une perte
+  de 3cm tour de taille sur 90j alors que poids stagne = phase réussie en recompo.
 
 ═══════════════════════════════════════════════
 CITATIONS

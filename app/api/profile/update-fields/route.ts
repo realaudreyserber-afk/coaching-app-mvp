@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { MEASUREMENT_FIELDS } from "@/lib/features/measurements/schema";
 
 type FieldValue = string | number | boolean | null | string[];
 
@@ -212,11 +213,57 @@ export async function POST(req: NextRequest) {
   try {
     const userRef = adminDb.collection("users").doc(uid);
     await userRef.set(buildNestedPayload(accepted), { merge: true });
+
+    // Side effect : si des champs mensurations ont été patchés via profile.*_cm,
+    // les propager aussi dans la collection measurements/{today} pour avoir
+    // l'historique time-series (fix bug data : profile.*_cm était uniquement
+    // la dernière valeur, l'historique était perdu).
+    await maybePropagateMeasurements(uid, accepted).catch((e) => {
+      console.warn("[profile/update-fields] measurements propagation failed:", e);
+      // best-effort — l'écriture profile a réussi, ne pas bloquer
+    });
+
     return NextResponse.json({ ok: true, accepted, rejected });
   } catch (err) {
     console.error("[profile/update-fields] write failed:", err);
     return NextResponse.json({ error: "Write failed" }, { status: 500 });
   }
+}
+
+/**
+ * Si l'update inclut un ou plusieurs champs mensurations (profile.waist_cm,
+ * profile.neck_cm, etc.), écrit (merge) un doc dans measurements/{today}
+ * avec ces valeurs. Préserve l'historique time-series.
+ */
+async function maybePropagateMeasurements(
+  uid: string,
+  accepted: Record<string, FieldValue>,
+): Promise<void> {
+  const measurementPatch: Record<string, number> = {};
+  for (const field of MEASUREMENT_FIELDS) {
+    const path = `profile.${field}`;
+    const value = accepted[path];
+    if (typeof value === "number") {
+      measurementPatch[field] = value;
+    }
+  }
+  if (Object.keys(measurementPatch).length === 0) return;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  await adminDb
+    .collection("users")
+    .doc(uid)
+    .collection("measurements")
+    .doc(todayIso)
+    .set(
+      {
+        ...measurementPatch,
+        date: todayIso,
+        source: "coach", // les updates via cette route viennent du COACH_SAVE
+        updated_at: new Date().toISOString(),
+      },
+      { merge: true },
+    );
 }
 
 /**

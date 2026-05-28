@@ -15,6 +15,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { PLANNING_SYSTEM_PROMPT } from '../../prompts/agents/planning';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
+import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -157,6 +158,14 @@ export class PlanningCoach extends BaseAgent {
       }
     } catch (e) {
       console.warn('[planning-agent] tdee_history fetch failed:', e);
+    }
+
+    // Mensurations long-terme (delta 30j / 90j par mesure)
+    try {
+      const measurements = await getMeasurementsSnapshot(input.uid);
+      if (measurements) ctx.measurements = measurements;
+    } catch (e) {
+      console.warn('[planning-agent] measurements fetch failed:', e);
     }
 
     // checkin_summary — moyennes énergie/libido/sommeil 30 jours
