@@ -47,6 +47,21 @@ export class MentalCoach extends BaseAgent {
       console.warn('[mental-agent] coach_state fetch failed:', e);
     }
 
+    // Goals timeline — pour gauger motivation vs durée engagée
+    try {
+      const userSnap = await userRef.get();
+      const goals = userSnap.data()?.goals;
+      if (goals) {
+        ctx.goals = {
+          type: goals.type,
+          target_date: goals.target_date,
+          duration_chosen_weeks: goals.duration_chosen_weeks,
+        };
+      }
+    } catch (e) {
+      console.warn('[mental-agent] goals fetch failed:', e);
+    }
+
     // Dernier session_debrief
     try {
       const snap = await userRef

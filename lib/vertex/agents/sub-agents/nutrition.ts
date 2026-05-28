@@ -89,6 +89,23 @@ export class NutritionCoach extends BaseAgent {
       console.warn('[nutrition-agent] active_plan fetch failed:', e);
     }
 
+    // Goals avec durée recommandée — pour calibrer la sévérité du déficit
+    // selon le timeline que l'user a choisi
+    try {
+      const userSnap = await userRef.get();
+      const goals = userSnap.data()?.goals;
+      if (goals) {
+        ctx.goals = {
+          type: goals.type,
+          target_weight: goals.target_weight,
+          duration_chosen_weeks: goals.duration_chosen_weeks,
+          recommended_weeks_min: goals.recommended_weeks_min,
+        };
+      }
+    } catch (e) {
+      console.warn('[nutrition-agent] goals fetch failed:', e);
+    }
+
     // Today's food logs (totaux du jour + 5 dernières entries)
     try {
       const todayYmd = new Date().toISOString().split('T')[0];

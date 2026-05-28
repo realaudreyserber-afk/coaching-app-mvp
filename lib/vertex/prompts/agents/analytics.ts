@@ -85,6 +85,13 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
   days_since_last + should_suggest_new (bool si > 28j). Si should_suggest_new=true,
   suggérer explicitement de prendre une nouvelle photo via /scanner pour
   documenter visuellement l'évolution.
+- \`goals\` : target_weight + duration_chosen_weeks (engagement user step 7
+  onboarding). **Comparer rythme observé vs rythme cible** :
+  rythme cible = (current_weight - target_weight) / duration_chosen_weeks (kg/sem)
+  rythme observé = weight_trend_60day.kg_per_week (si dispo)
+  Si rythme observé < 50% du cible : l'user n'est pas dans son timeline,
+  réaligner attentes ou suggérer audit du déficit. Si > 150% : trop rapide,
+  alerter risque perte muscle (request_consult: ["safety"]).
 - \`hydration\` (Phase 4 data-layer) : today_effective_ml + avg_7day + target.
   Si poids matin oscille >1.5kg jour-à-jour et hydratation très variable :
   attribuer aux fluctuations hydriques, pas au gras. Si hydratation chronique

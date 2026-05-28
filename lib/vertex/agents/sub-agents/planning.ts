@@ -33,11 +33,13 @@ export class PlanningCoach extends BaseAgent {
     const ctx: Record<string, unknown> = {};
     const userRef = adminDb.collection('users').doc(input.uid);
 
-    // Profile (subset stratégique)
+    // Profile (subset stratégique) + Goals avec durée recommandée par step 7
     let isFemale = false;
     try {
       const snap = await userRef.get();
-      const profile = snap.data();
+      const data = snap.data();
+      const profile = data?.profile;
+      const goals = data?.goals;
       if (profile) {
         ctx.profile = {
           objective: profile.objective,
@@ -51,8 +53,21 @@ export class PlanningCoach extends BaseAgent {
         };
         isFemale = profile.sex === 'female';
       }
+      // Goals data (Step 7 onboarding) incluant la durée recommandée par le coach
+      if (goals) {
+        ctx.goals = {
+          type: goals.type,
+          target_weight: goals.target_weight,
+          target_date: goals.target_date,
+          // Bornes calculées par computeRecommendedDuration au step 7 onboarding
+          recommended_weeks_min: goals.recommended_weeks_min,
+          recommended_weeks_default: goals.recommended_weeks_default,
+          recommended_weeks_max: goals.recommended_weeks_max,
+          duration_chosen_weeks: goals.duration_chosen_weeks,
+        };
+      }
     } catch (e) {
-      console.warn('[planning-agent] profile fetch failed:', e);
+      console.warn('[planning-agent] profile/goals fetch failed:', e);
     }
 
     // Cycle menstruel (si féminin) — éviter diet break en pré-règles, adapter cut long

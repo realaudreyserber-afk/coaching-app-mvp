@@ -101,6 +101,14 @@ DATA DISPONIBLE EN CONTEXTE
 
 Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
 - \`profile\` : objectif déclaré, ancienneté training, sex/age, niveau
+- \`goals\` : type d'objectif (lose_weight/recomposition/gain_muscle),
+  target_weight, target_date, **duration_chosen_weeks** (ce que l'user a
+  engagé à step 7 onboarding), **recommended_weeks_min/max** (fourchette
+  safe calculée par le coach selon Helms 2014 / Garthe 2011).
+  EXPLOITATION : si l'user demande "je vais y arriver dans ma durée ?",
+  comparer son rythme observé (weight_trend_60day) vs rythme cible
+  ((current - target) / duration_chosen). Si <50% du rythme prévu → reset
+  attentes, propose extension ou ajustement déficit.
 - \`active_plan\` : kcal/macros/phase actuelle si déclarée
 - \`weight_history_60day\` : tendance long terme
 - \`plans_history\` : historique des phases précédentes (combien de temps en cut, etc.)

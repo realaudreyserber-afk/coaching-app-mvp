@@ -97,6 +97,25 @@ export class AnalyticsCoach extends BaseAgent {
       console.warn('[analytics-agent] active_plan fetch failed:', e);
     }
 
+    // Goals avec durée recommandée — pour évaluer si l'user tient le rythme
+    // prévu (delta_kg_per_week observé vs delta cible attendu par duration_chosen)
+    try {
+      const userSnap = await userRef.get();
+      const goals = userSnap.data()?.goals;
+      if (goals) {
+        ctx.goals = {
+          type: goals.type,
+          target_weight: goals.target_weight,
+          target_date: goals.target_date,
+          duration_chosen_weeks: goals.duration_chosen_weeks,
+          recommended_weeks_min: goals.recommended_weeks_min,
+          recommended_weeks_max: goals.recommended_weeks_max,
+        };
+      }
+    } catch (e) {
+      console.warn('[analytics-agent] goals fetch failed:', e);
+    }
+
     // body_scan_recent (last)
     try {
       const snap = await userRef
