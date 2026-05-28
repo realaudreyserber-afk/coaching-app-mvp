@@ -7,9 +7,9 @@
  */
 
 import 'server-only';
-import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { SOCIAL_SYSTEM_PROMPT } from '../../prompts/agents/social';
+import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class SocialCoach extends BaseAgent {
@@ -19,20 +19,16 @@ export class SocialCoach extends BaseAgent {
 
   protected async fetchContext(input: AgentInput): Promise<Record<string, unknown>> {
     const ctx: Record<string, unknown> = {};
-    const userRef = adminDb.collection('users').doc(input.uid);
 
     try {
-      const snap = await userRef.get();
-      const profile = snap.data();
-      if (profile) {
-        ctx.profile = {
-          household: profile.household,
-          work_context: profile.work_context,
-          lifestyle: profile.lifestyle,
-          travel_frequency: profile.travel_frequency,
-          relationship_status: profile.relationship_status,
-        };
-      }
+      const profile = await getUserProfileSnapshot(input.uid);
+      ctx.profile = {
+        household: profile.household,
+        work_context: profile.work_context,
+        lifestyle: profile.lifestyle,
+        travel_frequency: profile.travel_frequency,
+        relationship_status: profile.relationship_status,
+      };
     } catch (e) {
       console.warn('[social-agent] profile fetch failed:', e);
     }

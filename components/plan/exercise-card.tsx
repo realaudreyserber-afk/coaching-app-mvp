@@ -25,6 +25,7 @@ interface ExerciseCardProps {
   onLogSet?: () => void;
   currentSet?: number;
   className?: string;
+  lastPr?: string;
 }
 
 export function ExerciseCard({
@@ -33,6 +34,7 @@ export function ExerciseCard({
   onLogSet,
   currentSet = 1,
   className = "",
+  lastPr,
 }: ExerciseCardProps) {
   return (
     <HudCard
@@ -132,6 +134,14 @@ export function ExerciseCard({
           >
             {exercise.name}
           </h3>
+          {lastPr && (
+            <div
+              className="mono text-[10px] mt-1 text-emerald-400 font-semibold"
+              style={{ letterSpacing: "0.05em" }}
+            >
+              {lastPr}
+            </div>
+          )}
         </div>
 
         {/* Stats : sets × reps + repos */}

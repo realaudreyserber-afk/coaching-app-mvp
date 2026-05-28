@@ -21,6 +21,7 @@ import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
+import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -36,18 +37,15 @@ export class SafetyCoach extends BaseAgent {
 
     // Profile flags
     try {
-      const snap = await userRef.get();
-      const profile = snap.data();
-      if (profile) {
-        ctx.profile_flags = {
-          age: profile.age,
-          is_minor: typeof profile.age === 'number' && profile.age < 18,
-          sex: profile.sex,
-          ed_history: profile.ed_history ?? profile.tca_history ?? false,
-          comorbidities: profile.comorbidities,
-          medications: profile.medications,
-        };
-      }
+      const profile = await getUserProfileSnapshot(input.uid);
+      ctx.profile_flags = {
+        age: profile.age,
+        is_minor: typeof profile.age === 'number' && profile.age < 18,
+        sex: profile.sex,
+        ed_history: profile.ed_history,
+        comorbidities: profile.comorbidities,
+        medications: profile.medications,
+      };
     } catch (e) {
       console.warn('[safety-agent] profile fetch failed:', e);
     }
@@ -64,10 +62,10 @@ export class SafetyCoach extends BaseAgent {
           const data = d.data();
           return {
             date: data.date,
-            weight_kg: data.weight_kg,
+            weight: data.weight,
             energy: data.energy,
             mood: data.mood,
-            sleep_h: data.sleep_h,
+            sleep_hours: data.sleep_hours,
             hunger: data.hunger,
           };
         })
@@ -162,7 +160,7 @@ export class SafetyCoach extends BaseAgent {
         .orderBy('date', 'asc')
         .get();
       const weights = snap.docs
-        .map((d) => ({ date: d.data().date, weight: d.data().weight_kg }))
+        .map((d) => ({ date: d.data().date, weight: d.data().weight }))
         .filter((w) => typeof w.weight === 'number');
       if (weights.length >= 2) {
         const first = weights[0].weight as number;

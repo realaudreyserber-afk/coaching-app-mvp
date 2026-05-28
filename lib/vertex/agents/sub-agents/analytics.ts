@@ -20,6 +20,7 @@ import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getProgressPhotosSnapshot } from '@/lib/features/progress-photos/store';
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
+import { getUserProfileSnapshot, type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -35,6 +36,13 @@ export class AnalyticsCoach extends BaseAgent {
     const nowIso = new Date().toISOString();
     const sevenDaysAgoIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
 
+    let profile: NormalizedProfile | null = null;
+    try {
+      profile = await getUserProfileSnapshot(input.uid);
+    } catch (e) {
+      console.warn('[analytics-agent] profile fetch failed:', e);
+    }
+
     // checkin_7day_history
     try {
       const snap = await userRef
@@ -47,10 +55,10 @@ export class AnalyticsCoach extends BaseAgent {
           const data = d.data();
           return {
             date: data.date,
-            weight_kg: data.weight_kg,
+            weight: data.weight,
             energy: data.energy,
             mood: data.mood,
-            sleep_h: data.sleep_h,
+            sleep_hours: data.sleep_hours,
             hunger: data.hunger,
           };
         })
@@ -99,21 +107,15 @@ export class AnalyticsCoach extends BaseAgent {
 
     // Goals avec durée recommandée — pour évaluer si l'user tient le rythme
     // prévu (delta_kg_per_week observé vs delta cible attendu par duration_chosen)
-    try {
-      const userSnap = await userRef.get();
-      const goals = userSnap.data()?.goals;
-      if (goals) {
-        ctx.goals = {
-          type: goals.type,
-          target_weight: goals.target_weight,
-          target_date: goals.target_date,
-          duration_chosen_weeks: goals.duration_chosen_weeks,
-          recommended_weeks_min: goals.recommended_weeks_min,
-          recommended_weeks_max: goals.recommended_weeks_max,
-        };
-      }
-    } catch (e) {
-      console.warn('[analytics-agent] goals fetch failed:', e);
+    if (profile?.goals) {
+      ctx.goals = {
+        type: profile.goals.type,
+        target_weight: profile.goals.target_weight,
+        target_date: profile.goals.target_date,
+        duration_chosen_weeks: profile.goals.duration_chosen_weeks,
+        recommended_weeks_min: profile.goals.recommended_weeks_min,
+        recommended_weeks_max: profile.goals.recommended_weeks_max,
+      };
     }
 
     // body_scan_recent (last)

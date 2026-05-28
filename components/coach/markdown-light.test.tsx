@@ -32,13 +32,13 @@ describe('MarkdownLight', () => {
   it('renders bullet lists with - prefix', () => {
     const html = render('- Item 1\n- Item 2\n- Item 3');
     expect(html).toContain('<ul');
-    expect((html.match(/<li>/g) ?? []).length).toBe(3);
+    expect((html.match(/<li/g) ?? []).length).toBe(3);
   });
 
   it('renders bullet lists with * prefix', () => {
     const html = render('* Item A\n* Item B');
     expect(html).toContain('<ul');
-    expect((html.match(/<li>/g) ?? []).length).toBe(2);
+    expect((html.match(/<li/g) ?? []).length).toBe(2);
   });
 
   it('does not confuse *italic* with * bullet', () => {
@@ -55,12 +55,33 @@ describe('MarkdownLight', () => {
     const html = render('Voici **3 règles** :\n\n- Protéines\n- Sommeil\n- Eau');
     expect(html).toContain('<strong>3 règles</strong>');
     expect(html).toContain('<ul');
-    expect((html.match(/<li>/g) ?? []).length).toBe(3);
+    expect((html.match(/<li/g) ?? []).length).toBe(3);
   });
 
   it('does NOT inject HTML (XSS safe)', () => {
     const html = render('Coucou <script>alert(1)</script>');
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('ignores tech tags like <COACH_SAVE> and <COACH_PLAN_PATCH>', () => {
+    const html = render('Texte avant.\n<COACH_SAVE>{"profile": {"objective": "lose_weight"}}</COACH_SAVE>\nTexte après.');
+    expect(html).toContain('Texte avant.');
+    expect(html).toContain('Texte après.');
+    expect(html).not.toContain('COACH_SAVE');
+    expect(html).not.toContain('lose_weight');
+  });
+
+  it('renders block code ``` correctly', () => {
+    const html = render('Voici le code :\n```ts\nconst a = 1;\n```');
+    expect(html).toContain('<pre');
+    expect(html).toContain('const a = 1;');
+  });
+
+  it('renders h3 headings with specific border style', () => {
+    const html = render('### Titre 3');
+    expect(html).toContain('<h3');
+    expect(html).toContain('border-b');
+    expect(html).toContain('Titre 3');
   });
 });

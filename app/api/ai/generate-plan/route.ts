@@ -148,7 +148,13 @@ export async function POST(req: NextRequest) {
       const ragPlanFragment = await buildPlanRagFragment(
         userContext.profile as { training_history?: string; training_environment?: any; available_equipment?: string[] } | undefined,
       );
-      let systemInstruction = buildPlanGeneratorSystemPrompt(userLevel) + ragPlanFragment;
+      // Merge all dietary options from profile, medical, and nutrition sub-objects for the generator prompt
+      const mergedFoodProfile = {
+        ...userData?.profile,
+        ...userData?.medical,
+        ...userData?.nutrition,
+      };
+      let systemInstruction = buildPlanGeneratorSystemPrompt(userLevel, mergedFoodProfile) + ragPlanFragment;
       if (flags.profilePaths()) {
         const pathInstructions = PROFILE_PATH_PLAN_INSTRUCTIONS[profilePath];
         if (pathInstructions) {

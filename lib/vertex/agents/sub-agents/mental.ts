@@ -21,6 +21,7 @@ import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
+import { getUserProfileSnapshot, type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -31,6 +32,13 @@ export class MentalCoach extends BaseAgent {
   protected async fetchContext(input: AgentInput): Promise<Record<string, unknown>> {
     const ctx: Record<string, unknown> = {};
     const userRef = adminDb.collection('users').doc(input.uid);
+
+    let profile: NormalizedProfile | null = null;
+    try {
+      profile = await getUserProfileSnapshot(input.uid);
+    } catch (e) {
+      console.warn('[mental-agent] profile fetch failed:', e);
+    }
 
     // coach_state.response_style
     // Audit 2026-05-28 #12 : doc-id était 'state' alors que tout le reste de la
@@ -51,18 +59,12 @@ export class MentalCoach extends BaseAgent {
     }
 
     // Goals timeline — pour gauger motivation vs durée engagée
-    try {
-      const userSnap = await userRef.get();
-      const goals = userSnap.data()?.goals;
-      if (goals) {
-        ctx.goals = {
-          type: goals.type,
-          target_date: goals.target_date,
-          duration_chosen_weeks: goals.duration_chosen_weeks,
-        };
-      }
-    } catch (e) {
-      console.warn('[mental-agent] goals fetch failed:', e);
+    if (profile?.goals) {
+      ctx.goals = {
+        type: profile.goals.type,
+        target_date: profile.goals.target_date,
+        duration_chosen_weeks: profile.goals.duration_chosen_weeks,
+      };
     }
 
     // Dernier session_debrief
@@ -90,14 +92,13 @@ export class MentalCoach extends BaseAgent {
     }
 
     // Cycle menstruel (si féminin) — valider fluctuations mood comme physiologiques
-    try {
-      const profileSnap = await adminDb.collection('users').doc(input.uid).get();
-      if (profileSnap.data()?.profile?.sex === 'female') {
+    if (profile?.sex === 'female') {
+      try {
         const cycle = await getCycleSnapshot(input.uid);
         if (cycle) ctx.cycle = cycle;
+      } catch (e) {
+        console.warn('[mental-agent] cycle fetch failed:', e);
       }
-    } catch (e) {
-      console.warn('[mental-agent] cycle fetch failed:', e);
     }
 
     // Substances — caféine excessive impacte cortisol + anxiété ; alcool = depressant

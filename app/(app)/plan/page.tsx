@@ -2,8 +2,8 @@
 "use client";
 
 import { Loader } from "@/components/ui/loader";
-import React, { useEffect, useState } from "react";
-import { collection, query, where, limit, getDocs } from "firebase/firestore";
+import React, { useEffect, useState, useMemo } from "react";
+import { collection, query, where, limit, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { useRouter } from "next/navigation";
@@ -16,36 +16,74 @@ import { ExerciseCard } from "@/components/plan/exercise-card";
 import { getExercisePosterUrl } from "@/lib/features/plans/exercise-images";
 import { getRecipeForMealName } from "@/lib/features/plans/meal-images";
 import { HudCard, PanelHeader, Tag } from "@/components/nodream";
+import { computeDefaultTargetMl } from "@/lib/features/hydration/schema";
+import { exerciseNameToId, type Pr } from "@/lib/features/personal-records/schema";
 
 export default function PlanPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"nutrition" | "training">("nutrition");
   const [plan, setPlan] = useState<PlanDoc | null>(null);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [prs, setPrs] = useState<Record<string, Pr>>({});
   const [fetching, setFetching] = useState(true);
   const [dyslexicFriendly, setDyslexicFriendly] = useState(false);
 
   useEffect(() => {
     if (loading || !user) return;
 
-    const fetchActivePlan = async () => {
+    const fetchPlanAndProfile = async () => {
       try {
         const plansRef = collection(db, "users", user.uid, "plans");
         const plansQuery = query(plansRef, where("active", "==", true), limit(1));
-        const snap = await getDocs(plansQuery);
+        const prsRef = collection(db, "users", user.uid, "prs");
 
-        if (!snap.empty) {
-          setPlan({ id: snap.docs[0].id, ...snap.docs[0].data() } as PlanDoc);
+        const [plansSnap, userSnap, prsSnap] = await Promise.all([
+          getDocs(plansQuery),
+          getDoc(doc(db, "users", user.uid)),
+          getDocs(prsRef),
+        ]);
+
+        if (!plansSnap.empty) {
+          setPlan({ id: plansSnap.docs[0].id, ...plansSnap.docs[0].data() } as PlanDoc);
         }
+        if (userSnap.exists()) {
+          setProfileData(userSnap.data());
+        }
+
+        const prsMap: Record<string, Pr> = {};
+        prsSnap.forEach((doc) => {
+          const data = doc.data() as Pr;
+          prsMap[data.exercise_id] = data;
+        });
+        setPrs(prsMap);
+
         setFetching(false);
       } catch (err) {
-        console.error("Error loading active plan:", err);
+        console.error("Error loading plan or profile:", err);
         setFetching(false);
       }
     };
 
-    fetchActivePlan();
+    fetchPlanAndProfile();
   }, [user, loading]);
+
+  const hydrationTarget = useMemo(() => {
+    if (!profileData) return 2500;
+    return computeDefaultTargetMl({
+      hormonal_context: profileData.profile?.hormonal_context,
+      uses_glp1: profileData.profile?.uses_glp1 || profileData.medical?.glp1?.active,
+      activity_level: profileData.profile?.activity_level,
+    });
+  }, [profileData]);
+
+  const getPrLabel = (exoName: string) => {
+    const exoId = exerciseNameToId(exoName);
+    const prEntry = prs[exoId];
+    if (!prEntry || !prEntry.prs || prEntry.prs.length === 0) return undefined;
+    const lastPrEntry = prEntry.prs[prEntry.prs.length - 1];
+    return `Dernier PR: ${lastPrEntry.weight_kg} kg x ${lastPrEntry.reps} reps`;
+  };
 
   if (loading || fetching) {
     return (
@@ -315,71 +353,97 @@ export default function PlanPage() {
                      })}
                   </div>
 
-                  {grouped.orphans.length > 0 && (
+                  <div className="grid gap-6 md:grid-cols-2 mt-6">
+                    {/* Card Hydratation */}
                     <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
                       <PanelHeader
-                        code="SUPP-ORPHELINS"
+                        code="HYDRATATION"
                         title={
                           <span className="flex items-center gap-2">
-                            <Pill className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
-                            Compléments hors repas
+                            <span className="h-4 w-4 text-[13px] font-bold font-mono text-[var(--accent-tech)] flex items-center justify-center">H₂O</span>
+                            Objectif Hydratation
                           </span>
                         }
                         accent="tech"
                       />
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                        {grouped.orphans.map((sup, idx) => (
-                          <li
-                            key={idx}
-                            className="flex justify-between items-start"
-                            style={{
-                              padding: '10px 0',
-                              borderBottom: idx < grouped.orphans.length - 1
-                                ? '1px solid var(--glass-border)'
-                                : 'none',
-                            }}
-                          >
-                            <div>
-                              <strong
-                                style={{
-                                  fontSize: 13,
-                                  color: 'var(--fg-1)',
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {sup.name}
-                              </strong>
+                      <div className="flex items-baseline justify-between mt-4">
+                        <span className="mono text-[11px] text-zinc-400">Cible quotidienne recommandée :</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="stat-num tech text-3xl font-extrabold">{hydrationTarget}</span>
+                          <span className="mono text-[10px] text-zinc-500">ml</span>
+                        </div>
+                      </div>
+                      <p className="mono mt-4 text-[9px] text-[var(--fg-5)] uppercase tracking-wider leading-relaxed">
+                        Calibré avec ton niveau d'activité et ton profil de santé
+                      </p>
+                    </HudCard>
+
+                    {grouped.orphans.length > 0 && (
+                      <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+                        <PanelHeader
+                          code="SUPP-ORPHELINS"
+                          title={
+                            <span className="flex items-center gap-2">
+                              <Pill className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
+                              Compléments hors repas
+                            </span>
+                          }
+                          accent="tech"
+                        />
+                        <ul style={{ margin: 0, padding: 0, listStyle: 'none' }} className="mt-2">
+                          {grouped.orphans.map((sup, idx) => (
+                            <li
+                              key={idx}
+                              className="flex justify-between items-start"
+                              style={{
+                                padding: '10px 0',
+                                borderBottom: idx < grouped.orphans.length - 1
+                                  ? '1px solid var(--glass-border)'
+                                  : 'none',
+                              }}
+                            >
+                              <div>
+                                <strong
+                                  style={{
+                                    fontSize: 13,
+                                    color: 'var(--fg-1)',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {sup.name}
+                                </strong>
+                                <span
+                                  className="mono"
+                                  style={{
+                                    fontSize: 9,
+                                    letterSpacing: '0.15em',
+                                    color: 'var(--fg-5)',
+                                    textTransform: 'uppercase',
+                                    display: 'block',
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {sup.timing}
+                                </span>
+                              </div>
                               <span
                                 className="mono"
                                 style={{
-                                  fontSize: 9,
-                                  letterSpacing: '0.15em',
-                                  color: 'var(--fg-5)',
-                                  textTransform: 'uppercase',
-                                  display: 'block',
-                                  marginTop: 2,
+                                  fontSize: 12,
+                                  color: 'var(--accent-tech)',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.05em',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
-                                {sup.timing}
+                                {sup.dosage}
                               </span>
-                            </div>
-                            <span
-                              className="mono"
-                              style={{
-                                fontSize: 12,
-                                color: 'var(--accent-tech)',
-                                fontWeight: 700,
-                                letterSpacing: '0.05em',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {sup.dosage}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </HudCard>
-                  )}
+                            </li>
+                          ))}
+                        </ul>
+                      </HudCard>
+                    )}
+                  </div>
                 </>
               );
             })()}
@@ -463,6 +527,7 @@ export default function PlanPage() {
                         restSeconds: ex.rest_seconds,
                         posterUrl: getExercisePosterUrl(ex.name),
                       }}
+                      lastPr={getPrLabel(ex.name)}
                     />
                   ))}
                 </div>
