@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import Link from 'next/link';
@@ -39,9 +39,13 @@ export default function ProgressPhotosPage() {
     (async () => {
       setLoading(true);
       try {
+        // Audit 2026-05-28 #20 : query non bornée → téléchargeait tout
+        // l'historique photos à chaque visite. Cap à 60 (≈ 1 an de photos
+        // hebdo) ; pagination à prévoir si besoin au-delà.
         const q = query(
           collection(db, 'users', user.uid, 'photos'),
           orderBy('date', 'desc'),
+          limit(60),
         );
         const snap = await getDocs(q);
         if (cancelled) return;

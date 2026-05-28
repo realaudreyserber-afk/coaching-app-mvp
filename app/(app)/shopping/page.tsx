@@ -14,7 +14,6 @@ import { useEffect, useState } from 'react';
 import {
   collection,
   query,
-  orderBy,
   getDocs,
   doc,
   addDoc,
@@ -51,10 +50,14 @@ export default function ShoppingPage() {
 
   async function loadActive() {
     if (!user) return;
+    // Audit 2026-05-28 #14 : l'ancien `orderBy('created_at')` exigeait un index
+    // composite (status + created_at) absent → crash failed-precondition en prod,
+    // et triait sur un serverTimestamp null localement → liste invisible + boucle
+    // de re-création. Une seule liste active est attendue : where + limit(1) suffit
+    // (pas d'index composite requis pour une simple égalité).
     const q = query(
       collection(db, 'users', user.uid, 'shopping_lists'),
       where('status', '==', 'active'),
-      orderBy('created_at', 'desc'),
       limit(1),
     );
     const snap = await getDocs(q);

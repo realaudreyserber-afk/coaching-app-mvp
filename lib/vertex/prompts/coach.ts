@@ -705,7 +705,7 @@ Le contenu est un objet JSON plat dont les CLÉS sont des paths dot-notation et 
 PATHS AUTORISÉS (whitelist serveur stricte — tout le reste est silencieusement rejeté) :
 
 Nutrition :
-- \`kcal\` (number 800-6000)
+- \`kcal\` (number 1200-6000) — Audit #13 : plancher 1200 imposé par le parser (sécurité WHO femmes). Un patch sous 1200 est rejeté SILENCIEUSEMENT : n'annonce JAMAIS une cible < 1200 kcal via un patch (passe par generate-plan avec contexte médical complet).
 - \`macros.p\` (number 0-600), \`macros.c\` (0-700), \`macros.f\` (0-300) — grammes
 - \`meals_template.{0-20}.name\` (string max 60)
 - \`meals_template.{0-20}.description\` (string max 600)

@@ -12,10 +12,16 @@
  */
 
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
+import { RECIPES } from '@/content/recipes/library';
 import Link from 'next/link';
+
+// Audit 2026-05-28 #15 : résout recipe_id → nom lisible via la librairie statique.
+// Si la recette n'existe plus (retirée de la lib), on évite un lien mort vers
+// /recipes/<id> qui ferait notFound().
+const RECIPE_NAME_BY_ID = new Map(RECIPES.map((r) => [r.id, r.name]));
 
 interface FavoriteRecipeDoc {
   id: string;
@@ -38,14 +44,16 @@ export default function FavoriteRecipesPage() {
     (async () => {
       setLoading(true);
       try {
-        const q = query(
-          collection(db, 'users', user.uid, 'favorite_recipes'),
-          orderBy('cooked_count', 'desc'),
-        );
+        // Audit #15 : pas d'orderBy('cooked_count') côté query — Firestore exclut
+        // les docs sans ce champ (favori fraîchement ajouté → invisible). On lit
+        // tout et on trie en mémoire (comme le snapshot serveur).
+        const q = query(collection(db, 'users', user.uid, 'favorite_recipes'));
         const snap = await getDocs(q);
         if (cancelled) return;
         setFavorites(
-          snap.docs.map((d) => ({ ...(d.data() as FavoriteRecipeDoc), id: d.id })),
+          snap.docs
+            .map((d) => ({ ...(d.data() as FavoriteRecipeDoc), id: d.id }))
+            .sort((a, b) => (b.cooked_count ?? 0) - (a.cooked_count ?? 0)),
         );
       } catch (e) {
         if (!cancelled) setErrorText(e instanceof Error ? e.message : String(e));
@@ -115,12 +123,18 @@ export default function FavoriteRecipesPage() {
               className="flex justify-between items-center rounded-md border border-gray-200 p-3"
             >
               <div>
-                <Link
-                  href={`/recipes/${f.recipe_id}`}
-                  className="font-medium text-sm hover:underline"
-                >
-                  {f.recipe_id}
-                </Link>
+                {RECIPE_NAME_BY_ID.has(f.recipe_id) ? (
+                  <Link
+                    href={`/recipes/${f.recipe_id}`}
+                    className="font-medium text-sm hover:underline"
+                  >
+                    {RECIPE_NAME_BY_ID.get(f.recipe_id)}
+                  </Link>
+                ) : (
+                  <span className="font-medium text-sm text-gray-400" title={f.recipe_id}>
+                    Recette indisponible
+                  </span>
+                )}
                 <div className="text-xs text-gray-500">
                   Cuisiné {f.cooked_count ?? 0} fois
                   {f.last_cooked_at ? ` · dernière : ${f.last_cooked_at}` : ''}

@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { useAuth } from '@/lib/firebase/hooks';
 import { flags } from '@/lib/features/flags';
 import { logFood } from '@/lib/features/food-logs/client';
@@ -30,6 +30,10 @@ export default function BarcodePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  // Audit 2026-05-28 #16 : @zxing/browser n'a plus de reader.reset(). C'est
+  // l'objet IScannerControls retourné par decodeFromVideoDevice qui porte
+  // .stop(). Sans lui, la caméra restait allumée (fuite MediaStream).
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
 
   // Check feature flag on mount
   useEffect(() => {
@@ -58,10 +62,11 @@ export default function BarcodePage() {
       setCameraPermission('granted');
 
       if (codeReaderRef.current && videoRef.current) {
-        await codeReaderRef.current.decodeFromVideoDevice(
+        // On capture l'IScannerControls pour pouvoir réellement arrêter le flux.
+        scannerControlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(
           undefined, // undefined selects default camera device (usually back camera)
           videoRef.current,
-          (result, error) => {
+          (result) => {
             if (result) {
               const code = result.getText();
               setScannedCode(code);
@@ -81,14 +86,17 @@ export default function BarcodePage() {
   };
 
   const stopScanning = () => {
-    if (codeReaderRef.current) {
+    // Audit #16 : arrêt via IScannerControls.stop() (l'ancien reader.reset()
+    // n'existe plus sur @zxing/browser → undefined → caméra restait allumée).
+    if (scannerControlsRef.current) {
       try {
-        (codeReaderRef.current as any).reset();
+        scannerControlsRef.current.stop();
       } catch (e) {
-        console.warn('Reader reset failed:', e);
+        console.warn('Scanner stop failed:', e);
       }
+      scannerControlsRef.current = null;
     }
-    // Manually stop stream tracks to turn off the camera light
+    // Belt-and-suspenders : coupe aussi les tracks du stream pour éteindre la LED
     if (videoRef.current && videoRef.current.srcObject) {
       try {
         const stream = videoRef.current.srcObject as MediaStream;

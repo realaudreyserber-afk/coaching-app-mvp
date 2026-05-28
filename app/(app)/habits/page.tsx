@@ -15,11 +15,10 @@ import {
   where,
   getDocs,
   addDoc,
-  setDoc,
   deleteDoc,
   doc,
   serverTimestamp,
-  updateDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
@@ -145,43 +144,50 @@ export default function HabitsPage() {
 
   async function toggleToday(habit: HabitDoc) {
     if (!user) return;
-    const wasCompleted = !!todayLogs[habit.id];
-    const newCompleted = !wasCompleted;
-    const logId = `${todayIso()}_${habit.id}`;
+    const uid = user.uid;
+    // Audit 2026-05-28 #19 : l'ancienne version incrémentait total_completions /
+    // streak depuis l'objet `habit` local (potentiellement périmé) → double-clic
+    // ou re-tick = over-count. On passe par une transaction atomique qui :
+    //  - dérive le nouvel état du LOG persisté frais (et non de l'état local),
+    //  - n'ajuste les compteurs que sur un vrai changement d'état (idempotent),
+    //  - lit le log d'hier par id déterministe (pas de query dans la tx).
+    const logRef = doc(db, 'users', uid, 'habit_logs', `${todayIso()}_${habit.id}`);
+    const yLogRef = doc(db, 'users', uid, 'habit_logs', `${yesterdayIso()}_${habit.id}`);
+    const habitRef = doc(db, 'users', uid, 'habits', habit.id);
     try {
-      await setDoc(doc(db, 'users', user.uid, 'habit_logs', logId), {
-        date: todayIso(),
-        habit_id: habit.id,
-        completed: newCompleted,
-        logged_at: serverTimestamp(),
+      const finalCompleted = await runTransaction(db, async (tx) => {
+        const logSnap = await tx.get(logRef);
+        const yLogSnap = await tx.get(yLogRef);
+        const habitSnap = await tx.get(habitRef);
+        const currentlyCompleted = logSnap.exists() && logSnap.data()?.completed === true;
+        const newCompleted = !currentlyCompleted;
+        const h = habitSnap.data() ?? {};
+
+        tx.set(logRef, {
+          date: todayIso(),
+          habit_id: habit.id,
+          completed: newCompleted,
+          logged_at: serverTimestamp(),
+        });
+
+        if (newCompleted) {
+          const yesterdayCompleted = yLogSnap.exists() && yLogSnap.data()?.completed === true;
+          const newStreak = yesterdayCompleted ? (h.current_streak ?? 0) + 1 : 1;
+          tx.update(habitRef, {
+            current_streak: newStreak,
+            longest_streak: Math.max(h.longest_streak ?? 0, newStreak),
+            total_completions: (h.total_completions ?? 0) + 1,
+          });
+        } else {
+          tx.update(habitRef, {
+            current_streak: 0,
+            total_completions: Math.max((h.total_completions ?? 0) - 1, 0),
+          });
+        }
+        return newCompleted;
       });
 
-      // Recompute streak côté client (best-effort).
-      // Increment if marking completed AND yesterday was completed or no log yesterday.
-      // Reset to 0 if unchecking today.
-      if (newCompleted) {
-        const yLog = await getDocs(
-          query(
-            collection(db, 'users', user.uid, 'habit_logs'),
-            where('date', '==', yesterdayIso()),
-            where('habit_id', '==', habit.id),
-          ),
-        );
-        const yesterdayCompleted = yLog.docs[0]?.data()?.completed === true;
-        const newStreak = yesterdayCompleted ? (habit.current_streak ?? 0) + 1 : 1;
-        const newLongest = Math.max(habit.longest_streak ?? 0, newStreak);
-        await updateDoc(doc(db, 'users', user.uid, 'habits', habit.id), {
-          current_streak: newStreak,
-          longest_streak: newLongest,
-          total_completions: (habit.total_completions ?? 0) + 1,
-        });
-      } else {
-        await updateDoc(doc(db, 'users', user.uid, 'habits', habit.id), {
-          current_streak: 0,
-          total_completions: Math.max((habit.total_completions ?? 0) - 1, 0),
-        });
-      }
-      setTodayLogs({ ...todayLogs, [habit.id]: newCompleted });
+      setTodayLogs({ ...todayLogs, [habit.id]: finalCompleted });
       await reloadAll();
     } catch (e) {
       setErrorText(e instanceof Error ? e.message : String(e));

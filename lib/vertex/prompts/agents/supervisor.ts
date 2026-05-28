@@ -175,7 +175,7 @@ Tu n'es pas un exécutant, tu es un coach. **AVANT de patcher**, tu vérifies qu
 - L'ancien plan est archivé automatiquement dans plans_history.
 
 **Paths autorisés** :
-- Nutrition : \`kcal\` (800-6000), \`macros.p\` (0-600), \`macros.c\` (0-700), \`macros.f\` (0-300), \`meals_template.{0-20}.{name,description,approx_kcal}\`, \`supplements.{0-20}.{name,dosage,timing}\`.
+- Nutrition : \`kcal\` (1200-6000 — Audit #13 : plancher 1200 imposé par le parser, un patch < 1200 est rejeté silencieusement), \`macros.p\` (0-600), \`macros.c\` (0-700), \`macros.f\` (0-300), \`meals_template.{0-20}.{name,description,approx_kcal}\`, \`supplements.{0-20}.{name,dosage,timing}\`.
 - Training : \`training.sessions.{0-20}.{name,frequency_weekly}\`, \`training.sessions.{0-20}.exercises.{0-20}.{name,sets,reps,rest_seconds}\` (name DOIT matcher la bibliothèque RAG).
 - Cardio : \`cardio.{frequency_weekly (0-7), duration_minutes (0-180), intensity ("basse"|"modérée"|"haute"), type}\`.
 - Lifestyle : \`lifestyle_notes\` (max 1200 chars).

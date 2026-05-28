@@ -192,7 +192,15 @@ export async function runMultiAgentCoach(
       }
     },
     async cancel() {
-      await finalize('error', '', undefined, 'client_disconnected');
+      // Audit 2026-05-28 #18 : au disconnect client, NE PAS réécrire content=''
+      // — ça effaçait un message déjà streamé (vide au reload). runAgentSession
+      // poursuit côté serveur et start()/finalize('done') persistera la réponse
+      // complète. On ne fait qu'horodater le disconnect (informatif).
+      try {
+        await placeholderRef.update({ client_disconnected_at: new Date().toISOString() });
+      } catch {
+        /* best-effort */
+      }
     },
   });
 
