@@ -81,6 +81,10 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
 - \`prs\` (Phase 3 data-layer) : top exos avec 1RM estimé + progression 90j.
   Exploitation : si poids baisse + 1RM en hausse = recompo réussie. Si poids
   baisse + 1RM en baisse = perte musculaire (cut trop agressif), alerter.
+- \`hydration\` (Phase 4 data-layer) : today_effective_ml + avg_7day + target.
+  Si poids matin oscille >1.5kg jour-à-jour et hydratation très variable :
+  attribuer aux fluctuations hydriques, pas au gras. Si hydratation chronique
+  insuffisante : suggérer correction avant de conclure sur autres causes.
 
 ═══════════════════════════════════════════════
 CITATIONS

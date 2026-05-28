@@ -68,6 +68,11 @@ PROFILS SPÉCIFIQUES
 - Si user **sous contraception hormonale active** : phases moins marquées, signaler que tu n'attribues PAS les fluctuations au cycle naturel.
 - Ne JAMAIS forcer un déficit agressif en phase lutéale → augmente le risque de craquage et le ressenti d'échec.
 
+**Hydratation (si context.hydration dispo)** :
+- Si \`today_effective_ml\` < 50% du \`today_target_ml\` à 15h+ → mentionner explicitement et suggérer rattrapage
+- Si \`days_target_hit_7day\` < 3/7 → pattern d'hydratation insuffisante chronique, à corriger en priorité (impact poids matin + énergie + cravings)
+- Sous TRT ou GLP-1 : insister sur hydratation (TRT épaissit le sang ; GLP-1 réduit la soif)
+
 **Sous GLP-1 (sémaglutide, tirzépatide, liraglutide)** :
 - Appétit drastiquement réduit → risque de **carence protéique** (objectif #1 : protéger les 1.8 g/kg poids cible)
 - **Fractionner en 5-6 mini-repas** plutôt que 3 gros (nausées + satiété précoce)

@@ -14,6 +14,7 @@ import { BaseAgent } from './base';
 import { NUTRITION_SYSTEM_PROMPT } from '../../prompts/agents/nutrition';
 import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corpus';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
+import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -126,6 +127,14 @@ export class NutritionCoach extends BaseAgent {
       }
     } catch (e) {
       console.warn('[nutrition-agent] nutrition_guides fetch failed:', e);
+    }
+
+    // Hydratation — Phase 4 data-layer
+    try {
+      const hydration = await getHydrationSnapshot(input.uid);
+      if (hydration) ctx.hydration = hydration;
+    } catch (e) {
+      console.warn('[nutrition-agent] hydration fetch failed:', e);
     }
 
     return ctx;

@@ -78,6 +78,17 @@ NUMÉROS / SOURCES UTILES (à inclure si severity critical/warning)
 Tu intègres 1-2 numéros dans \`citations\` ou directement dans \`recommendations\`.
 
 ═══════════════════════════════════════════════
+HYDRATATION (si context.hydration dispo)
+═══════════════════════════════════════════════
+
+Si user sous TRT et avg_7day_ml < 2500 ml → severity=warning + recommandation
+explicite (hématocrite élevé sans hydratation suffisante = risque thrombose,
+référer médecin si Hb >17 g/dL).
+
+Si user sous GLP-1 et avg_7day_ml < 2000 ml + fatigue/lipothymie mentionnée →
+severity=warning + recommandation re-évaluation dosage avec médecin prescripteur.
+
+═══════════════════════════════════════════════
 SORTIE
 ═══════════════════════════════════════════════
 

@@ -16,6 +16,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { SAFETY_SYSTEM_PROMPT } from '../../prompts/agents/safety';
+import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -108,6 +109,14 @@ export class SafetyCoach extends BaseAgent {
       }
     } catch (e) {
       console.warn('[safety-agent] bloodwork fetch failed:', e);
+    }
+
+    // Hydratation — alerte sous TRT/GLP-1 si insuffisant
+    try {
+      const hydration = await getHydrationSnapshot(input.uid);
+      if (hydration) ctx.hydration = hydration;
+    } catch (e) {
+      console.warn('[safety-agent] hydration fetch failed:', e);
     }
 
     // Weight history 30j — détection perte rapide

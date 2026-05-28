@@ -16,6 +16,7 @@ import { BaseAgent } from './base';
 import { ANALYTICS_SYSTEM_PROMPT } from '../../prompts/agents/analytics';
 import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
+import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -146,6 +147,14 @@ export class AnalyticsCoach extends BaseAgent {
       if (prs) ctx.prs = prs;
     } catch (e) {
       console.warn('[analytics-agent] prs fetch failed:', e);
+    }
+
+    // Hydratation — corrélation possible avec poids matin
+    try {
+      const hydration = await getHydrationSnapshot(input.uid);
+      if (hydration) ctx.hydration = hydration;
+    } catch (e) {
+      console.warn('[analytics-agent] hydration fetch failed:', e);
     }
 
     // food_logs_summary 7 derniers jours (cumul jour par jour)
