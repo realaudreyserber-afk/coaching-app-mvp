@@ -241,39 +241,99 @@ export default function SessionLandingPage() {
                   <Dumbbell className="h-4 w-4" style={{ color: "var(--gold-400)" }} aria-hidden="true" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div
-                    style={{
-                      padding: 8,
-                      background: "var(--glass-bg-2)",
-                      border: "1px solid var(--glass-border)",
-                      clipPath:
-                        "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-                    }}
-                  >
-                    <span className="eyebrow" style={{ color: "var(--fg-4)" }}>Exos</span>
-                    <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginTop: 2 }}>
-                      {block.exercises.length}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      padding: 8,
-                      background: "var(--gold-tint-08)",
-                      border: "1px solid var(--gold-tint-25)",
-                      clipPath:
-                        "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
-                    }}
-                  >
-                    <span className="eyebrow">Fréq</span>
-                    <div
-                      className="mono"
-                      style={{ fontSize: 14, fontWeight: 700, color: "var(--gold-400)", marginTop: 2 }}
-                    >
-                      {block.frequency_weekly}×/sem
-                    </div>
-                  </div>
-                </div>
+                {/* Audit UX 2026-05-28 : ajout durée estimée + focus muscles via heuristique
+                    sur le nom du bloc (Push/Pull/Legs/Upper/Lower/Full/Cardio). */}
+                {(() => {
+                  // Estimation durée : pour chaque exo, sets × (30s effort moyen + rest_seconds).
+                  // Ajout 10% buffer pour transitions/installation.
+                  const totalSec = block.exercises.reduce(
+                    (sum, ex) => sum + (ex.sets ?? 3) * (30 + (ex.rest_seconds ?? 90)),
+                    0,
+                  );
+                  const estimatedMin = Math.round((totalSec * 1.1) / 60);
+
+                  // Focus muscles : heuristique sur le nom du bloc
+                  const upper = (block.name ?? "").toUpperCase();
+                  let focus = "Mix";
+                  if (/PUSH|POUSS/.test(upper)) focus = "Pectoraux · Épaules · Triceps";
+                  else if (/PULL|TIR|DOS/.test(upper)) focus = "Dos · Biceps";
+                  else if (/LEGS?|JAMB|LOWER|BAS/.test(upper)) focus = "Quadriceps · Fessiers · Mollets";
+                  else if (/UPPER|HAUT/.test(upper)) focus = "Haut du corps complet";
+                  else if (/FULL|BODY/.test(upper)) focus = "Full body";
+                  else if (/CARDIO|RUN|COURSE/.test(upper)) focus = "Cardio";
+                  else if (/CHEST|PEC|POITRINE/.test(upper)) focus = "Pectoraux";
+                  else if (/BACK|DOS/.test(upper)) focus = "Dos";
+                  else if (/ARMS?|BRAS/.test(upper)) focus = "Bras (biceps + triceps)";
+                  else if (/SHOULDER|EPAULE|ÉPAULE/.test(upper)) focus = "Épaules";
+                  else if (/CORE|ABS|ABDO/.test(upper)) focus = "Core · Abdominaux";
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div
+                          style={{
+                            padding: 8,
+                            background: "var(--glass-bg-2)",
+                            border: "1px solid var(--glass-border)",
+                            clipPath:
+                              "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                          }}
+                        >
+                          <span className="eyebrow" style={{ color: "var(--fg-4)" }}>Exos</span>
+                          <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginTop: 2 }}>
+                            {block.exercises.length}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            padding: 8,
+                            background: "var(--gold-tint-08)",
+                            border: "1px solid var(--gold-tint-25)",
+                            clipPath:
+                              "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                          }}
+                        >
+                          <span className="eyebrow">Fréq</span>
+                          <div
+                            className="mono"
+                            style={{ fontSize: 14, fontWeight: 700, color: "var(--gold-400)", marginTop: 2 }}
+                          >
+                            {block.frequency_weekly}×/sem
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            padding: 8,
+                            background: "var(--glass-bg-2)",
+                            border: "1px solid var(--glass-border)",
+                            clipPath:
+                              "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                          }}
+                        >
+                          <span className="eyebrow" style={{ color: "var(--fg-4)" }}>Durée</span>
+                          <div className="mono" style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginTop: 2 }}>
+                            ~{estimatedMin}min
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          padding: "6px 8px",
+                          background: "var(--glass-bg-2)",
+                          border: "1px solid var(--glass-border)",
+                          marginTop: 8,
+                          clipPath:
+                            "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+                        }}
+                      >
+                        <span className="eyebrow" style={{ color: "var(--fg-4)" }}>Focus</span>
+                        <div style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 1 }}>
+                          {focus}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <button
                   onClick={() => handleStart(idx, block)}

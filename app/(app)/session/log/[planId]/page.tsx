@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import { Loader } from "@/components/ui/loader";
@@ -328,6 +328,15 @@ export default function LogSessionPage() {
   const [restRemainingSec, setRestRemainingSec] = useState(0);
   const restEndAtRef = useRef<number>(0);
 
+  // Audit UX 2026-05-28 #7 : historique dernière perf par exercice (pré-fetch)
+  // Map exercise_id → { date, weight_kg, reps_done, rpe_felt } du dernier set fait
+  const [lastPerfByExo, setLastPerfByExo] = useState<Record<string, {
+    date: string;
+    weight_kg: number;
+    reps_done: number;
+    rpe_felt: number;
+  }>>({});
+
   // Beep via Web Audio API — pas de fichier audio, marche partout
   const playBeep = useCallback((freq = 800, durationMs = 250) => {
     try {
@@ -439,6 +448,48 @@ export default function LogSessionPage() {
         // User weight pour calcul calories MET-based
         const uw = (userSnap.data()?.profile?.weight as number) ?? userWeightKg;
         if (typeof uw === "number" && uw > 0) setUserWeightKg(uw);
+
+        // Audit UX 2026-05-28 #7 : fetch last 20 workout_sessions pour build
+        // un map exercise_id → dernière perf (best set par session).
+        try {
+          const sessSnap = await getDocs(
+            query(
+              collection(db, "users", user.uid, "workout_sessions"),
+              orderBy("date", "desc"),
+              limit(20),
+            ),
+          );
+          const perfMap: Record<string, { date: string; weight_kg: number; reps_done: number; rpe_felt: number }> = {};
+          for (const sessDoc of sessSnap.docs) {
+            const sess = sessDoc.data() as { date?: string; exercises?: Array<{ exercise_id?: string; sets?: Array<{ weight_kg?: number; reps_done?: number; rpe_felt?: number }> }> };
+            const sessDate = (sess.date ?? "").slice(0, 10);
+            for (const ex of sess.exercises ?? []) {
+              const eid = ex.exercise_id;
+              if (!eid || perfMap[eid]) continue; // garde seulement la PLUS RÉCENTE
+              type SetType = { weight_kg?: number; reps_done?: number; rpe_felt?: number };
+              const bestSet: SetType | null = (ex.sets ?? [])
+                .filter((s) => typeof s.weight_kg === "number" && typeof s.reps_done === "number")
+                .reduce<SetType | null>(
+                  (best, s) =>
+                    (s.weight_kg ?? 0) * (s.reps_done ?? 0) > (best?.weight_kg ?? 0) * (best?.reps_done ?? 0)
+                      ? s
+                      : best,
+                  null,
+                );
+              if (bestSet && typeof bestSet.weight_kg === "number" && typeof bestSet.reps_done === "number") {
+                perfMap[eid] = {
+                  date: sessDate,
+                  weight_kg: bestSet.weight_kg,
+                  reps_done: bestSet.reps_done,
+                  rpe_felt: bestSet.rpe_felt ?? 0,
+                };
+              }
+            }
+          }
+          setLastPerfByExo(perfMap);
+        } catch (perfErr) {
+          console.warn("[session/log] last perf fetch failed (non-blocking):", perfErr);
+        }
       } catch (e: any) {
         console.error("[session/log] load failed:", e);
         setErr(e?.message ?? "Erreur de chargement");
@@ -912,6 +963,40 @@ export default function LogSessionPage() {
             <Tag accent="tech">CIBLE : {activeExo.target_reps_range} REPS</Tag>
             <Tag accent="gold">REPOS {activeExo.target_rest_seconds}s</Tag>
           </div>
+
+          {/* Audit UX 2026-05-28 #7 : historique dernière perf sur cet exo */}
+          {lastPerfByExo[activeExo.exercise_id] && (
+            <div
+              className="mono mb-3"
+              style={{
+                padding: "8px 12px",
+                background: "var(--glass-bg-2)",
+                border: "1px dashed var(--glass-border)",
+                fontSize: 11,
+                color: "var(--fg-3)",
+                letterSpacing: "0.05em",
+                clipPath:
+                  "polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px)",
+              }}
+            >
+              <span style={{ color: "var(--fg-4)" }}>DERNIÈRE FOIS · {lastPerfByExo[activeExo.exercise_id].date}</span>{" "}
+              <span style={{ color: "var(--gold-400)", fontWeight: 700 }}>
+                {lastPerfByExo[activeExo.exercise_id].weight_kg} kg
+              </span>{" "}
+              ×{" "}
+              <span style={{ color: "var(--fg-1)", fontWeight: 700 }}>
+                {lastPerfByExo[activeExo.exercise_id].reps_done} reps
+              </span>
+              {lastPerfByExo[activeExo.exercise_id].rpe_felt > 0 && (
+                <>
+                  {" "}@ RPE{" "}
+                  <span style={{ color: "var(--accent-tech)", fontWeight: 700 }}>
+                    {lastPerfByExo[activeExo.exercise_id].rpe_felt}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Boutons SET 1/2/3/... */}
           <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))" }}>

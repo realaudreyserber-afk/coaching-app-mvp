@@ -14,7 +14,10 @@ interface MatrixRainProps {
  * Reads `--accent-tech` from the body to pick its trail color, so it
  * responds to the palette tweak (matrix / cyan / magenta).
  */
-export function MatrixRain({ enabled = true, opacity = 0.18 }: MatrixRainProps) {
+// Audit WCAG 2026-05-28 : opacity réduite de 0.18 → 0.10 pour préserver le
+// contraste des textes secondaires (gris foncé sur fond noir) qui étaient
+// limite AA. Le motif matrice reste visible mais n'interfère plus avec la lisibilité.
+export function MatrixRain({ enabled = true, opacity = 0.10 }: MatrixRainProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
