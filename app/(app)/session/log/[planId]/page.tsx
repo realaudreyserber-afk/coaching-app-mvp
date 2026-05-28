@@ -429,6 +429,29 @@ export default function LogSessionPage() {
     setRestActive(false);
   }, []);
 
+  // Ajuste le repos en cours de ±delta secondes (boutons +30 / −30).
+  const adjustRestTimer = useCallback(
+    (deltaSec: number) => {
+      if (restEndAtRef.current <= 0) return;
+      const newEnd = restEndAtRef.current + deltaSec * 1000;
+      const remaining = Math.max(0, Math.round((newEnd - Date.now()) / 1000));
+      if (remaining <= 0) {
+        // −30 a ramené le repos à zéro → on termine proprement (sans bip de fin).
+        restEndAtRef.current = 0;
+        setRestRemainingSec(0);
+        setRestActive(false);
+        return;
+      }
+      const clamped = Math.min(remaining, 900); // garde-fou 15 min max
+      restEndAtRef.current = Date.now() + clamped * 1000;
+      // Si on repasse au-dessus de 5 s, ré-arme le bip des 5 s.
+      if (clamped > 5) beeped5Ref.current = false;
+      setRestRemainingSec(clamped);
+      setRestActive(true);
+    },
+    [],
+  );
+
   // Compte à rebours : un SEUL intervalle par période de repos (dépend de
   // restActive, pas de restRemainingSec). Bips basés sur le FRANCHISSEMENT d'un
   // seuil (<=5, <=0) et non l'égalité → jamais sautés même si un tick décale.
@@ -970,7 +993,7 @@ export default function LogSessionPage() {
       </HudCard>
 
       {/* Audit UX 2026-05-28 : timer de repos visible, beep à 5s et fin, vibration à 0 */}
-      {restRemainingSec > 0 && (
+      {restRemainingSec > 0 ? (
         <div
           role="timer"
           aria-live="polite"
@@ -993,25 +1016,60 @@ export default function LogSessionPage() {
             <TimerReset className="h-5 w-5" aria-hidden="true" />
             <span>REPOS · {String(Math.floor(restRemainingSec / 60)).padStart(2, "0")}:{String(restRemainingSec % 60).padStart(2, "0")}</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => adjustRestTimer(-30)}
+              className="mono"
+              style={{ padding: "4px 8px", background: "transparent", border: "1px solid currentColor", color: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+              aria-label="Retirer 30 secondes au repos"
+            >
+              −30
+            </button>
+            <button
+              type="button"
+              onClick={() => adjustRestTimer(30)}
+              className="mono"
+              style={{ padding: "4px 8px", background: "transparent", border: "1px solid currentColor", color: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+              aria-label="Ajouter 30 secondes au repos"
+            >
+              +30
+            </button>
+            <button
+              type="button"
+              onClick={skipRestTimer}
+              className="mono"
+              style={{ padding: "4px 10px", background: "transparent", border: "1px solid currentColor", color: "inherit", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer" }}
+              aria-label="Sauter le repos"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      ) : (
+        activeExo && (
           <button
             type="button"
-            onClick={skipRestTimer}
-            className="mono"
+            onClick={() => startRestTimer(activeExo.target_rest_seconds)}
+            className="mono flex items-center justify-center gap-2"
             style={{
-              padding: "4px 10px",
-              background: "transparent",
-              border: "1px solid currentColor",
-              color: "inherit",
-              fontSize: 10,
+              width: "100%",
+              padding: "10px 16px",
+              background: "var(--glass-bg-2)",
+              border: "1px dashed var(--gold-tint-35)",
+              color: "var(--gold-400)",
+              fontSize: 11,
+              fontWeight: 700,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               cursor: "pointer",
+              clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
             }}
-            aria-label="Sauter le repos"
+            aria-label={`Lancer un repos de ${activeExo.target_rest_seconds} secondes`}
           >
-            Skip
+            <TimerReset className="h-4 w-4" aria-hidden="true" /> Lancer un repos · {activeExo.target_rest_seconds}s
           </button>
-        </div>
+        )
       )}
 
       {success && (
