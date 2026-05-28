@@ -4,9 +4,10 @@
 
 import { Loader } from "@/components/ui/loader";
 import React, { useEffect, useState } from "react";
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
+import Link from "next/link";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
 import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus, Activity, Sparkles } from "lucide-react";
 import { WeightHistoryRow } from "@/components/progress/weight-history-row";
@@ -131,6 +132,43 @@ export default function ProgressPage() {
   const [compareWeekB, setCompareWeekB] = useState<string>("");
   const [photoType, setPhotoType] = useState<"face" | "profile" | "back">("face");
 
+  // Saisie rapide de poids directement depuis la page Suivi (la courbe lit
+  // checkins_daily ; on upsert le même doc du jour en merge pour rester
+  // cohérent avec le check-in quotidien). refreshTick relance le chargement.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [weighInput, setWeighInput] = useState("");
+  const [weighSaving, setWeighSaving] = useState(false);
+  const [weighMsg, setWeighMsg] = useState<string | null>(null);
+
+  const handleQuickWeighIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || weighSaving) return;
+    const w = parseFloat(weighInput.replace(",", "."));
+    if (!Number.isFinite(w) || w < 20 || w > 400) {
+      setWeighMsg("Poids invalide (20–400 kg).");
+      return;
+    }
+    setWeighSaving(true);
+    setWeighMsg(null);
+    try {
+      // Même format de doc-id que /checkin/daily pour viser le MÊME document du
+      // jour (pas de doublon). On écrit aussi `date` (cf. fix audit #7).
+      const todayStr = new Date().toISOString().split("T")[0];
+      await setDoc(
+        doc(db, "users", user.uid, "checkins_daily", todayStr),
+        { weight: w, date: todayStr, updated_at: serverTimestamp() },
+        { merge: true },
+      );
+      setWeighInput("");
+      setWeighMsg("Pesée enregistrée ✓");
+      setRefreshTick((t) => t + 1);
+    } catch (err) {
+      setWeighMsg(err instanceof Error ? err.message : "Échec de l'enregistrement");
+    } finally {
+      setWeighSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (loading || !user) return;
 
@@ -253,7 +291,7 @@ export default function ProgressPage() {
     };
 
     loadProgressData();
-  }, [user, loading]);
+  }, [user, loading, refreshTick]);
 
   if (loading || fetching) {
     return (
@@ -437,7 +475,52 @@ export default function ProgressPage() {
 
       {/* WEIGHT TAB */}
       {activeTab === "weight" && (
-        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+        <div className="space-y-6">
+          {/* Saisie rapide de poids (audit Suivi : la page était en lecture seule) */}
+          <HudCard accent="gold" chamfer="sm" style={{ padding: '0.9rem 1.25rem' }}>
+            <form onSubmit={handleQuickWeighIn} className="flex flex-wrap items-end gap-3">
+              <div style={{ flex: '1 1 160px', minWidth: 140 }}>
+                <label htmlFor="quick-weigh" style={labelStyle}>Pesée du jour (kg)</label>
+                <input
+                  id="quick-weigh"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min={20}
+                  max={400}
+                  value={weighInput}
+                  onChange={(e) => setWeighInput(e.target.value)}
+                  placeholder="ex. 82.4"
+                  style={inputBase}
+                  disabled={weighSaving}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={weighSaving}
+                className="btn btn-primary mono"
+                style={{ height: 36, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}
+              >
+                {weighSaving ? "…" : "Logger"}
+              </button>
+              {weighMsg && (
+                <span
+                  className="mono"
+                  role="status"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: '0.1em',
+                    color: weighMsg.includes('✓') ? 'var(--accent-tech)' : 'var(--alert-500)',
+                    alignSelf: 'center',
+                  }}
+                >
+                  {weighMsg}
+                </span>
+              )}
+            </form>
+          </HudCard>
+
+          <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
           <div className="space-y-3 lg:col-span-2">
             <div className="px-1 space-y-1">
               <span className="mono" style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--gold-500)', opacity: 0.85 }}>
@@ -493,12 +576,33 @@ export default function ProgressPage() {
               </ul>
             )}
           </HudCard>
+          </div>
         </div>
       )}
 
       {/* MEASUREMENTS TAB */}
       {activeTab === "measurements" && (
         <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
+          <div className="lg:col-span-3 flex justify-end">
+            <Link
+              href="/progress/measurements"
+              className="mono inline-flex items-center gap-2"
+              style={{
+                height: 38,
+                padding: '0 16px',
+                background: 'var(--accent-tech-tint)',
+                border: '1px solid var(--accent-tech)',
+                color: 'var(--accent-tech)',
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+              }}
+            >
+              <Ruler className="h-3.5 w-3.5" aria-hidden="true" /> Saisir mes mensurations
+            </Link>
+          </div>
           {weeklyRecords.length < 1 ? (
             <HudCard accent="tech" chamfer="sm" className="lg:col-span-3" style={{ padding: '1.25rem' }}>
               <p className="mono text-center" style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.1em' }}>
@@ -660,6 +764,26 @@ export default function ProgressPage() {
       {/* PHOTOS TAB */}
       {activeTab === "photos" && (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <Link
+              href="/checkin/weekly"
+              className="mono inline-flex items-center gap-2"
+              style={{
+                height: 38,
+                padding: '0 16px',
+                background: 'var(--pink-tint-10)',
+                border: '1px solid var(--pink-tint-35)',
+                color: 'var(--pink-500)',
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                fontWeight: 700,
+                clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+              }}
+            >
+              <Camera className="h-3.5 w-3.5" aria-hidden="true" /> Ajouter une photo
+            </Link>
+          </div>
           {weeklyRecords.length < 1 ? (
             <HudCard accent="tech" chamfer="sm" style={{ padding: '1.25rem' }}>
               <p className="mono text-center" style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.1em' }}>
