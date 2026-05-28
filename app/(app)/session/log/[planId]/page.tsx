@@ -341,7 +341,15 @@ export default function LogSessionPage() {
 
   // Audit UX 2026-05-28 : timer de repos visible avec son + vibration
   const [restRemainingSec, setRestRemainingSec] = useState(0);
+  // `restActive` pilote l'intervalle du compte à rebours. On NE met PAS
+  // restRemainingSec en dépendance de l'effet (sinon l'intervalle serait recréé
+  // chaque seconde = race + bips sautés). L'intervalle lit l'échéance dans le ref.
+  const [restActive, setRestActive] = useState(false);
   const restEndAtRef = useRef<number>(0);
+  const beeped5Ref = useRef(false);
+  // Un seul AudioContext réutilisé (sinon fuite : les navigateurs plafonnent
+  // ~6 contextes → le bip devient muet après quelques sets).
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Audit UX 2026-05-28 #7 : historique dernière perf par exercice (pré-fetch)
   // Map exercise_id → { date, weight_kg, reps_done, rpe_felt } du dernier set fait
@@ -352,51 +360,89 @@ export default function LogSessionPage() {
     rpe_felt: number;
   }>>({});
 
-  // Beep via Web Audio API — pas de fichier audio, marche partout
-  const playBeep = useCallback((freq = 800, durationMs = 250) => {
+  // Beep via Web Audio API — UN SEUL AudioContext réutilisé + resume() (autoplay
+  // policy). Sans réutilisation, chaque bip créait un contexte jamais fermé →
+  // plafond navigateur atteint → bips muets en cours de séance.
+  const ensureAudioCtx = useCallback((): AudioContext | null => {
     try {
-      const AudioCtx = (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durationMs / 1000);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + durationMs / 1000);
+      if (!audioCtxRef.current) {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtx) return null;
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === "suspended") void audioCtxRef.current.resume();
+      return audioCtxRef.current;
     } catch {
-      // Audio context bloqué (autoplay policy / contexte non-user-gesture) — silent fail
+      return null;
     }
+  }, []);
+
+  const playBeep = useCallback(
+    (freq = 800, durationMs = 250) => {
+      const ctx = ensureAudioCtx();
+      if (!ctx) return;
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + durationMs / 1000);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + durationMs / 1000);
+      } catch {
+        /* contexte bloqué — silent fail */
+      }
+    },
+    [ensureAudioCtx],
+  );
+
+  // Ferme l'AudioContext au démontage (libère la ressource).
+  useEffect(() => {
+    return () => {
+      try {
+        void audioCtxRef.current?.close();
+      } catch {
+        /* ignore */
+      }
+    };
   }, []);
 
   const startRestTimer = useCallback(
     (seconds: number) => {
       if (seconds <= 0) return;
       restEndAtRef.current = Date.now() + seconds * 1000;
+      beeped5Ref.current = false;
+      ensureAudioCtx(); // déverrouille l'audio dans le geste user (validateSet)
       setRestRemainingSec(seconds);
+      setRestActive(true);
     },
-    [],
+    [ensureAudioCtx],
   );
 
   const skipRestTimer = useCallback(() => {
     restEndAtRef.current = 0;
     setRestRemainingSec(0);
+    setRestActive(false);
   }, []);
 
-  // Tick le countdown chaque seconde quand rest actif
+  // Compte à rebours : un SEUL intervalle par période de repos (dépend de
+  // restActive, pas de restRemainingSec). Bips basés sur le FRANCHISSEMENT d'un
+  // seuil (<=5, <=0) et non l'égalité → jamais sautés même si un tick décale.
   useEffect(() => {
-    if (restRemainingSec <= 0) return;
+    if (!restActive) return;
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.round((restEndAtRef.current - Date.now()) / 1000));
       setRestRemainingSec(remaining);
-      // Beep + vibration à 5s restants et à la fin
-      if (remaining === 5) {
+      if (remaining <= 5 && remaining > 0 && !beeped5Ref.current) {
+        beeped5Ref.current = true;
         playBeep(600, 150);
       }
-      if (remaining === 0) {
+      if (remaining <= 0) {
+        clearInterval(interval);
         playBeep(1000, 400);
         if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
           try {
@@ -405,11 +451,11 @@ export default function LogSessionPage() {
             /* ignore */
           }
         }
-        clearInterval(interval);
+        setRestActive(false);
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [restRemainingSec, playBeep]);
+  }, [restActive, playBeep]);
 
   // Tick chaque seconde pour la durée et les stats live
   useEffect(() => {
