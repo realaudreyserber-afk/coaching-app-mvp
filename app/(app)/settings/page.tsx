@@ -103,7 +103,7 @@ function TacticalToggle({ id, checked, onChange, label, desc, accent = 'gold' }:
 }
 
 export default function SettingsPage() {
-  const { user, logout, getFreshToken } = useAuth();
+  const { user, logout, getFreshToken, refreshProfileStatus } = useAuth();
   const router = useRouter();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -1243,6 +1243,12 @@ export default function SettingsPage() {
               }
               const data = await res.json();
               const resumeStep = typeof data?.resumeStep === "number" ? data.resumeStep : 1;
+              // Bug fix 2026-05-28 : avant navigate, refresh hasProfile depuis
+              // Firestore. Sinon le (app)/layout.tsx voit hasProfile === true
+              // (state cached), considère que l'user est sur /onboarding par
+              // erreur et redirige vers /dashboard. Le restart fonctionnait
+              // côté Firestore mais l'UI rebondissait au dashboard.
+              await refreshProfileStatus();
               router.push(`/onboarding/${resumeStep}`);
             } catch (err) {
               console.error("[settings] restart onboarding failed:", err);
