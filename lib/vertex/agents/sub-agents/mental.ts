@@ -51,8 +51,11 @@ export class MentalCoach extends BaseAgent {
       if (state) {
         ctx.coach_state = {
           response_style: state.response_style,
-          tone_preferences: state.tone_preferences,
-          do_not_repeat: state.do_not_repeat,
+          // Audit 2026-05-29 : tone_preferences/do_not_repeat n'existent PAS dans
+          // le schéma CoachState (toujours undefined → mémoire anti-répétition
+          // morte). Vrais champs : topics_discussed + personality_notes.
+          topics_discussed: state.topics_discussed,
+          personality_notes: state.personality_notes,
         };
       }
     } catch (e) {

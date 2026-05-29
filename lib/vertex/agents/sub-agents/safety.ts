@@ -45,6 +45,20 @@ export class SafetyCoach extends BaseAgent {
         ed_history: profile.ed_history,
         comorbidities: profile.comorbidities,
         medications: profile.medications,
+        // Audit 2026-05-29 : objectif + goals pour distinguer une perte de poids
+        // SOLLICITÉE (cut volontaire) d'une perte NON sollicitée (drapeau TCA/maladie).
+        objective: profile.objective,
+        goals: profile.goals
+          ? {
+              target_weight: profile.goals.target_weight,
+              duration_chosen_weeks: profile.goals.duration_chosen_weeks,
+            }
+          : null,
+        // Statut hormonal EXPLICITE — la section HYDRATATION du prompt raisonne sur
+        // "user sous TRT/GLP-1" ; sans ces champs la règle était morte OU déclenchée
+        // sur inférence (risque TRT halluciné). Jamais inférer depuis medications.
+        hormonal_context: profile.hormonal_context,
+        uses_glp1: profile.uses_glp1,
       };
     } catch (e) {
       console.warn('[safety-agent] profile fetch failed:', e);
