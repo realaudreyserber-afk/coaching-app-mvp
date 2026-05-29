@@ -1,57 +1,35 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { VertexAI } from '@google-cloud/vertexai';
 import { GoogleGenAI } from '@google/genai';
 
 const project = process.env.GOOGLE_CLOUD_PROJECT || 'mock-project-id';
-const location = process.env.VERTEX_AI_LOCATION || 'europe-west1';
 
-// Build options dynamically to support serverless environments (like Vercel)
-const vertexOptions: any = {
-  project: project,
-  location: location,
-};
-
-// If credentials are provided in the environment (e.g. on Vercel), pass them to GoogleAuth options
-if (process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY) {
-  vertexOptions.googleAuthOptions = {
-    credentials: {
-      client_email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-      private_key: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-  };
-}
-
-// Initialize Vertex AI client
-export const vertexAI = new VertexAI(vertexOptions);
-
-// Instantiate the two primary models we'll use in the MVP (deprecated/legacy Vertex AI usage)
-export const modelPro = vertexAI.getGenerativeModel({
-  model: process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash',
-  generationConfig: {
-    temperature: 0.2,
-  },
-});
-
-export const modelFlash = vertexAI.getGenerativeModel({
-  model: process.env.VERTEX_AI_MODEL_FLASH || 'gemini-3.5-flash',
-  generationConfig: {
-    temperature: 0.1,
-  },
-});
+// Auth Vertex : en serverless (Vercel) on passe les creds du service account ;
+// sinon ADC (gcloud / metadata) prend le relais.
+const googleAuthOptions =
+  process.env.FIREBASE_ADMIN_CLIENT_EMAIL && process.env.FIREBASE_ADMIN_PRIVATE_KEY
+    ? {
+        credentials: {
+          client_email: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+          private_key: process.env.FIREBASE_ADMIN_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        },
+      }
+    : undefined;
 
 /**
- * Helper to call Vertex AI models with structured output.
- * We enforce JSON responses and validate them using Zod on the caller side.
+ * Endpoint Vertex. ⚠️ `global` est REQUIS pour les modèles récents (gemini-3.x) :
+ * sur une région (europe-west1, us-central1) seuls les 2.5 répondent (les 3.x => 404).
+ * `gemini-3.5-flash` (le modèle d'origine de l'app) ne marche QUE via `global`.
+ * Compromis : `global` ne garantit pas la résidence des données en UE (mais c'était
+ * déjà le cas via l'API Gemini/AI Studio). Override : VERTEX_LLM_LOCATION.
  */
-export const getGenerativeModelWithJSON = (modelName: string) => {
-  return vertexAI.getGenerativeModel({
-    model: modelName,
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-    },
-  });
-};
+const VERTEX_LOCATION = process.env.VERTEX_LLM_LOCATION || 'global';
+
+/**
+ * Client Vertex AI via le SDK MODERNE @google/genai (mode vertexai). L'ancien
+ * @google-cloud/vertexai est déprécié (EOL 2026-06) et ne gère pas `global`.
+ * Facturé sur le projet GCP → consomme les crédits Google Cloud.
+ */
+const vertexGenAI = new GoogleGenAI({ vertexai: true, project, location: VERTEX_LOCATION, googleAuthOptions });
 
 interface GenerateOptions {
   model?: string;
@@ -138,16 +116,12 @@ export interface GenerateTextResult {
 }
 
 /**
- * Variante de generateText qui retourne aussi les tokens consommés.
- * Utilisée par le système multi-agent pour cost tracking par session
- * (cf. lib/vertex/agents/). Comportement identique sinon.
+ * Modèle côté Vertex AI. Par défaut `gemini-3.5-flash` (le modèle d'origine de
+ * l'app), disponible sur Vertex via l'endpoint `global` (cf. VERTEX_LOCATION).
+ * ⚠️ Sur une RÉGION (europe-west1…) il faut `gemini-2.5-flash` (les 3.x => 404).
+ * Override : VERTEX_AI_MODEL (ex: `gemini-3.1-pro-preview` pour + de qualité).
  */
-/**
- * Modèle utilisé côté Vertex AI. ⚠️ `gemini-3.5-flash` N'EXISTE PAS sur Vertex
- * (404 Publisher Model) — c'est un nom propre à l'API Gemini/AI Studio. Sur
- * Vertex le modèle disponible est `gemini-2.5-flash`. Override : VERTEX_AI_MODEL.
- */
-const VERTEX_MODEL = process.env.VERTEX_AI_MODEL || 'gemini-2.5-flash';
+const VERTEX_MODEL = process.env.VERTEX_AI_MODEL || 'gemini-3.5-flash';
 const DEV_API_MODEL_DEFAULT = 'gemini-3.5-flash';
 
 /**
@@ -177,10 +151,19 @@ function isFailoverError(err: unknown): boolean {
   );
 }
 
-async function callGeminiApiOnce(options: GenerateOptions): Promise<GenerateTextResult> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const response = await withRetry(() => ai.models.generateContent({
-    model: options.model || DEV_API_MODEL_DEFAULT,
+/** Client Gemini/AI Studio (clé API) — créé à la volée (la clé peut être absente). */
+function geminiApiClient(): GoogleGenAI {
+  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+}
+
+/** Appel unifié : même SDK @google/genai pour Vertex (vertexai mode) et clé API. */
+async function callGenAI(
+  client: GoogleGenAI,
+  model: string,
+  options: GenerateOptions,
+): Promise<GenerateTextResult> {
+  const response = await withRetry(() => client.models.generateContent({
+    model,
     contents: options.contents,
     config: {
       temperature: options.temperature ?? 0.3,
@@ -200,26 +183,11 @@ async function callGeminiApiOnce(options: GenerateOptions): Promise<GenerateText
   };
 }
 
-async function callVertexOnce(options: GenerateOptions): Promise<GenerateTextResult> {
-  const model = vertexAI.getGenerativeModel({
-    model: VERTEX_MODEL,
-    generationConfig: {
-      temperature: options.temperature ?? 0.3,
-      responseMimeType: options.responseMimeType,
-      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-      ...(options.responseSchema ? { responseSchema: options.responseSchema as any } : {}),
-    },
-    systemInstruction: options.systemInstruction
-      ? { role: 'system', parts: [{ text: options.systemInstruction }] }
-      : undefined,
-  });
-  const response = await withRetry(() => model.generateContent({ contents: options.contents }), options.signal);
-  const responseResult = response.response;
-  const usage = (responseResult as any).usageMetadata ?? {};
-  return {
-    text: responseResult.candidates?.[0]?.content?.parts?.[0]?.text || '',
-    tokens: { input: usage.promptTokenCount ?? 0, output: usage.candidatesTokenCount ?? 0 },
-  };
+function callVertexOnce(options: GenerateOptions): Promise<GenerateTextResult> {
+  return callGenAI(vertexGenAI, VERTEX_MODEL, options);
+}
+function callGeminiApiOnce(options: GenerateOptions): Promise<GenerateTextResult> {
+  return callGenAI(geminiApiClient(), options.model || DEV_API_MODEL_DEFAULT, options);
 }
 
 export async function generateTextWithUsage(options: GenerateOptions): Promise<GenerateTextResult> {
@@ -265,10 +233,13 @@ export function parseLLMJson<T = unknown>(raw: string): T {
   }
 }
 
-async function* streamGeminiApi(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const stream = await ai.models.generateContentStream({
-    model: options.model || DEV_API_MODEL_DEFAULT,
+async function* streamGenAI(
+  client: GoogleGenAI,
+  model: string,
+  options: GenerateOptions,
+): AsyncGenerator<string, void, unknown> {
+  const stream = await client.models.generateContentStream({
+    model,
     contents: options.contents,
     config: {
       temperature: options.temperature ?? 0.3,
@@ -287,24 +258,11 @@ async function* streamGeminiApi(options: GenerateOptions): AsyncGenerator<string
   }
 }
 
-async function* streamVertex(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
-  const model = vertexAI.getGenerativeModel({
-    model: VERTEX_MODEL,
-    generationConfig: {
-      temperature: options.temperature ?? 0.3,
-      responseMimeType: options.responseMimeType,
-      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-    },
-    systemInstruction: options.systemInstruction
-      ? { role: 'system', parts: [{ text: options.systemInstruction }] }
-      : undefined,
-  });
-  const streamingResult = await model.generateContentStream({ contents: options.contents });
-  for await (const item of streamingResult.stream) {
-    if (options.signal?.aborted) return;
-    const text = item.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (text) yield text;
-  }
+function streamVertex(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
+  return streamGenAI(vertexGenAI, VERTEX_MODEL, options);
+}
+function streamGeminiApi(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
+  return streamGenAI(geminiApiClient(), options.model || DEV_API_MODEL_DEFAULT, options);
 }
 
 export async function* generateTextStream(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
