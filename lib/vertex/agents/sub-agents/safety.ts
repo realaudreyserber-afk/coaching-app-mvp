@@ -21,7 +21,7 @@ import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
-import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -37,7 +37,7 @@ export class SafetyCoach extends BaseAgent {
 
     // Profile flags
     try {
-      const profile = await getUserProfileSnapshot(input.uid);
+      const profile = await resolveProfileSnapshot(input);
       ctx.profile_flags = {
         age: profile.age,
         is_minor: typeof profile.age === 'number' && profile.age < 18,

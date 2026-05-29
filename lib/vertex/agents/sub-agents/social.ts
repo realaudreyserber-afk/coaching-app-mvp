@@ -9,7 +9,7 @@
 import 'server-only';
 import { BaseAgent } from './base';
 import { SOCIAL_SYSTEM_PROMPT } from '../../prompts/agents/social';
-import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class SocialCoach extends BaseAgent {
@@ -21,7 +21,7 @@ export class SocialCoach extends BaseAgent {
     const ctx: Record<string, unknown> = {};
 
     try {
-      const profile = await getUserProfileSnapshot(input.uid);
+      const profile = await resolveProfileSnapshot(input);
       ctx.profile = {
         household: profile.household,
         work_context: profile.work_context,

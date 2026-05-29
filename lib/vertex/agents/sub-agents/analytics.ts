@@ -20,7 +20,8 @@ import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getProgressPhotosSnapshot } from '@/lib/features/progress-photos/store';
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
-import { getUserProfileSnapshot, type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
+import { type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -38,7 +39,7 @@ export class AnalyticsCoach extends BaseAgent {
 
     let profile: NormalizedProfile | null = null;
     try {
-      profile = await getUserProfileSnapshot(input.uid);
+      profile = await resolveProfileSnapshot(input);
     } catch (e) {
       console.warn('[analytics-agent] profile fetch failed:', e);
     }

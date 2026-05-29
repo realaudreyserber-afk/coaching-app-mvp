@@ -16,6 +16,8 @@
  * Le Supervisor agrège ces outputs en une seule réponse texte pour l'user.
  */
 
+import type { NormalizedProfile } from '@/lib/features/user-profile/snapshot';
+
 /**
  * Identifiant canonique des sous-agents. Le Supervisor utilise ces noms
  * pour router. Ajouter une nouvelle valeur ici impose d'implémenter
@@ -78,6 +80,13 @@ export interface AgentInput {
   recent_chat?: Array<{ role: 'user' | 'assistant'; content: string }>;
   /** Mémoire partagée de la session courante (read-only ici) */
   shared_memory?: SharedSessionMemory;
+  /**
+   * Profil normalisé préchargé UNE fois par le Supervisor (évite le N+1 :
+   * chaque sous-agent re-fetchait le même doc Firestore). Transient — NON
+   * persisté dans le SessionRecord. Lire via resolveProfileSnapshot(input),
+   * qui retombe sur un fetch direct si absent (tests / appel hors superviseur).
+   */
+  profile?: NormalizedProfile | null;
 }
 
 /**

@@ -19,7 +19,7 @@ import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getFavoriteRecipesSnapshot } from '@/lib/features/favorite-recipes/store';
 import { getShoppingListsSnapshot } from '@/lib/features/shopping-lists/store';
-import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -35,7 +35,7 @@ export class NutritionCoach extends BaseAgent {
     let isFemale = false;
     let profile: any = null;
     try {
-      profile = await getUserProfileSnapshot(input.uid);
+      profile = await resolveProfileSnapshot(input);
       ctx.profile = {
         objective: profile.objective,
         weight_kg: profile.weight_kg,

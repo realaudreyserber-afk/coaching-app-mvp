@@ -21,7 +21,8 @@ import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
-import { getUserProfileSnapshot, type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
+import { type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class MentalCoach extends BaseAgent {
@@ -35,7 +36,7 @@ export class MentalCoach extends BaseAgent {
 
     let profile: NormalizedProfile | null = null;
     try {
-      profile = await getUserProfileSnapshot(input.uid);
+      profile = await resolveProfileSnapshot(input);
     } catch (e) {
       console.warn('[mental-agent] profile fetch failed:', e);
     }

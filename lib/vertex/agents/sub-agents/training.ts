@@ -18,7 +18,7 @@ import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
-import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 import type { ProfileForRag } from '@/lib/features/rag-coach/context';
 
@@ -35,7 +35,7 @@ export class TrainingCoach extends BaseAgent {
     let profileForRag: ProfileForRag | undefined;
     let isFemale = false;
     try {
-      const profile = await getUserProfileSnapshot(input.uid);
+      const profile = await resolveProfileSnapshot(input);
       ctx.profile = {
         objective: profile.objective,
         level: profile.training_level,

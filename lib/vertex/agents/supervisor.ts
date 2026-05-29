@@ -23,6 +23,10 @@ import { getSubAgent } from './sub-agents';
 import { persistSessionRecord, estimateCostUsd } from './shared-memory';
 import { generateSessionId, tracer } from './tracing';
 import {
+  getUserProfileSnapshot,
+  type NormalizedProfile,
+} from '@/lib/features/user-profile/snapshot';
+import {
   AGENT_SCHEMA_VERSION,
   createEmptySharedMemory,
   isValidSubAgentName,
@@ -140,6 +144,18 @@ export async function runAgentSession(
       return finalize();
     }
 
+    // Anti-N+1 : le profil est chargé UNE fois ici (au lieu d'être re-fetch par
+    // chaque sous-agent), puis injecté dans chaque AgentInput. Les agents le
+    // lisent via resolveProfileSnapshot(). Best-effort : si le chargement échoue,
+    // chaque agent retombe sur son fetch individuel (fallback = comportement legacy).
+    // Placé après les early-returns (skip / 0 agent) → pas de lecture inutile.
+    let preloadedProfile: NormalizedProfile | null = null;
+    try {
+      preloadedProfile = await getUserProfileSnapshot(input.uid);
+    } catch (e) {
+      trace.supervisor('profile_preload_failed', 'warn', { err: String(e) });
+    }
+
     const runs = await Promise.all(
       validAgents.map(async ({ name, reason_for_consult }) => {
         safeEmit(input.onPhase, { type: 'agent_start', agent: name, reason: reason_for_consult });
@@ -150,6 +166,7 @@ export async function runAgentSession(
           reason_for_consult,
           recent_chat: input.recent_chat,
           shared_memory: sharedMemory,
+          profile: preloadedProfile,
         };
         const agent = getSubAgent(name);
         const output = await agent.run(agentInput, sharedMemory);

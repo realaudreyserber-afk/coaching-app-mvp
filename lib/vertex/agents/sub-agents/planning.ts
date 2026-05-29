@@ -19,7 +19,7 @@ import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
-import { getUserProfileSnapshot } from '@/lib/features/user-profile/snapshot';
+import { resolveProfileSnapshot } from '../profile-cache';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -38,7 +38,7 @@ export class PlanningCoach extends BaseAgent {
     let isFemale = false;
     let profile: any = null;
     try {
-      profile = await getUserProfileSnapshot(input.uid);
+      profile = await resolveProfileSnapshot(input);
       ctx.profile = {
         objective: profile.objective,
         training_seniority_years: profile.training_seniority_years ?? profile.training_level,
