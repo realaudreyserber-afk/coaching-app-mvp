@@ -6,7 +6,7 @@ import { generateText, generateTextStream } from '@/lib/vertex/client';
 import { COACH_SYSTEM_PROMPT } from '@/lib/vertex/prompts/coach';
 import { runSafetyCheck } from '@/lib/vertex/safety';
 import { serverHasAccess } from '@/lib/stripe/subscription';
-import { flags } from '@/lib/features/flags';
+import { getServerFlag } from '@/lib/features/flags-server';
 import { searchScientificCorpus, SearchResult } from '@/lib/features/rag-sourcing/client';
 import { buildRAGPrompt } from '@/lib/features/rag-sourcing/prompts';
 import { PROFILE_PATH_COACH_INSTRUCTIONS } from '@/lib/features/profile-paths/prompts';
@@ -103,11 +103,23 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Feature flags résolus côté SERVEUR (Remote Config + fallback env). Avant,
+      // la route importait le resolver CLIENT -> Remote Config sans aucun effet en
+      // prod (audit 2026-05-29). Résolus une fois ici (chemin legacy uniquement :
+      // le backend multi-agent est déjà sorti en return plus haut).
+      const [fRag, fBloodwork, fProfilePaths, fGlp1, fFasting] = await Promise.all([
+        getServerFlag('rag_sourcing'),
+        getServerFlag('bloodwork_upload'),
+        getServerFlag('profile_paths'),
+        getServerFlag('glp1'),
+        getServerFlag('fasting'),
+      ]);
+
       // 2. Perform RAG Sourcing if flag is active
       let searchResults: SearchResult[] = [];
       let augmentedUserMessage = lastMessageText;
 
-      if (flags.ragSourcing() && lastMessageText.trim().length > 5) {
+      if (fRag && lastMessageText.trim().length > 5) {
         try {
           // Extract keywords for scientific search using Gemini Flash
           const extractPrompt = `
@@ -172,7 +184,7 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
 
       // 4. Fetch bloodwork details if flag is active
       let bloodwork: Record<string, unknown> | undefined;
-      if (flags.bloodworkUpload()) {
+      if (fBloodwork) {
         try {
           const bloodworkSnap = await userRef
             .collection('bloodwork')
@@ -217,10 +229,10 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
       const enriched = buildEnrichedSystemPrompt(COACH_SYSTEM_PROMPT, ctx, {
         includeProfile: true,
         includeActivePlan: true,
-        includeProfilePath: flags.profilePaths(),
-        includeGlp1: flags.glp1(),
-        includeFasting: flags.fasting(),
-        includeBloodwork: flags.bloodworkUpload(),
+        includeProfilePath: fProfilePaths,
+        includeGlp1: fGlp1,
+        includeFasting: fFasting,
+        includeBloodwork: fBloodwork,
         includeRag: searchResults.length > 0,
         includeNotification: false,
       });
@@ -229,7 +241,7 @@ Return ONLY the English terms separated by spaces. No other text or punctuation.
       // (buildEnrichedSystemPrompt only injects a short marker; the long
       // instruction text lives in PROFILE_PATH_COACH_INSTRUCTIONS.)
       let profilePathInstruction = '';
-      if (flags.profilePaths()) {
+      if (fProfilePaths) {
         const profilePath = (userData.profile_path || 'standard') as ProfilePath;
         const pathCoachInst = PROFILE_PATH_COACH_INSTRUCTIONS[profilePath];
         if (pathCoachInst) {
