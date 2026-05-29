@@ -23,9 +23,10 @@ import { getHabitsSnapshot } from '@/lib/features/habits/store';
 import { type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
 import { resolveProfileSnapshot } from '../profile-cache';
 import { fetchScientificSources } from '../scientific-context';
+import { computeWeightTrend } from '@/lib/features/analytics/weight-trend';
 import type { AgentInput, SubAgentName } from '../types';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export class AnalyticsCoach extends BaseAgent {
   readonly name: SubAgentName = 'analytics';
@@ -36,7 +37,7 @@ export class AnalyticsCoach extends BaseAgent {
     const ctx: Record<string, unknown> = {};
     const userRef = adminDb.collection('users').doc(input.uid);
     const nowIso = new Date().toISOString();
-    const sevenDaysAgoIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+    const thirtyDaysAgoIso = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
 
     let profile: NormalizedProfile | null = null;
     try {
@@ -45,26 +46,31 @@ export class AnalyticsCoach extends BaseAgent {
       console.warn('[analytics-agent] profile fetch failed:', e);
     }
 
-    // checkin_7day_history
+    // Check-ins : fenêtre étendue (~90j) pour les diagnostics multi-semaines
+    // (plateau > 3 sem, recalibrage TDEE). On garde un DÉTAIL 7j + un
+    // weight_trend calculé serveur. Avant : 7j seul → plateau/TDEE impossibles
+    // (audit 2026-05-29, critical).
     try {
       const snap = await userRef
         .collection('checkins_daily')
         .orderBy('date', 'desc')
-        .limit(7)
+        .limit(90)
         .get();
-      ctx.checkin_7day_history = snap.docs
-        .map((d) => {
-          const data = d.data();
-          return {
-            date: data.date,
-            weight: data.weight,
-            energy: data.energy,
-            mood: data.mood,
-            sleep_hours: data.sleep_hours,
-            hunger: data.hunger,
-          };
-        })
-        .reverse();
+      const all = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          date: data.date,
+          weight: data.weight,
+          energy: data.energy,
+          mood: data.mood,
+          sleep_hours: data.sleep_hours,
+          hunger: data.hunger,
+        };
+      });
+      ctx.checkin_7day_history = all.slice(0, 7).reverse();
+      ctx.weight_trend = computeWeightTrend(
+        all.map((c) => ({ date: c.date, weight: c.weight })),
+      );
     } catch (e) {
       console.warn('[analytics-agent] checkins fetch failed:', e);
     }
@@ -207,11 +213,12 @@ export class AnalyticsCoach extends BaseAgent {
       console.warn('[analytics-agent] habits fetch failed:', e);
     }
 
-    // food_logs_summary 7 derniers jours (cumul jour par jour)
+    // food_logs : 30 jours (cumul jour par jour) — l'adherence d'un plateau ne
+    // se juge pas sur 7j (audit 2026-05-29).
     try {
       const snap = await userRef
         .collection('food_logs')
-        .where('logged_at', '>=', sevenDaysAgoIso)
+        .where('logged_at', '>=', thirtyDaysAgoIso)
         .where('logged_at', '<', nowIso)
         .get();
       const byDay: Record<string, { kcal: number; count: number }> = {};
@@ -223,7 +230,7 @@ export class AnalyticsCoach extends BaseAgent {
         byDay[day].kcal += data.totals?.kcal ?? 0;
         byDay[day].count += 1;
       });
-      ctx.food_logs_7day_summary = Object.entries(byDay)
+      ctx.food_logs_30day_summary = Object.entries(byDay)
         .sort(([a], [b]) => (a < b ? -1 : 1))
         .map(([date, v]) => ({ date, kcal: v.kcal, entries: v.count }));
     } catch (e) {
