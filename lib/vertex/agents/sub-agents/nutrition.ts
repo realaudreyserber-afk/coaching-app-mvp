@@ -12,13 +12,12 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { NUTRITION_SYSTEM_PROMPT } from '../../prompts/agents/nutrition';
-import { searchNutritionGuides } from '@/lib/features/rag-sourcing/internal-corpus';
+import { searchNutritionGuides, getProtocolForUser } from '@/lib/features/rag-sourcing/internal-corpus';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
-import { getFavoriteRecipesSnapshot } from '@/lib/features/favorite-recipes/store';
-import { getShoppingListsSnapshot } from '@/lib/features/shopping-lists/store';
+import { getFastingState } from '@/lib/features/fasting/fasting-util';
 import { resolveProfileSnapshot } from '../profile-cache';
 import { fetchScientificSources } from '../scientific-context';
 import type { AgentInput, SubAgentName } from '../types';
@@ -175,20 +174,29 @@ export class NutritionCoach extends BaseAgent {
       console.warn('[nutrition-agent] cravings fetch failed:', e);
     }
 
-    // Favorite recipes — Phase 12 (suggérer en priorité ce que l'user aime)
+    // Audit 2026-05-29 : favorite_recipes + shopping_lists retirés — ils étaient
+    // fetchés mais renvoyaient des IDs opaques inexploitables (jamais référencés
+    // par le prompt). Coût Firestore + tokens sans valeur.
+
+    // Protocole sèche seedé (référence par tranche de poids) — ancre les recos
+    // quand l'objectif est une perte. Null si la collection n'est pas seedée.
     try {
-      const favRecipes = await getFavoriteRecipesSnapshot(input.uid);
-      if (favRecipes) ctx.favorite_recipes = favRecipes;
+      if (profile?.objective === 'lose_weight' && typeof profile.weight_kg === 'number') {
+        const proto = await getProtocolForUser(profile.weight_kg, 1);
+        if (proto) ctx.cut_protocol_reference = proto;
+      }
     } catch (e) {
-      console.warn('[nutrition-agent] favorite_recipes fetch failed:', e);
+      console.warn('[nutrition-agent] cut protocol fetch failed:', e);
     }
 
-    // Shopping lists — Phase 13 (état liste active)
+    // Jeûne intermittent — état de la fenêtre courante si un protocole est actif.
+    // Le jeûne est dans le scope nutrition mais n'était jamais lu (audit 2026-05-29).
     try {
-      const shopping = await getShoppingListsSnapshot(input.uid);
-      if (shopping) ctx.shopping_lists = shopping;
+      const userSnap = await userRef.get();
+      const fp = userSnap.data()?.fasting_protocol;
+      if (fp?.active) ctx.fasting = getFastingState(fp);
     } catch (e) {
-      console.warn('[nutrition-agent] shopping_lists fetch failed:', e);
+      console.warn('[nutrition-agent] fasting fetch failed:', e);
     }
 
     // Sources scientifiques réelles pour grounder les citations (Helms, Phillips,
