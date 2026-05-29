@@ -13,7 +13,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
-import { buildCoachRagFragment } from '@/lib/features/rag-coach/context';
+import { buildCoachRagFragment, buildProfileForRag } from '@/lib/features/rag-coach/context';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
@@ -47,10 +47,9 @@ export class TrainingCoach extends BaseAgent {
         // Audit #4/#5 : section "Sous TRT" du prompt conditionnée à ce champ.
         hormonal_context: profile.hormonal_context,
       };
-      profileForRag = {
-        level: profile.training_level,
-        equipment: profile.equipment,
-      } as ProfileForRag;
+      // Audit 2026-05-29 : mapping centralisé + typé (avant : { level, equipment }
+      // via cast `as ProfileForRag` qui annulait le filtre niveau ET équipement).
+      profileForRag = buildProfileForRag(profile);
       isFemale = profile.sex === 'female';
     } catch (e) {
       console.warn('[training-agent] profile fetch failed:', e);
@@ -147,6 +146,16 @@ export class TrainingCoach extends BaseAgent {
       if (hrv) ctx.hrv = hrv;
     } catch (e) {
       console.warn('[training-agent] hrv fetch failed:', e);
+    }
+
+    // Personal records — progression force (1RM, deltas 90j). La section
+    // PERSONAL RECORDS du prompt en dépend ; l'import getPrsSnapshot était
+    // présent mais jamais appelé (ctx.prs jamais peuplé) — audit 2026-05-29.
+    try {
+      const prs = await getPrsSnapshot(input.uid);
+      if (prs) ctx.prs = prs;
+    } catch (e) {
+      console.warn('[training-agent] prs fetch failed:', e);
     }
 
     return ctx;

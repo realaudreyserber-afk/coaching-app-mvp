@@ -6,6 +6,7 @@
  */
 
 import type { TrainingEnvironment } from "@/types/user";
+import type { NormalizedProfile } from "@/lib/features/user-profile/snapshot";
 import {
   retrieveExercises,
   retrieveMethods,
@@ -79,6 +80,28 @@ export interface ProfileForRag {
   training_history?: string;
   training_environment?: TrainingEnvironment;
   available_equipment?: string[];
+}
+
+/**
+ * Mappe le profil normalisé unifié (NormalizedProfile) vers la forme attendue
+ * par le RAG exos. Centralisé pour que TOUS les appelants (sous-agent training,
+ * routes coach/generate-plan) filtrent par niveau + équipement de façon
+ * identique.
+ *
+ * Remplace l'ancien mapping inline `{ level, equipment } as ProfileForRag` qui,
+ * via le cast `as`, masquait des noms de champs erronés (level/equipment au lieu
+ * de training_history/available_equipment) → levelFromProfile retombait TOUJOURS
+ * sur 'intermediaire' et equipmentFromProfile renvoyait TOUJOURS undefined :
+ * filtres niveau ET équipement morts pour 100% des users (audit 2026-05-29).
+ * Pas de cast large ici → TypeScript vérifie les noms de champs.
+ */
+export function buildProfileForRag(profile: NormalizedProfile): ProfileForRag {
+  return {
+    training_history: profile.training_level ?? undefined,
+    training_environment:
+      (profile.training_environment ?? undefined) as TrainingEnvironment | undefined,
+    available_equipment: profile.equipment ?? undefined,
+  };
 }
 
 export function levelFromProfile(profile: ProfileForRag | undefined): "debutant" | "intermediaire" | "avance" {
