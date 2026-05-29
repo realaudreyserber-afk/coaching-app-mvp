@@ -74,7 +74,11 @@ export interface ExerciseFilter {
   maxLevel?: ExerciseLevel;
   /** Famille : push / pull / squat / hinge / core / autres (match exact). */
   family?: string;
-  /** Slugs d'équipement disponibles ; le poids du corps ("aucun") est toujours autorisé. */
+  /**
+   * Slugs d'équipement disponibles ; le poids du corps ("aucun") est toujours
+   * autorisé. `undefined` = aucun filtre matériel (tout) ; `[]` = POIDS DU CORPS
+   * uniquement (user sans matériel / sans salle).
+   */
   equipment?: string[];
   /** Muscle cible (slug FR : fessiers, quadriceps, dos…) — match partiel. */
   muscle?: string;
@@ -90,8 +94,9 @@ export interface ExerciseFilter {
 export function searchExercises(filter: ExerciseFilter = {}, limit = 12): Exercise[] {
   const maxLvl = filter.maxLevel ? LEVEL_ORDER[filter.maxLevel] : 3;
   const family = filter.family ? norm(filter.family) : null;
-  const equip =
-    filter.equipment && filter.equipment.length ? new Set(filter.equipment.map(norm)) : null;
+  // Présence du tableau (même vide) => on filtre. [] => seul "aucun" passe
+  // (poids du corps uniquement). undefined => aucun filtre.
+  const equip = filter.equipment ? new Set(filter.equipment.map(norm)) : null;
   const muscle = filter.muscle ? norm(filter.muscle) : null;
   const pattern = filter.pattern ? norm(filter.pattern) : null;
 

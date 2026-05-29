@@ -207,10 +207,15 @@ export class TrainingCoach extends BaseAgent {
       for (const k of Object.keys(MUSCLES)) if (msg.includes(k)) { muscle = MUSCLES[k]; break; }
       let family: string | undefined;
       for (const k of Object.keys(FAMILIES)) if (msg.includes(k)) { family = FAMILIES[k]; break; }
-      const opts = searchExercises(
-        { maxLevel, family, equipment: profileForRag?.available_equipment, muscle },
-        10,
-      );
+      // "sans salle / à la maison / poids du corps / voyage" => pool poids du
+      // corps uniquement ([] = aucun matériel), sinon on respecte le matériel
+      // déclaré au profil. (Sert le besoin "sans salle de sport".)
+      const noGym =
+        /poids du corps|a la maison|à la maison|sans salle|pas de salle|chez moi|en voyage|sans materiel|sans matériel|sans equipement|sans équipement/.test(
+          msg,
+        );
+      const equipFilter = noGym ? [] : profileForRag?.available_equipment;
+      const opts = searchExercises({ maxLevel, family, equipment: equipFilter, muscle }, 10);
       if (opts.length > 0) {
         ctx.exercise_library = opts.map((e) => ({
           name_fr: e.name_fr,

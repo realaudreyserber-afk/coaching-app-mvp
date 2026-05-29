@@ -45,6 +45,17 @@ describe('exercise-db (Functional Fitness v2.9)', () => {
     expect(squat.every((e) => e.family === 'squat')).toBe(true);
   });
 
+  it('équipement [] (sans matériel) -> poids du corps UNIQUEMENT', () => {
+    const bw = searchExercises({ equipment: [] }, 40);
+    expect(bw.length).toBeGreaterThan(0);
+    expect(bw.every((e) => e.equipment === 'aucun')).toBe(true);
+  });
+
+  it('équipement undefined -> aucun filtre (inclut du matériel)', () => {
+    const all = searchExercises({}, 60);
+    expect(all.some((e) => e.equipment && e.equipment !== 'aucun')).toBe(true);
+  });
+
   it('expose des liens démo vidéo (demo_url)', () => {
     const withDemo = searchExercises({}, 200).filter((e) => e.demo_url);
     expect(withDemo.length).toBeGreaterThan(0);
