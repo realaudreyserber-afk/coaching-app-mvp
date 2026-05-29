@@ -173,6 +173,14 @@ export interface CycleSnapshot {
   last_period_start: string | null;
   /** Sous contraception hormonale (auquel cas phase est moins parlante) */
   on_hormonal_contraception: boolean;
+  /** Jours depuis le début de la dernière période (null si inconnu) */
+  days_since_last_period: number | null;
+  /**
+   * Aménorrhée suspectée : > 3 cycles sans règles ET pas sous contraception
+   * hormonale. Signal santé sérieux (REDS) — à DÉLÉGUER à safety, jamais conclure.
+   * Avant (audit 2026-05-29), ce signal reposait sur une inférence côté LLM.
+   */
+  amenorrhea_suspected: boolean;
 }
 
 export async function getCycleSnapshot(uid: string): Promise<CycleSnapshot | null> {
@@ -192,6 +200,7 @@ export async function getCycleSnapshot(uid: string): Promise<CycleSnapshot | nul
 
     let current_phase: CyclePhase | null = null;
     let day_in_cycle: number | null = null;
+    let days_since_last_period: number | null = null;
     if (lastPeriodStart) {
       current_phase = computeCyclePhase(todayIso, lastPeriodStart, avgCycle, avgPeriod);
       const dayDiff = Math.floor(
@@ -199,6 +208,7 @@ export async function getCycleSnapshot(uid: string): Promise<CycleSnapshot | nul
           (24 * 60 * 60 * 1000),
       );
       day_in_cycle = dayDiff % avgCycle;
+      days_since_last_period = dayDiff;
     }
 
     // Override avec entry du jour si explicitement marqué (non predicted)
@@ -221,6 +231,11 @@ export async function getCycleSnapshot(uid: string): Promise<CycleSnapshot | nul
       symptoms_last_7day,
       last_period_start: lastPeriodStart,
       on_hormonal_contraception: settings?.hormonal_contraception?.active ?? false,
+      days_since_last_period,
+      amenorrhea_suspected:
+        !(settings?.hormonal_contraception?.active ?? false) &&
+        days_since_last_period !== null &&
+        days_since_last_period > avgCycle * 3,
     };
   } catch (e) {
     console.warn('[cycle/store] getCycleSnapshot failed:', e);

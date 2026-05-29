@@ -9,6 +9,14 @@ export interface NormalizedProfile {
   weight_kg: number | null;
   height_cm: number | null;
   target_weight_kg: number | null;
+  /**
+   * Audit 2026-05-29 : composition corporelle partagée à tous les agents pour
+   * une base de calcul protéines COMMUNE (nutrition/training/planning divergeaient
+   * : poids cible vs poids actuel vs LBM). `body_fat_pct` = baseline.bf_pct si
+   * mesuré ; `lbm_kg` dérivé (poids × (1 − bf%)). null si non mesuré.
+   */
+  body_fat_pct: number | null;
+  lbm_kg: number | null;
   activity_level: string | null;
   dietary_restrictions: string[] | null;
   dietary_preferences: string[] | null;
@@ -79,6 +87,12 @@ export async function getUserProfileSnapshot(uid: string): Promise<NormalizedPro
   // Weight fallback chain
   const weight_kg = profile.weight ?? baseline.weight ?? null;
   const height_cm = profile.height ?? null;
+  const body_fat_pct =
+    typeof baseline.bf_pct === 'number' ? baseline.bf_pct : null;
+  const lbm_kg =
+    typeof weight_kg === 'number' && body_fat_pct !== null
+      ? Math.round(weight_kg * (1 - body_fat_pct / 100) * 10) / 10
+      : null;
 
   return {
     uid,
@@ -89,6 +103,8 @@ export async function getUserProfileSnapshot(uid: string): Promise<NormalizedPro
     weight_kg,
     height_cm,
     target_weight_kg: goals.target_weight ?? null,
+    body_fat_pct,
+    lbm_kg,
     activity_level: profile.activity_level ?? null,
     dietary_restrictions: profile.dietary_restrictions ?? null,
     dietary_preferences: profile.dietary_preferences ?? null,

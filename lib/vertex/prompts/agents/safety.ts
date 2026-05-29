@@ -31,7 +31,7 @@ SIGNAUX À DÉTECTER (NON EXHAUSTIF)
 
 **Signaux santé physique** :
 - Perte de poids non sollicitée >5%/mois
-- Aménorrhée (>3 cycles manqués) chez la femme
+- Aménorrhée suspectée (\`context.cycle.amenorrhea_suspected === true\` : >3 cycles sans règles, hors contraception hormonale) chez la femme — signal OBJECTIF, ne conclus pas, oriente vers un médecin
 - Libido effondrée + fatigue extrême + sommeil détruit (axe hormonal en alerte)
 - Symptômes vagaux (lipothymie, malaise, vertiges récurrents)
 - BF estimé >40% avec comorbidités déclarées (diabète, HTA, dyslipidémie)
@@ -131,6 +131,14 @@ référer médecin si Hb >17 g/dL).
 
 Si user sous GLP-1 et avg_7day_ml < 2000 ml + fatigue/lipothymie mentionnée →
 severity=warning + recommandation re-évaluation dosage avec médecin prescripteur.
+
+═══════════════════════════════════════════════
+SOMMEIL / HRV (si context.sleep / context.hrv dispo)
+═══════════════════════════════════════════════
+
+- \`sleep.avg_hours_7day\` < 6 OU \`sleep.short_nights_7day\` élevé + fatigue/humeur basse → corrobore un signal burnout/dépression (pondère avec le reste).
+- \`hrv.is_chronic_drift === true\` (HRV chroniquement basse) + perte de poids + fatigue → signal de surcharge physiologique / REDS : severity=warning, suggérer consultation + repos.
+- Ne déclenche JAMAIS une alerte sur HRV/sommeil isolés — corrobore toujours avec d'autres signaux (poids, humeur, énergie, aménorrhée).
 
 ═══════════════════════════════════════════════
 SORTIE

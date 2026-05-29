@@ -16,6 +16,7 @@ import 'server-only';
 import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { SAFETY_SYSTEM_PROMPT } from '../../prompts/agents/safety';
+import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
@@ -34,10 +35,12 @@ export class SafetyCoach extends BaseAgent {
   protected async fetchContext(input: AgentInput): Promise<Record<string, unknown>> {
     const ctx: Record<string, unknown> = {};
     const userRef = adminDb.collection('users').doc(input.uid);
+    let isFemale = false;
 
     // Profile flags
     try {
       const profile = await resolveProfileSnapshot(input);
+      isFemale = profile.sex === 'female';
       ctx.profile_flags = {
         age: profile.age,
         is_minor: typeof profile.age === 'number' && profile.age < 18,
@@ -149,6 +152,24 @@ export class SafetyCoach extends BaseAgent {
       if (lifeEvents) ctx.life_events = lifeEvents;
     } catch (e) {
       console.warn('[safety-agent] life_events fetch failed:', e);
+    }
+
+    // Cycle — détection OBJECTIVE d'aménorrhée (signal REDS) sans inférence LLM
+    // (audit 2026-05-29 : avant, le signal aménorrhée n'avait aucune donnée source).
+    if (isFemale) {
+      try {
+        const cycle = await getCycleSnapshot(input.uid);
+        if (cycle) {
+          ctx.cycle = {
+            current_phase: cycle.current_phase,
+            on_hormonal_contraception: cycle.on_hormonal_contraception,
+            days_since_last_period: cycle.days_since_last_period,
+            amenorrhea_suspected: cycle.amenorrhea_suspected,
+          };
+        }
+      } catch (e) {
+        console.warn('[safety-agent] cycle fetch failed:', e);
+      }
     }
 
     // Sleep + HRV — Phases 14+15 (signaux burnout/dépression)
