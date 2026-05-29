@@ -42,6 +42,8 @@ function toFood(r: RawFood): FoodComposition {
 function normalize(s: string): string {
   return s
     .toLowerCase()
+    .replace(/œ/g, 'oe') // ligatures FR (œuf, bœuf, cœur…)
+    .replace(/æ/g, 'ae')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // diacritiques combinants
     .replace(/[^a-z0-9\s]/g, ' ')

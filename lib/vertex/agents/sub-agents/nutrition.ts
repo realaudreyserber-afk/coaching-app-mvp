@@ -20,6 +20,7 @@ import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getFastingState } from '@/lib/features/fasting/fasting-util';
 import { resolveProfileSnapshot } from '../profile-cache';
 import { fetchScientificSources } from '../scientific-context';
+import { analyzeMicronutrientIntake } from '@/lib/features/micronutrients/intake-analysis';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -197,6 +198,35 @@ export class NutritionCoach extends BaseAgent {
       if (fp?.active) ctx.fasting = getFastingState(fp);
     } catch (e) {
       console.warn('[nutrition-agent] fasting fetch failed:', e);
+    }
+
+    // Micronutriments : estime les apports sur ~14j (table CIQUAL) vs cibles
+    // sportives. analyzeMicronutrientIntake n'affirme RIEN si les logs sont trop
+    // partiels (garde-fou anti-fausse-carence). Débloque la détection réelle.
+    try {
+      const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const snap = await userRef
+        .collection('food_logs')
+        .where('logged_at', '>=', since)
+        .orderBy('logged_at', 'desc')
+        .limit(150)
+        .get();
+      const byDay: Record<string, Array<{ name?: string; qty_g?: number }>> = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        const day = (data.logged_at as string | undefined)?.slice(0, 10);
+        if (!day) return;
+        if (!byDay[day]) byDay[day] = [];
+        for (const it of (data.items ?? []) as Array<{ name?: string; qty_g?: number }>) {
+          byDay[day].push({ name: it?.name, qty_g: it?.qty_g });
+        }
+      });
+      const loggedDays = Object.entries(byDay).map(([date, items]) => ({ date, items }));
+      if (loggedDays.length > 0) {
+        ctx.micronutrient_intake = analyzeMicronutrientIntake(loggedDays, profile?.sex ?? null);
+      }
+    } catch (e) {
+      console.warn('[nutrition-agent] micronutrient analysis failed:', e);
     }
 
     // Sources scientifiques réelles pour grounder les citations (Helms, Phillips,
