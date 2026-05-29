@@ -15,6 +15,7 @@ import { BaseAgent } from './base';
 import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
 import { buildCoachRagFragment, buildProfileForRag } from '@/lib/features/rag-coach/context';
 import { searchExercises, type ExerciseLevel } from '@/lib/features/exercise-db';
+import { matchFrExercise } from '@/lib/features/exercise-db/canonical';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
@@ -223,6 +224,24 @@ export class TrainingCoach extends BaseAgent {
       }
     } catch (e) {
       console.warn('[training-agent] exercise library fetch failed:', e);
+    }
+
+    // Si le message nomme un exercice mainstream (pompe, squat, développé couché…),
+    // on le résout vers sa version PROPRE (pas une variante exotique de la base).
+    try {
+      const named = matchFrExercise(input.user_message);
+      if (named) {
+        ctx.named_exercise = {
+          name_fr: named.name_fr,
+          name: named.name,
+          level: named.level,
+          muscle: named.muscle,
+          equipment: named.equipment,
+          demo_url: named.demo_url,
+        };
+      }
+    } catch (e) {
+      console.warn('[training-agent] canonical match failed:', e);
     }
 
     return ctx;
