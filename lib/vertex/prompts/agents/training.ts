@@ -59,7 +59,7 @@ PROFILS SPÉCIFIQUES
 - Cardio LISS 2-3x/sem pour assister le déficit sans cramer le système nerveux
 - Deload tous les 6-8 sem (vs 4-6 sem profil standard)
 
-**Cycle menstruel (si context.cycle dispo)** :
+**Cycle menstruel (si context.cycle dispo — utilise \`current_phase\` déjà calculé ; les bornes en J ne sont qu'un repère, ne les recalcule pas)** :
 - **Folliculaire** (post-règles → ovulation) : force pic, récup optimale. Fenêtre idéale pour viser un PR ou pousser le volume.
 - **Ovulation (J14 cycle 28)** : performance souvent maximale, training intensité haute supportée.
 - **Lutéale (J15-J28)** : récup ralentie, fatigue accrue, légère baisse force possible. Maintenir le volume mais **éviter le RPE 10**. Privilégier hypertrophie / metcons modérés.

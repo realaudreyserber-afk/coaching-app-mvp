@@ -93,12 +93,33 @@ export class TrainingCoach extends BaseAgent {
         .get();
       ctx.recent_workouts = snap.docs.map((d) => {
         const data = d.data();
+        const exos = Array.isArray(data.exercises) ? data.exercises : [];
         return {
           date: data.date,
           type: data.type,
-          exercises_count: Array.isArray(data.exercises) ? data.exercises.length : 0,
           rpe_avg: data.rpe_avg,
           duration_min: data.duration_min,
+          // Audit 2026-05-29 : avant on ne gardait que exercises_count → l'agent
+          // ne pouvait recommander aucune progression de charge. On expose
+          // maintenant, par exo, le meilleur set (volume = poids × reps).
+          exercises: exos.slice(0, 12).map((ex: Record<string, unknown>) => {
+            const sets = Array.isArray(ex?.sets) ? (ex.sets as Array<Record<string, unknown>>) : [];
+            let topSet: { weight_kg: number; reps_done: number } | undefined;
+            for (const s of sets) {
+              const w = typeof s?.weight_kg === 'number' ? s.weight_kg : undefined;
+              const r = typeof s?.reps_done === 'number' ? s.reps_done : undefined;
+              if (w !== undefined && r !== undefined) {
+                if (!topSet || w * r > topSet.weight_kg * topSet.reps_done) {
+                  topSet = { weight_kg: w, reps_done: r };
+                }
+              }
+            }
+            return {
+              name: (ex?.name as string | undefined) ?? (ex?.exercise_id as string | undefined),
+              sets_done: sets.length,
+              top_set: topSet,
+            };
+          }),
         };
       });
     } catch (e) {

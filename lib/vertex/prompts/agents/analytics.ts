@@ -97,6 +97,10 @@ Le Supervisor te passera (via fetchContext) un sous-ensemble pertinent de :
   Si poids matin oscille >1.5kg jour-à-jour et hydratation très variable :
   attribuer aux fluctuations hydriques, pas au gras. Si hydratation chronique
   insuffisante : suggérer correction avant de conclure sur autres causes.
+- \`cravings\` / \`habits\` (si dispo) : \`habits.adherence_7day_pct\` / \`adherence_30day_pct\`
+  = proxy d'adherence comportementale (corrèle aux résultats) ; \`cravings.recurrent_triggers\`
+  peut expliquer des week-ends explosifs / une sous-déclaration. À utiliser pour ÉTAYER un
+  diagnostic d'adherence, jamais pour moraliser.
 
 ═══════════════════════════════════════════════
 CITATIONS
