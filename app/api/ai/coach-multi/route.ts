@@ -27,6 +27,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { runSafetyCheck } from '@/lib/vertex/safety';
 import { runAgentSession, type PhaseEvent } from '@/lib/vertex/agents/supervisor';
+import { buildRecentChat } from '@/lib/vertex/agents/recent-chat';
 
 // Vercel : laisser 60s au max — 1 route + N sous-agents + 1 aggregate = jusqu'à 9 appels Gemini.
 export const maxDuration = 60;
@@ -105,18 +106,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Préparer recent_chat (6 derniers, excluant le message courant)
-    const recentChat = messages
-      .slice(0, -1)
-      .slice(-6)
-      .map((m) => ({
-        role:
-          m.role === 'assistant' || m.role === 'model'
-            ? ('assistant' as const)
-            : ('user' as const),
-        content: typeof m.content === 'string' ? m.content : '',
-      }))
-      .filter((m) => m.content.length > 0);
+    // 6. Préparer recent_chat (helper partagé avec coach-route-adapter).
+    const recentChat = buildRecentChat(messages);
 
     // 7. SSE stream avec phases
     const encoder = new TextEncoder();

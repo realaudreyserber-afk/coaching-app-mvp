@@ -52,6 +52,20 @@ async function embedQueryCached(query: string): Promise<number[]> {
 }
 
 let loaded = false;
+const ragIndexStatus: { exercises: boolean; methods: boolean } = {
+  exercises: false,
+  methods: false,
+};
+
+/**
+ * Statut de chargement des index RAG. Observabilité (audit 2026-05-29) : en
+ * serverless, un déploiement sans `build:rag` fait perdre tout le RAG silencieusement.
+ * Un endpoint /api/health/rag peut appeler ceci pour détecter la régression.
+ */
+export function getRagIndexStatus(): { exercises: boolean; methods: boolean } {
+  ensureLoaded();
+  return { ...ragIndexStatus };
+}
 
 function ensureLoaded(): void {
   if (loaded) return;
@@ -61,15 +75,20 @@ function ensureLoaded(): void {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const exos = require("./embeddings/exercises.json") as EmbeddingIndex<ExercisePayload>;
     registerIndex("exercises", exos);
+    ragIndexStatus.exercises = true;
   } catch (e) {
-    console.warn("[rag-coach] exercises index not found — run `npm run build:rag`", e);
+    console.error("[rag-coach] ⚠️ index 'exercises' ABSENT — run `npm run build:rag` (le coach training perd tout son RAG)", e);
   }
   try {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const methods = require("./embeddings/methods.json") as EmbeddingIndex<MethodPayload>;
     registerIndex("methods", methods);
+    ragIndexStatus.methods = true;
   } catch (e) {
-    console.warn("[rag-coach] methods index not found — run `npm run build:rag`", e);
+    console.error("[rag-coach] ⚠️ index 'methods' ABSENT — run `npm run build:rag`", e);
+  }
+  if (!ragIndexStatus.exercises || !ragIndexStatus.methods) {
+    console.error("[rag-coach] ⚠️ RAG DÉGRADÉ au cold start — index manquant(s)", ragIndexStatus);
   }
 }
 

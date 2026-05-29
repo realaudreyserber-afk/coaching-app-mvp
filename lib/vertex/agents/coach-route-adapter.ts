@@ -30,6 +30,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import type { DocumentReference } from 'firebase-admin/firestore';
 import { runAgentSession } from './supervisor';
+import { buildRecentChat } from './recent-chat';
 
 export interface RunMultiAgentCoachInput {
   req: NextRequest;
@@ -44,18 +45,8 @@ export async function runMultiAgentCoach(
 ): Promise<NextResponse> {
   const { req, uid, userRef, messages, lastMessageText } = input;
 
-  // Construire recent_chat à passer au supervisor (5 derniers messages, sans le dernier user)
-  const recentChat = messages
-    .slice(0, -1)
-    .slice(-6)
-    .map((m) => ({
-      role:
-        m.role === 'assistant' || m.role === 'model'
-          ? ('assistant' as const)
-          : ('user' as const),
-      content: typeof m.content === 'string' ? m.content : '',
-    }))
-    .filter((m) => m.content.length > 0);
+  // recent_chat pour le supervisor (helper partagé avec la route coach-multi).
+  const recentChat = buildRecentChat(messages);
 
   const acceptHeader = req.headers.get('accept') || '';
   const wantsStream = acceptHeader.includes('text/event-stream');

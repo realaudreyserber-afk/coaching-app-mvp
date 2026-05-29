@@ -16,6 +16,7 @@
 
 import 'server-only';
 import { generateTextWithUsage, parseLLMJson } from '../../client';
+import { AGENT_SHARED_PREFIX } from '../../prompts/agents/_shared';
 import { tracer } from '../tracing';
 import { isValidSubAgentName } from '../types';
 import type {
@@ -91,7 +92,9 @@ export abstract class BaseAgent {
 
       const result = await generateTextWithUsage({
         model: this.model,
-        systemInstruction: this.systemPrompt,
+        // Préfixe partagé (voix / contrat sortie / délégation safety / garde-fou
+        // hormonal) prependé à TOUS les sous-agents — source unique, anti-divergence.
+        systemInstruction: `${AGENT_SHARED_PREFIX}\n\n${this.systemPrompt}`,
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         temperature: this.temperature,
         responseMimeType: 'application/json',
