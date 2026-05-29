@@ -60,4 +60,27 @@ describe('coach-route-adapter — stripCoachTags', () => {
     const input = '<COACH_SAVE>a</COACH_SAVE><COACH_SAVE>b</COACH_SAVE>fin';
     expect(stripCoachTags(input)).toBe('fin');
   });
+
+  // Cas balise FERMANTE orpheline (sans ouvrante) — ne doit pas survivre dans
+  // l'historique chat. Avant le fix, ces tags restaient visibles.
+  it('removes an orphan COACH_SAVE closing tag with no opener', () => {
+    const out = stripCoachTags('Bonjour </COACH_SAVE> voici la suite.');
+    expect(out).not.toContain('COACH_SAVE');
+    expect(out).toContain('Bonjour');
+    expect(out).toContain('voici la suite.');
+  });
+
+  it('removes an orphan COACH_PLAN_PATCH closing tag with no opener', () => {
+    expect(stripCoachTags('Suite</COACH_PLAN_PATCH>fin')).toBe('Suitefin');
+  });
+
+  it('removes a residual orphan closing tag left after a complete block', () => {
+    // Le bloc complet est retiré, laissant une fermante orpheline → doit partir.
+    const input = 'A<COACH_SAVE>x</COACH_SAVE>B</COACH_SAVE>C';
+    expect(stripCoachTags(input)).toBe('ABC');
+  });
+
+  it('strips an orphan closing tag sitting at the very end', () => {
+    expect(stripCoachTags('Texte final.</COACH_SAVE>')).toBe('Texte final.');
+  });
 });

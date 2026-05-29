@@ -245,5 +245,9 @@ export function stripCoachTags(text: string): string {
     const openIdx = out.indexOf(tag);
     if (openIdx !== -1) out = out.slice(0, openIdx);
   }
+  // Cas symétrique : balise FERMANTE orpheline (sans ouvrante, ex. output LLM
+  // malformé "texte </COACH_SAVE> suite") — elle ne doit pas rester visible
+  // dans l'historique chat. On retire toute fermante résiduelle.
+  out = out.replace(/<\/COACH_SAVE>/g, '').replace(/<\/COACH_PLAN_PATCH>/g, '');
   return out.trimEnd();
 }
