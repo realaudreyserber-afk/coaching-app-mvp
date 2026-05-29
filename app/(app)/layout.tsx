@@ -4,13 +4,17 @@ import { Loader } from "@/components/ui/loader";
 import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/firebase/hooks";
+import { useSubscription } from "@/lib/stripe/hooks";
+import { isPaywallEnabled } from "@/lib/stripe/subscription";
 
 import { TacticalHeader } from "@/components/nodream/tactical-header";
 import { TacticalBottomNav } from "@/components/nodream/tactical-bottom-nav";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import { Paywall } from "@/components/billing/paywall";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, hasProfile } = useAuth();
+  const { access, loading: subLoading } = useSubscription();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -65,6 +69,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hideChrome = isOnboarding;
   const hideBottomNav = isOnboarding || isLiveSession;
 
+  // Paywall (modèle essai 14 j → abonnement). No-op tant que
+  // NEXT_PUBLIC_ENABLE_PAYWALL !== '1'. Quand actif : si l'accès est `locked`
+  // (essai terminé, pas premium), on remplace le contenu par le Paywall —
+  // SAUF sur /settings (dont l'abonnement + l'export/suppression RGPD) et /legal,
+  // qui restent accessibles. L'onboarding n'est jamais paywallé.
+  const onAllowlistedRoute =
+    !!pathname && (pathname.startsWith("/settings") || pathname.startsWith("/legal"));
+  const showPaywall =
+    isPaywallEnabled() &&
+    !subLoading &&
+    access.locked &&
+    !onAllowlistedRoute &&
+    !isOnboarding;
+
   return (
     <ConfirmProvider>
       <div className="min-h-screen flex flex-col bg-background">
@@ -80,7 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           tabIndex={-1}
           className={`flex-1 flex flex-col relative z-10 ${!hideBottomNav ? "pb-20" : ""}`}
         >
-          {children}
+          {showPaywall ? <Paywall /> : children}
         </main>
         {!hideBottomNav && <TacticalBottomNav />}
       </div>

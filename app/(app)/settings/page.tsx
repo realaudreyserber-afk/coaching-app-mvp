@@ -1146,6 +1146,31 @@ export default function SettingsPage() {
         </button>
       </form>
 
+      {/* Subscription / Premium — surfacer l'abonnement (était orphelin) */}
+      <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
+        <PanelHeader
+          code="ABONNEMENT"
+          title={
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
+              Abonnement
+            </span>
+          }
+          accent="gold"
+        />
+        <p className="mono" style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.04em', margin: '12px 0' }}>
+          Gère ton abonnement Premium, ton essai et ta facturation.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/settings/subscription')}
+          className="btn btn-primary mono"
+          style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase' }}
+        >
+          Gérer mon abonnement
+        </button>
+      </HudCard>
+
       {/* GDPR Card */}
       <HudCard accent="tech" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
         <PanelHeader

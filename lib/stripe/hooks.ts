@@ -5,7 +5,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/client';
 import { useAuth } from '@/lib/firebase/hooks';
 import type { SubscriptionState, SubscriptionTier } from './subscription';
-import { canAccessFeature, isPremium } from './subscription';
+import { canAccessFeature, isPremium, computeAccess } from './subscription';
 
 export function useSubscription() {
   const { user } = useAuth();
@@ -38,5 +38,7 @@ export function useSubscription() {
     loading,
     premium: isPremium(state),
     can: (required: SubscriptionTier) => canAccessFeature(state, required),
+    /** État d'accès trial-aware (essai/premium/locked + jours restants). */
+    access: computeAccess(state),
   };
 }

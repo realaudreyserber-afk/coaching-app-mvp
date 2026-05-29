@@ -7,7 +7,7 @@ import { flags } from '@/lib/features/flags';
 import { BODY_SCANNER_SYSTEM_PROMPT } from '@/lib/features/body-scanner/prompts';
 import { BodyScannerAnalysisSchema } from '@/lib/features/body-scanner/schema';
 import { BODY_SCANNER_RESPONSE_SCHEMA } from '@/lib/vertex/body-scanner-schema';
-import { canAccessFeature } from '@/lib/stripe/subscription';
+import { serverHasAccess } from '@/lib/stripe/subscription';
 
 interface ImagePart {
   inlineData: { data: string; mimeType: string };
@@ -39,12 +39,13 @@ export async function POST(req: NextRequest) {
       const uid = user.uid;
       const userRef = adminDb.collection('users').doc(uid);
 
-      // Tier gating Premium
+      // Garde d'accès (essai/premium ; no-op tant que le paywall n'est pas
+      // activé). Trial-aware : un user en essai y a accès.
       const userSnap = await userRef.get();
       const subscription = userSnap.data()?.subscription;
-      if (!canAccessFeature(subscription, 'premium')) {
+      if (!serverHasAccess(subscription)) {
         return NextResponse.json(
-          { error: "Body scanner réservé aux abonnés Premium." },
+          { error: "Body scanner réservé aux abonnés (essai ou Premium)." },
           { status: 402 }
         );
       }

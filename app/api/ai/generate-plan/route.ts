@@ -235,10 +235,28 @@ Le sexe biologique déclaré de l'utilisateur est : ${userContext.profile?.sex =
       // back to /onboarding or let them in /dashboard. Setting it server-side
       // here (rather than client-side in step 11) guarantees the flag only
       // flips when a plan was actually persisted.
+      // Démarrage de l'essai (modèle 14 j → paywall) : posé au PREMIER plan
+      // généré, de façon IDEMPOTENTE (uniquement si aucun essai déjà enregistré
+      // et si l'user n'est pas déjà premium). Dot-notation → ne touche pas
+      // subscription.tier / stripe ids. No-op fonctionnel tant que le paywall
+      // n'est pas activé (NEXT_PUBLIC_ENABLE_PAYWALL), mais on horodate dès
+      // maintenant pour que la date d'essai soit juste le jour J de l'activation.
+      const sub = userData?.subscription;
+      const trialFields: Record<string, unknown> = {};
+      const isPremiumUser = sub?.tier === 'premium' || sub?.tier === 'premium_plus';
+      if (!sub?.trial_started_at && !isPremiumUser) {
+        const trialStart = new Date();
+        trialFields['subscription.trial_started_at'] = trialStart.toISOString();
+        trialFields['subscription.trial_ends_at'] = new Date(
+          trialStart.getTime() + 14 * 24 * 60 * 60 * 1000,
+        ).toISOString();
+      }
+
       batch.update(userRef, {
         plan_current_id: newPlanRef.id,
         onboarding_completed: true,
         onboarding_completed_at: new Date().toISOString(),
+        ...trialFields,
       });
 
       await batch.commit();

@@ -5,6 +5,7 @@ import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { generateText, generateTextStream } from '@/lib/vertex/client';
 import { COACH_SYSTEM_PROMPT } from '@/lib/vertex/prompts/coach';
 import { runSafetyCheck } from '@/lib/vertex/safety';
+import { serverHasAccess } from '@/lib/stripe/subscription';
 import { flags } from '@/lib/features/flags';
 import { searchScientificCorpus, SearchResult } from '@/lib/features/rag-sourcing/client';
 import { buildRAGPrompt } from '@/lib/features/rag-sourcing/prompts';
@@ -50,6 +51,17 @@ export async function POST(req: NextRequest) {
       }
       
       const userData = userSnap.data() || {};
+
+      // Garde paywall serveur (no-op tant que NEXT_PUBLIC_ENABLE_PAYWALL≠1).
+      // Protège la route la plus coûteuse contre un appel direct par un user
+      // dont l'essai est terminé sans abonnement. Fail-open intégré au helper.
+      if (!serverHasAccess(userData.subscription)) {
+        return NextResponse.json(
+          { error: 'subscription_required', message: "Ton essai est terminé. Passe à Premium pour continuer avec le coach." },
+          { status: 402 },
+        );
+      }
+
       const { messages } = await req.json();
 
       if (!messages || !Array.isArray(messages) || messages.length === 0) {

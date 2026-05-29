@@ -6,7 +6,7 @@ import { generateText, parseLLMJson } from '@/lib/vertex/client';
 import { flags } from '@/lib/features/flags';
 import { FORM_CHECK_SYSTEM_PROMPT } from '@/lib/features/form-check/prompts';
 import { FormCheckResultSchema } from '@/lib/features/form-check/schema';
-import { canAccessFeature } from '@/lib/stripe/subscription';
+import { serverHasAccess } from '@/lib/stripe/subscription';
 
 export async function POST(req: NextRequest) {
   if (!flags.formCheck()) {
@@ -15,12 +15,13 @@ export async function POST(req: NextRequest) {
 
   return withAuth(req, async (_authReq, user) => {
     try {
-      // Tier gating server-side (M12 = Premium+ in brief V2)
+      // Garde d'accès server-side (essai/premium ; no-op tant que le paywall
+      // n'est pas activé). Trial-aware : un user en essai y a accès.
       const userSnap = await adminDb.collection('users').doc(user.uid).get();
       const subscription = userSnap.data()?.subscription;
-      if (!canAccessFeature(subscription, 'premium')) {
+      if (!serverHasAccess(subscription)) {
         return NextResponse.json(
-          { error: "Form check vidéo réservé aux abonnés Premium." },
+          { error: "Form check vidéo réservé aux abonnés (essai ou Premium)." },
           { status: 402 }
         );
       }
