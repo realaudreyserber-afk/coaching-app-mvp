@@ -16,6 +16,7 @@
 
 import { matchFood, nutrientsForPortion } from '@/lib/features/food-composition';
 import { classifyTransformation } from '@/lib/features/food-composition/nova';
+import { estimateGlycemic } from '@/lib/features/glycemic/gi-table';
 import { athleteAdjustedRda } from '@/lib/features/nutrition-db/athlete-targets';
 import { getNutrient } from '@/lib/features/nutrition-db/nutrients';
 
@@ -58,6 +59,9 @@ export interface MicronutrientIntakeAnalysis {
     aut_calorie_share: number | null;
     /** Densité protéique moyenne : g protéines / 100 kcal (levier satiété en cut). */
     protein_per_100kcal: number | null;
+    /** Part des glucides (à IG connu) provenant d'aliments à IG élevé (>70) (0-1).
+     *  Levier SATIÉTÉ/ÉNERGIE, pas perte de gras (le déficit reste le moteur). */
+    high_gi_carb_share: number | null;
   } | null;
   /** Formulation prudente prête pour le coach (jamais "carence"). */
   note: string;
@@ -93,6 +97,8 @@ export function analyzeMicronutrientIntake(
   let totalKcal = 0;
   let autKcal = 0;
   let totalProtein = 0;
+  let carbsWithGi = 0;
+  let highGiCarbs = 0;
   const perDay: Array<Record<string, number>> = [];
 
   for (const day of days) {
@@ -113,6 +119,14 @@ export function analyzeMicronutrientIntake(
         if (classifyTransformation(food.name, food.group).ultra_processed) autKcal += n.kcal;
       }
       if (typeof n.protein_g === 'number') totalProtein += n.protein_g;
+      // Charge glycémique : part des glucides venant d'aliments à IG élevé.
+      if (typeof n.carb_g === 'number' && n.carb_g > 0) {
+        const gly = estimateGlycemic(food.name, n.carb_g);
+        if (gly) {
+          carbsWithGi += n.carb_g;
+          if (gly.gi > 70) highGiCarbs += n.carb_g;
+        }
+      }
     }
     perDay.push(totals);
   }
@@ -156,6 +170,8 @@ export function analyzeMicronutrientIntake(
         aut_calorie_share: totalKcal > 0 ? Math.round((autKcal / totalKcal) * 100) / 100 : null,
         protein_per_100kcal:
           totalKcal > 0 ? Math.round((totalProtein / totalKcal) * 100 * 10) / 10 : null,
+        high_gi_carb_share:
+          carbsWithGi > 0 ? Math.round((highGiCarbs / carbsWithGi) * 100) / 100 : null,
       }
     : null;
 
