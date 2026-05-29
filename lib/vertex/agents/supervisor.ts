@@ -230,6 +230,44 @@ export async function runAgentSession(
       tokensOutputTotal += out.tokens?.output ?? 0;
     }
 
+    // 2e tour minimal — délégation safety croisée. Si un sous-agent a posé
+    // request_consult: ['safety'] (ex: nutrition/analytics détectent un signal
+    // TCA) et que safety n'a PAS été routé au tour 1, on le lance maintenant et
+    // on l'inclut dans l'agrégation. Sans ça, request_consult était un chemin
+    // mort → trou de couverture safety (audit 2026-05-29).
+    if (!subOutputs.safety && runs.some((o) => o.request_consult?.includes('safety'))) {
+      safeEmit(input.onPhase, {
+        type: 'agent_start',
+        agent: 'safety',
+        reason: 'Consultation demandée par un autre agent (request_consult)',
+      });
+      try {
+        const safetyInput: AgentInput = {
+          session_id,
+          uid: input.uid,
+          user_message: input.user_message,
+          reason_for_consult:
+            "Un autre agent a signalé un risque potentiel à évaluer (request_consult: safety).",
+          recent_chat: input.recent_chat,
+          shared_memory: sharedMemory,
+          profile: preloadedProfile,
+        };
+        const safetyOut = await getSubAgent('safety').run(safetyInput, sharedMemory);
+        subOutputs.safety = safetyOut;
+        tokensInputTotal += safetyOut.tokens?.input ?? 0;
+        tokensOutputTotal += safetyOut.tokens?.output ?? 0;
+        safeEmit(input.onPhase, {
+          type: 'agent_finish',
+          agent: 'safety',
+          severity: safetyOut.severity,
+          duration_ms: safetyOut.duration_ms ?? 0,
+        });
+        trace.supervisor('safety_second_round', 'info', { triggered_by: 'request_consult' });
+      } catch (e) {
+        trace.supervisor('safety_second_round_failed', 'warn', { err: String(e) });
+      }
+    }
+
     // 4. Étape ARBITRATION (minimaliste Phase 1)
     arbitration = arbitrateOutputs(subOutputs);
 

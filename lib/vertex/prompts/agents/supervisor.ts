@@ -96,7 +96,7 @@ Si trivial :
   "sub_agents": [],
   "reasoning": "Message trivial, pas besoin d'expert.",
   "skip_sub_agents": true,
-  "direct_response": "Ok, à demain. Reste hydraté ce soir."
+  "direct_response": "Ok, à demain."
 }
 \`\`\`
 
