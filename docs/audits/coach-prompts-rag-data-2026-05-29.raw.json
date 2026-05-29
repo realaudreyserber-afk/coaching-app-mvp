@@ -1,0 +1,933 @@
+{
+  "summary": "Audit multi-agents : prompts + RAG + couche donnees du coach NoDream (analyse seule)",
+  "agentCount": 12,
+  "logs": [
+    "10/10 agents revus + infra RAG/data ; 90 findings"
+  ],
+  "result": {
+    "reviews": [
+      {
+        "prompt": "supervisor",
+        "role_fit": "oui — l'agent est bien un orchestrateur pur (route + aggregate, gestion COACH_SAVE/COACH_PLAN_PATCH) conforme au rôle attendu ; mais l'étape aggregate n'a pas les données nécessaires pour tenir les promesses de patch de son prompt.",
+        "summary": "Le prompt supervisor est globalement solide sur le routing, la voix NoDream et les règles safety (délégation médicale claire, jamais de diagnostic, pas de déduction silencieuse). Le problème majeur est un désalignement prompt/impl : le prompt charge le supervisor d'émettre COACH_PLAN_PATCH avec des contraintes (cohérence calorique sur le kcal courant, noms d'exos validés contre la RAG, refus si \"déjà en cut\") alors que le buildAggregatePrompt ne lui transmet NI le plan actif, NI le profil, NI la bibliothèque RAG — il ne reçoit que diagnostic/recommendations/citations des sous-agents. Le supervisor doit donc inventer ces valeurs pour patcher, ce qui touche directement la sécurité (patch macros/kcal incohérent) et le périmètre. Deux autres incohérences : request_consult est parsé mais jamais consommé (pas de 2e tour), et raw_data des sous-agents (qui porte l'active_plan) est explicitement non transmis à l'aggregate.",
+        "findings": [
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "critical",
+            "issue": "Le prompt charge le supervisor (étape aggregate) d'émettre <COACH_PLAN_PATCH> avec des règles qui EXIGENT de connaître l'état courant du plan : 'Cohérence calorique : si tu modifies un macro, vérifie que kcal reste cohérent (sinon patch aussi kcal)' et 'name DOIT matcher la bibliothèque RAG' et le refus 'passe-moi à 1200 kcal alors qu'il est déjà en cut'. Or buildAggregatePrompt (agents/supervisor.ts L290-328) ne transmet QUE user_message + diagnostic/recommendations/citations des sous-agents + arbitration. Le supervisor ne reçoit JAMAIS : kcal/macros actuels, phase courante (cut/bulk), training.session_template, ni la bibliothèque d'exos RAG. Il lui est donc impossible de vérifier la cohérence calorique ou de valider un nom d'exo : il doit deviner les valeurs courantes pour émettre le patch. Ces valeurs inventées sont ensuite POSTées vers /api/coach/apply-patch (cf. coach-route-adapter.ts).",
+            "location": "prompts/agents/supervisor.ts §PATCHER LE PLAN (L154-192, surtout L177 'Cohérence calorique', L182 'name DOIT matcher la bibliothèque RAG', L172 'déjà en cut') vs agents/supervisor.ts buildAggregatePrompt (L290-328)",
+            "recommendation": "Soit (préféré) injecter dans buildAggregatePrompt un bloc [PLAN ACTIF] (kcal, macros, phase, weeks_active, training.split/session_template) + [EXOS RAG DISPONIBLES] chargés une fois au niveau supervisor (réutiliser le preloadedProfile + un fetch active_plan), soit retirer du prompt l'autorité de patch du supervisor et déléguer l'émission du patch aux sous-agents qui possèdent déjà active_plan dans leur fetchContext (nutrition/training/planning)."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "high",
+            "issue": "raw_data des sous-agents — qui contient justement active_plan (kcal, macros, phase) et rag_exercises (cf. nutrition.ts L78-89, training.ts L77-83/L130-133, planning.ts L91-101) — est volontairement exclu du prompt aggregate. buildAggregatePrompt ne sérialise que diagnostic/recommendations/citations. La donnée nécessaire au patch transite déjà par les sous-agents mais est jetée avant d'atteindre le décideur du patch (le supervisor). C'est une donnée chargée puis non exploitée par l'orchestrateur.",
+            "location": "agents/supervisor.ts buildAggregatePrompt L298-312 (sérialisation des outputs : pas de out.raw_data) ; types.ts AgentOutput.raw_data L111",
+            "recommendation": "Si on garde le patch côté supervisor, transmettre un sous-ensemble whitelisté de raw_data pertinent (notamment active_plan et rag_exercises) dans outputsSummary, ou ajouter un bloc dédié [DONNÉES PLAN] agrégé à partir des raw_data des agents nutrition/training/planning."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "medium",
+            "issue": "request_consult est documenté dans le format de sortie des sous-agents (base.ts L69), parsé et stocké sur chaque AgentOutput (base.ts L150-162, types.ts L109-110 : 'Demande explicite au Supervisor : demande à TrainingCoach de confirmer'), mais le supervisor ne le lit JAMAIS : ni arbitrateOutputs ni buildAggregatePrompt ne consultent out.request_consult, et runAgentSession n'a pas de 2e tour de consultation. La capacité 'un agent peut demander la consultation d'un autre' est promise par les types/contrats mais non implémentée — chemin de données mort.",
+            "location": "agents/supervisor.ts (runAgentSession L138-210 : un seul Promise.all, pas de re-route ; buildAggregatePrompt L298-312 n'inclut pas request_consult) ; types.ts L109-110 ; base.ts L69,L150-162",
+            "recommendation": "Soit implémenter un mini second tour (si un output high-confidence pose request_consult vers un agent non encore consulté, le lancer puis ré-agréger), soit retirer request_consult du contrat pour ne pas suggérer une capacité absente. Au minimum documenter que c'est réservé à une phase future (comme l'arbitration le fait déjà honnêtement)."
+          },
+          {
+            "dimension": "securite",
+            "severity": "medium",
+            "issue": "Le prompt safety est rigoureux côté routing (safety SYSTÉMATIQUE sur signaux TCA/médical, override critical), et l'impl honore l'override critical dans arbitrateOutputs/aggregate. MAIS la garde 'ne pas faire un patch qui nuit à la santé' (L172 'passe-moi à 1200 kcal alors qu'il est déjà en cut') ne peut pas s'appliquer puisque la phase courante n'est pas transmise à l'aggregate. Un patch dangereux peut donc être émis faute de contexte, même si safety a flag warning. De plus rien dans buildAggregatePrompt n'instruit explicitement de SUPPRIMER les balises COACH_PLAN_PATCH quand safety est critical — l'override est décrit pour le ton mais pas pour bloquer un patch concurrent.",
+            "location": "prompts/agents/supervisor.ts L172 ; agents/supervisor.ts buildAggregatePrompt L323-326 (instruction critical = ton/redirection, rien sur l'inhibition des patchs)",
+            "recommendation": "Dans buildAggregatePrompt, quand arbitration indique safety critical, ajouter une instruction explicite 'n'émets AUCUNE balise COACH_PLAN_PATCH/COACH_SAVE'. Et fournir la phase/kcal courants pour que la règle anti-patch-dangereux soit applicable."
+          },
+          {
+            "dimension": "format_sortie",
+            "severity": "low",
+            "issue": "Le prompt impose à l'étape route 'Pas de fences markdown dans la sortie' (L103), or l'exemple JSON juste au-dessus (L82-91, L94-101) est lui-même entouré de fences ```. Risque mineur que le LLM imite l'exemple et émette des fences. L'impl est défensive (parseLLMJson tolère les fences, responseMimeType:'application/json' à temp 0.2), donc impact limité, mais l'instruction et son exemple se contredisent visuellement.",
+            "location": "prompts/agents/supervisor.ts L82-103",
+            "recommendation": "Préciser que les ``` dans le prompt ne sont qu'illustratifs, ou montrer l'exemple sans fences pour aligner instruction et démonstration."
+          },
+          {
+            "dimension": "perimetre_chevauchement",
+            "severity": "low",
+            "issue": "Le routing planning vs nutrition vs analytics est globalement bien délimité (horizons explicites). Un cas d'ambiguïté résiduel : COACH_PLAN_PATCH sur macros est de la responsabilité du supervisor (prompt §PATCHER) alors que nutrition est l'expert macros et détient déjà active_plan. Le supervisor décide donc d'un patch macros sans être l'expert ni avoir les données, doublonnant conceptuellement le rôle de nutrition. Cohérent avec l'archi 'une seule voix' mais crée la dépendance de données décrite plus haut.",
+            "location": "prompts/agents/supervisor.ts §PATCHER (L156-191, macros.p/c/f) vs rôle nutrition (sub-agents/nutrition.ts)",
+            "recommendation": "Clarifier la frontière : soit le supervisor n'émet le patch que sur recommandation explicite et chiffrée d'un sous-agent (à inclure dans recommendations), soit déléguer la proposition de valeurs au sous-agent et ne garder au supervisor que l'assemblage de la balise."
+          },
+          {
+            "dimension": "voix_ton",
+            "severity": "low",
+            "issue": "La voix NoDream est correctement spécifiée (tutoiement, interdiction de 'régime', pas de moralisation, citations max 1-2). Le fallback skip-path codé en dur dans l'impl 'D'accord, je suis là si tu veux.' (agents/supervisor.ts L134) et l'exemple de direct_response du prompt 'Reste hydraté ce soir.' (L99) sont à la limite du paternalisme/conseil non sollicité que MEMORY interdit ('jamais dire repose-toi/dors bien'). 'Reste hydraté ce soir' sur un simple 'à demain' est un conseil de santé non demandé.",
+            "location": "prompts/agents/supervisor.ts L99 (exemple direct_response) ; agents/supervisor.ts L134 fallback",
+            "recommendation": "Remplacer l'exemple par une formule neutre sans injonction santé (ex: 'Ok, à demain.'). Aligner sur la règle anti-paternalisme : pas d'injonction hydratation/repos non sollicitée dans les réponses triviales."
+          },
+          {
+            "dimension": "cout_verbosite",
+            "severity": "low",
+            "issue": "Le même SUPERVISOR_SYSTEM_PROMPT (très long : whitelist COACH_SAVE exhaustive ~ligne 141, paths COACH_PLAN_PATCH détaillés) est envoyé comme systemInstruction AUX DEUX étapes route ET aggregate (agents/supervisor.ts L110 et L197). À l'étape route, toute la section persistance/patch (L123-192, la majorité du prompt) est inutile puisque la route ne produit qu'un RoutingDecision JSON. Coût input tokens doublé sur du contenu non pertinent à chaque session.",
+            "location": "agents/supervisor.ts L110 (route) et L197 (aggregate) réutilisant le même prompt entier ; prompt L123-192",
+            "recommendation": "Scinder en deux system prompts (ROUTE = sections routing/safety uniquement ; AGGREGATE = voix + persistance/patch), ou conditionner les sections via le préfixe [ÉTAPE]. Réduit le coût input à chaque appel route."
+          }
+        ]
+      },
+      {
+        "prompt": "nutrition",
+        "role_fit": "oui — le scope du prompt (macros, ingrédients, recettes, jeûne, GLP-1, suppléments, timing, hydratation, horizon jour/semaine) colle exactement au rôle attendu ; les délégations vers safety/training/analytics/mental/social/education sont correctement posées dès l'en-tête.",
+        "summary": "Prompt solide, dense et nettement supérieur à la moyenne : voix NoDream respectée (mot \"régime\" interdit, pas de moralisation, garde-fous TRT anti-inférence très propres, délégation médicale à safety claire). Le vrai problème est l'alignement prompt↔impl : fetchContext charge active_plan, today_food_logs, nutrition_guides_ottawa, favorite_recipes et shopping_lists, mais le prompt ne mentionne JAMAIS ces cinq objets — l'agent ne sait pas qu'il dispose du plan actif ni de l'intake du jour (les deux données les plus structurantes pour un coach nutrition), et reçoit des recettes/courses en IDs opaques inexploitables. Côté safety, profile.ed_history (historique TCA) existe et n'est pas chargé alors que toute la logique severity=critical repose sur la détection TCA. Côté RAG, le prompt autorise 9 citations scientifiques (Helms, Phillips, Garthe…) mais l'impl ne récupère que le corpus Ottawa P1208 — les sources promises ne sont jamais en contexte.",
+        "findings": [
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "fetchContext charge ctx.active_plan (kcal/macros/meals_template) et ctx.today_food_logs (totaux + recent_items du jour), qui sont les deux données les plus structurantes pour un coach nutrition à horizon jour/semaine. Or le prompt système ne les mentionne NULLE PART : aucune section n'explique à l'agent qu'il dispose du plan actif et de l'intake du jour, ni comment raisonner sur les macros restantes (kcal cible - kcal déjà consommés). Grep dans le prompt sur 'active_plan', 'today_food_logs', 'meals_template', 'recent_items' = 0 occurrence. Risque concret : l'agent répond 'combien de protéines aujourd'hui ?' sans tenir compte de ce qui a déjà été mangé, ou recalcule un plan sans savoir qu'il en existe déjà un actif.",
+            "location": "prompt entier (aucune mention) vs impl nutrition.ts lignes 70-92 (active_plan) et 105-135 (today_food_logs)",
+            "recommendation": "Ajouter une section 'DONNÉES DISPONIBLES EN CONTEXTE' listant context.active_plan (kcal/macros/meals_template) et context.today_food_logs (totaux + recent_items). Instruire explicitement : 'Si context.active_plan existe, ancre tes recommandations dessus (ne recalcule pas un plan from scratch). Si context.today_food_logs existe, raisonne sur les macros RESTANTES du jour (cible - déjà consommé), pas sur la cible brute.'"
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "high",
+            "issue": "profile.ed_history (booléen historique TCA, présent sur NormalizedProfile ligne 42 de snapshot.ts) n'est PAS inclus dans le ctx.profile construit par fetchContext (lignes 39-54 : seuls objective, weight_kg, height_cm, age, sex, activity_level, dietary_restrictions, dietary_preferences, allergies, dislikes, uses_glp1, hormonal_context sont copiés). Or toute la logique severity=critical du prompt (règle #4, section SORTIE) repose sur la détection d'un signal TCA. L'agent ne détecte donc un risque TCA que via le message live de l'user, en ignorant un antécédent déclaré et connu du système. Pour un user à ed_history=true, un message ambigu (jeûne agressif, obsession chiffres) devrait relever la prudence d'un cran — l'agent n'a pas cette information.",
+            "location": "impl nutrition.ts lignes 39-54 (champ manquant) ; snapshot.ts ligne 42 (ed_history existe) ; prompt règle #4 ligne 46 + SORTIE ligne 159",
+            "recommendation": "Ajouter ed_history au ctx.profile, et l'exploiter dans le prompt : 'Si context.profile.ed_history === true, abaisse ton seuil de vigilance TCA : tout signal même léger (jeûne extrême, langage de purge/punition, obsession chiffres) → severity warning minimum + request_consult: [\"safety\"].' Décision à confirmer avec safety pour éviter un double-traitement, mais l'agent nutrition ne doit pas être aveugle à cet antécédent."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "ctx.favorite_recipes et ctx.shopping_lists sont fetchés (impl lignes 175-189) mais (a) jamais référencés dans le prompt — l'agent n'a aucune instruction sur quoi en faire, et (b) leur snapshot ne renvoie que des recipe_id OPAQUES sans nom ni macros (FavoriteRecipesSnapshot.most_cooked = {recipe_id, cooked_count, rating} ; ShoppingListsSnapshot = juste des compteurs + active_list_name). L'objectif déclaré du commentaire impl ('suggérer en priorité ce que l'user aime', ligne 175) est donc inatteignable : avec un recipe_id seul, l'agent ne peut ni nommer ni reproduire la recette. Données chargées, coûtées en lecture Firestore + tokens, mais inexploitables et non documentées.",
+            "location": "impl nutrition.ts lignes 175-189 ; favorite-recipes/store.ts lignes 23-29 (most_cooked = recipe_id opaque) ; shopping-lists/store.ts lignes 21-28 ; prompt = 0 mention",
+            "recommendation": "Soit (a) enrichir les snapshots pour résoudre recipe_id → nom + macros (jointure avec content/recipes/library) avant injection, et ajouter au prompt une instruction 'priorise les most_cooked recipes quand tu proposes un repas' ; soit (b) retirer ces deux fetchs du contexte nutrition s'ils ne servent pas le tour de conversation (coût lecture + tokens sans valeur). En l'état c'est du contexte mort."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "medium",
+            "issue": "La section CITATIONS (lignes 138-149) autorise l'agent à citer 9 références scientifiques précises (Helms 2014, Phillips 2011, Garthe 2011, Aragon & Schoenfeld 2013, Pasiakos 2013, Rosenbaum & Leibel 2010, Bhasin 2018, Wilding 2021, + Ottawa). Or l'impl ne récupère QUE searchNutritionGuides (corpus Ottawa P1208) ligne 139 ; elle n'appelle JAMAIS searchInternalCorpus (qui existe dans le même fichier internal-corpus.ts et contient justement Helms/Phillips/Garthe via les thèmes proteines/vitesse_perte/adaptation_metabolique). Conséquence : l'agent cite Helms/Phillips/Rosenbaum depuis sa mémoire paramétrique, sans jamais avoir le document source en contexte — risque de citation hallucinée (mauvaise année, mauvais finding) et incohérence avec un système qui se veut sourcé.",
+            "location": "impl nutrition.ts lignes 137-149 (seul searchNutritionGuides appelé) ; internal-corpus.ts ligne 196 searchInternalCorpus disponible mais non branché ; prompt CITATIONS lignes 138-149",
+            "recommendation": "Brancher searchInternalCorpus(input.user_message, 3) en plus de searchNutritionGuides et injecter le résultat dans ctx (ex: ctx.scientific_sources), puis instruire le prompt 'ne cite que les références fournies en contexte ; si une référence n'est pas dans context.scientific_sources, ne l'invente pas'. Sinon, restreindre la liste CITATIONS du prompt aux seules sources réellement disponibles (Ottawa) pour éviter la fabrication."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "medium",
+            "issue": "Incohérence sur la base de calcul protéique entre sections, sur un agent dont le job #1 est de sortir des chiffres concrets. Ligne 32 : cut = '1.8-2.4 g/kg de poids cible'. Ligne 84 (TRT) : 'pas plus élevé que natural ... 1.8 g/kg poids' (poids actuel, pas cible). Ligne 128 (GLP-1) : '1.8 g/kg poids cible'. Ligne 74 (obésité musclée) : '2.2-2.6 g/kg LBM'. Trois référentiels différents (poids cible / poids actuel / LBM) sans règle d'arbitrage explicite. Pour un user en surpoids, 1.8 g/kg poids actuel vs poids cible vs LBM donne des écarts de 40-80 g/jour. L'agent peut produire des chiffres divergents selon la section qu'il 'active'.",
+            "location": "prompt lignes 32, 74, 84, 128",
+            "recommendation": "Ajouter une règle d'arbitrage unique en tête de PHILOSOPHIE : 'Base de calcul protéique par défaut = poids cible (target_weight) ; EXCEPTION profil obésité musclée → LBM. Précise toujours la base utilisée dans le diagnostic (g/kg de QUOI).' Et harmoniser le libellé 'poids' vs 'poids cible' partout."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "low",
+            "issue": "Détection GLP-1 : le prompt déclenche l'adaptation GLP-1 sur 'Si l'user mentionne un GLP-1' (règle #3 ligne 45) — donc sur le texte du message. L'impl charge pourtant un signal structuré fiable, profile.uses_glp1 (booléen, impl ligne 50, résolu depuis profile.uses_glp1 ou medical.glp1.active). Le prompt n'utilise jamais context.profile.uses_glp1 comme déclencheur. Résultat : un user sous GLP-1 déclaré dans son profil mais qui ne le re-mentionne pas dans le message n'obtiendra pas les adaptations (fractionnement, protection protéique, hydratation forcée) alors que la donnée est là.",
+            "location": "prompt règle #3 ligne 45 + section 'Sous GLP-1' lignes 127-132 (déclencheur = mention texte) ; impl ligne 50 (uses_glp1 chargé mais déclencheur non câblé dans le prompt)",
+            "recommendation": "Aligner le prompt sur le modèle TRT (déjà bien fait) : 'Active la section GLP-1 si context.profile.uses_glp1 === true OU si l'user le mentionne.' Comme pour le TRT, ajouter le garde-fou pertinence (ne pas digresser GLP-1 sur une demande sans rapport)."
+          },
+          {
+            "dimension": "perimetre_chevauchement",
+            "severity": "low",
+            "issue": "Légère tension de périmètre avec analytics : la section 'Obésité musclée' ligne 76 instruit l'agent à statuer sur la sous-déclaration via 'si data analytics montre stagnation avec adherence apparente'. Or l'en-tête (lignes 7-8) délègue explicitement les 'tendances data historique' à analytics, et fetchContext ne charge AUCUNE donnée de tendance poids/adherence multi-semaines (today_food_logs = jour J uniquement ; pas de série temporelle). L'agent est donc invité à raisonner sur une 'stagnation analytics' qu'il n'a pas en contexte.",
+            "location": "prompt ligne 76 vs en-tête lignes 7-8 ; impl : aucun fetch de tendance/série temporelle",
+            "recommendation": "Reformuler ligne 76 en conditionnel délégué : 'si le Supervisor te transmet un signal de stagnation depuis analytics → suggérer tracking serré 7 jours ; sinon, recommande de consulter analytics (request_consult) avant de conclure à une sous-déclaration.' Évite que l'agent invente une stagnation sans données."
+          },
+          {
+            "dimension": "securite",
+            "severity": "low",
+            "issue": "Très bon traitement global (TRT anti-inférence, délégation médicale, alcool/caféine → safety). Une zone reste implicite : les substances. Le prompt instruit request_consult:[\"safety\"] sur drinking_days_7day > 4 (ligne 120) mais ne fixe aucun garde-fou sur l'interaction GLP-1 + alcool ni GLP-1 + jeûne, alors que les deux sont nutritionnellement à risque (hypoglycémie, nausées aggravées) et que les deux données coexistent en contexte (uses_glp1 + substances + section fasting). Le prompt traite chaque axe isolément.",
+            "location": "prompt sections Substances (117-120), Sous GLP-1 (127-132), Jeûne (ligne 22) — pas de croisement",
+            "recommendation": "Ajouter une ligne dans la section GLP-1 : 'Sous GLP-1, déconseille activement le jeûne intermittent (déjà dit) ET signale qu'alcool + GLP-1 majore nausées/hypoglycémie ; si substances montre consommation régulière → une phrase de prudence + request_consult:[\"safety\"].'"
+          },
+          {
+            "dimension": "cout_verbosite",
+            "severity": "low",
+            "issue": "Le prompt est long (~160 lignes) et plusieurs sections de profil très détaillées (Obésité musclée, TRT, Cycle, Cravings, Substances, Hydratation, GLP-1) sont injectées en permanence quel que soit le profil/la question. Couplé aux fetchs morts (favorite_recipes, shopping_lists), le coût tokens par tour est gonflé. Ce n'est pas critique (système prompt cacheable) mais les deux fetchs inexploités s'ajoutent en input à chaque appel.",
+            "location": "prompt sections profil 70-132 + impl fetchs favorite_recipes/shopping_lists 175-189",
+            "recommendation": "Prioriser le retrait des deux fetchs morts (cf. finding data_coverage). Optionnel : envisager une injection conditionnelle des sous-sections profil (TRT/cycle/GLP-1) seulement quand le champ correspondant est présent, plutôt que tout en statique — gain tokens sans perte de couverture."
+          }
+        ]
+      },
+      {
+        "prompt": "training",
+        "summary": "Le prompt training.ts est solide sur le fond (perimetre net, regle hormonale TRT stricte, securite douleur deleguee a safety, voix NoDream globalement respectee). MAIS l'implementation fetchContext est cassee sur deux points majeurs : (1) le RAG exos est filtre avec un mauvais mapping ProfileForRag, ce qui annule de fait le filtrage niveau ET equipement — donc les regles #2/#3 du prompt (pas de DL sans barre, adapter au niveau) ne sont jamais appuyees par la data ; (2) toute la section PERSONAL RECORDS du prompt est morte cote data — getPrsSnapshot est importe mais jamais appele, context.prs n'existe pas. Le prompt promet des choses que l'impl ne fournit pas.",
+        "role_fit": "oui — l'agent reste bien cantonne a programmation/biomeca/charge/recup, delegue medical a safety et nutrition a nutrition ; les chevauchements sont gerees via request_consult.",
+        "findings": [
+          {
+            "dimension": "rag_coherence",
+            "severity": "critical",
+            "issue": "Le profil passe au RAG est mal mappe. fetchContext construit profileForRag = { level: profile.training_level, equipment: profile.equipment }, mais l'interface ProfileForRag (context.ts l.78-82) attend { training_history?, training_environment?, available_equipment? }. Les fonctions levelFromProfile() et equipmentFromProfile() lisent donc des champs absents : levelFromProfile retombe TOUJOURS sur 'intermediaire' (le ternaire ne voit jamais 'beginner'/'advanced'), et equipmentFromProfile retourne TOUJOURS undefined (pas de training_environment ni available_equipment) => AUCUN filtre equipement. Le RAG remonte donc des exos non filtres par niveau ni par materiel, pour tous les users.",
+            "location": "impl sub-agents/training.ts l.50-53 (profileForRag) + features/rag-coach/context.ts l.78-100 + appel l.130",
+            "recommendation": "Mapper correctement : profileForRag = { training_history: profile.training_level, training_environment: profile.training_environment, available_equipment: profile.equipment }. Note : training_level vaut deja 'beginner'/'advanced' (cf. snapshot l.99 = profile.training_history brut), donc le passer dans training_history est coherent avec levelFromProfile. Verifier aussi que profile.equipment correspond bien a des slugs compatibles available_equipment."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "critical",
+            "issue": "La section PERSONAL RECORDS du prompt (l.108-130) decrit en detail context.prs.top_exercises avec current_1rm, last_pr_date, delta_90day_pct, etc. et donne 4 regles d'exploitation. Mais fetchContext n'appelle JAMAIS getPrsSnapshot — l'import est present (l.18) mais inutilise. context.prs n'est donc jamais peuple. Toute la section du prompt est une instruction morte : au mieux ignoree, au pire le LLM hallucine des 1RM/deltas qu'il n'a pas.",
+            "location": "prompt training.ts l.108-130 vs impl sub-agents/training.ts (import getPrsSnapshot l.18 jamais appele ; aucun ctx.prs)",
+            "recommendation": "Ajouter dans fetchContext un bloc try/catch : const prs = await getPrsSnapshot(input.uid); if (prs) ctx.prs = prs; (modele identique aux blocs sleep/hrv l.136-150). Les noms de champs du snapshot (top_exercises, current_1rm, last_pr_date, n_prs_total, delta_90day_kg, delta_90day_pct) correspondent deja exactement au prompt."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "high",
+            "issue": "recent_workouts ne conserve aucune donnee de charge ni de detail d'exercice : le map (l.95-104) ne garde que date, type, exercises_count, rpe_avg, duration_min. Or le prompt fait reposer sa philosophie sur la 'progression mesurable' et le 'tracking des charges sur les exos cles' (l.32), et fixe confidence=high 'si dernière séance dispo' (l.140). L'agent ne voit jamais quels exos ont ete faits ni a quelle charge/reps — il ne peut donc ni auditer un programme, ni recommander une progression de charge concrete ('pas de fais plus de musculation' l.138), ni evaluer un volume reel. Le delta_90day des PRs (cf. finding precedent) etait le seul substitut, et il est lui aussi absent.",
+            "location": "impl sub-agents/training.ts l.95-104 (map recent_workouts) vs prompt l.32, l.138, l.140-141",
+            "recommendation": "Inclure au minimum un resume par exo des dernieres seances (name + top set weight/reps, ou volume par pattern). A defaut de tout charger, exposer les exercices avec leur meilleur set pour permettre des recommandations de charge concretes et le calcul de volume hebdo que le prompt suppose disponible."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "medium",
+            "issue": "Le prompt raisonne le cycle en numeros de jour explicites (J14 ovulation, J15-J28 luteale, J1-J5 menstruelle, l.62-68) alors que le snapshot fournit directement current_phase (enum calcule) + day_in_cycle, et expose on_hormonal_contraception (pas un champ 'contraception hormonale active' nomme tel quel). Le prompt ne dit jamais au LLM quel champ lire (current_phase vs day_in_cycle), ce qui cree un risque que le modele tente de deriver la phase des J-numbers au lieu d'utiliser current_phase deja calcule, ou inversement ignore on_hormonal_contraception.",
+            "location": "prompt training.ts l.62-68 vs cycle/store.ts CycleSnapshot l.163-176 (current_phase, day_in_cycle, on_hormonal_contraception)",
+            "recommendation": "Aligner le prompt sur les champs reels du snapshot : indiquer explicitement 'utilise context.cycle.current_phase (folliculaire/ovulation/luteale/menstruelle) ; context.cycle.on_hormonal_contraception=true => attenuer la lecture des phases'. Garder les J-numbers comme pedagogie seulement, pas comme source de calcul."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "low",
+            "issue": "ctx.profile charge weight_kg, age, sex, injuries mais le prompt n'exploite explicitement que sex (regle TRT/cycle), equipment, level, hormonal_context. injuries est charge et pertinent (choix d'exos, regle douleur l.46-49) mais le prompt ne dit jamais a l'agent d'utiliser context.profile.injuries pour ecarter des patterns contre-indiques — donnee chargee, exploitation non instruite. A l'inverse, le prompt 'Obésité musclée' (l.55-60) parle de LBM/BF mais aucune mensuration/composition corporelle (body fat, LBM) n'est chargee dans fetchContext.",
+            "location": "impl l.39-49 (ctx.profile inclut injuries, weight_kg ; pas de body fat/LBM) vs prompt l.46-49 (douleur) et l.55-60 (profil obesite musclee base sur LBM/BF)",
+            "recommendation": "Soit instruire le prompt a croiser context.profile.injuries avec le choix d'exos, soit accepter que ce profilage 'obesite musclee' (qui exige BF%/LBM) ne soit pas activable faute de data de composition corporelle chargee — auquel cas marquer cette section du prompt comme heuristique sur ressenti, pas sur data, pour eviter une fausse promesse de personnalisation."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "low",
+            "issue": "Le commentaire d'en-tete du fichier impl (l.4-9) liste le fetchContext comme : profile, active_plan.training, workout_sessions (3), form_checks (2), rag exos. Il omet cycle, sleep et hrv qui sont bel et bien fetches plus bas (l.60-67, 136-150). La doc d'en-tete est obsolete vs le code, ce qui peut induire en erreur lors d'une future maintenance (risque de croire que sleep/hrv ne sont pas dispo).",
+            "location": "impl sub-agents/training.ts l.1-10 (docstring) vs corps l.59-150",
+            "recommendation": "Mettre a jour la docstring d'en-tete pour lister cycle (si feminin), sleep, hrv — et, une fois corrige, prs."
+          }
+        ]
+      },
+      {
+        "prompt": "analytics",
+        "summary": "Prompt clair, bien cadré (voix NoDream respectée, périmètre net, délégation propre à nutrition/safety). Mais l'impl ne fournit PAS les fenêtres temporelles multi-semaines que le prompt exige : il ne charge que 7 jours de data, alors que le coeur du rôle (plateau >3 semaines, recalibrage TDEE sur N semaines, trends 14/30j, comparaison rythme vs goal) suppose 30-60 jours. Gap structurel data_coverage + alignement_prompt_impl à corriger en priorité.",
+        "role_fit": "partiel — le prompt définit exactement le bon rôle (diagnostic data, horizon 7-30j), mais l'impl ne récupère qu'une fenêtre 7 jours, donc l'agent ne peut pas tenir la moitié de ses promesses analytiques (plateau multi-semaines, recalibrage TDEE, rythme vs cible).",
+        "findings": [
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "critical",
+            "issue": "Le prompt demande de calculer 'rythme observé = weight_trend_60day.kg_per_week' (section DATA DISPONIBLE, goals) pour comparer au rythme cible et déclencher request_consult:['safety'] si >150%. Or fetchContext de analytics ne calcule JAMAIS weight_trend_60day. Cette clé n'existe que dans planning.ts (sub-agents/planning.ts L125-131). L'agent analytics reçoit goals (target_weight, duration_chosen_weeks) mais aucun rythme observé : la logique de réalignement et le garde-fou perte-muscle (>150% → safety) ne peuvent JAMAIS s'exécuter, ou pire l'agent hallucine la valeur.",
+            "location": "prompt analytics.ts L88-94 (bloc goals) ; impl analytics.ts fetchContext (aucun calcul de tendance) ; planning.ts L107-135 (seul endroit où weight_trend_60day est calculé)",
+            "recommendation": "Ajouter dans fetchContext de analytics le même calcul de tendance que planning.ts (query checkins_daily sur 60j, deltaKg/deltaDays → kg_per_week) et exposer ctx.weight_trend_60day. Sinon retirer du prompt toute la logique rythme observé vs cible et la déléguer explicitement à planning."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "critical",
+            "issue": "Tout le coeur analytique du prompt repose sur des fenêtres multi-semaines : 'tendances sur 7/14/30 jours' (L19), 'plateau >3 semaines de moyenne 7j stagnante' (règle 1, L42-46), 'TDEE à recalibrer : (poids actuel - poids initial) sur N semaines' (règle 3, L54-57), 'plateau >4 semaines → warning' (sortie, L116). Mais l'impl ne charge QUE 7 jours : checkin_7day_history limit(7) (L49-53) et food_logs sur sevenDaysAgoIso→now (L211-215). Il est physiquement impossible de détecter un plateau de 3-4 semaines ou de recalibrer le TDEE sur N semaines avec 7 points de data. L'agent ne peut pas faire le travail décrit.",
+            "location": "prompt analytics.ts L19, L42-46, L54-57, L116 ; impl analytics.ts fetchContext L48-53 (checkins limit 7) + L210-215 (food_logs 7 jours)",
+            "recommendation": "Étendre fetchContext : charger checkins_daily et food_logs sur au moins 30 jours (idéalement 60 pour le TDEE/plateau), calculer côté serveur les moyennes mobiles 7/14/30j et le delta de poids sur la période, et exposer ces agrégats (ex: weight_trend_7/14/30, plateau_weeks, kcal_avg_by_week). Ne pas laisser le LLM agréger sur une fenêtre 7j qui n'existe pas."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "Règle 1 (plateau) et L22 exigent 'adherence ≥80% sur food logs' incluant les macros ('kcal mais aussi macros'). Or l'impl n'agrège QUE le kcal par jour (byDay[day].kcal += data.totals?.kcal, L222) — aucun macro, et surtout AUCUN calcul d'adherence (food_logs_7day_summary ne contient que {date, kcal, entries}). Le prompt parle d'adherence_pct (sortie raw_data L118) mais rien dans l'impl ne la calcule ni ne compare logs vs active_plan_targets. L'agent doit donc inventer l'adherence à partir de kcal bruts vs cible, sans macros.",
+            "location": "prompt analytics.ts L22, règle 1 L43-45, sortie L118 ; impl analytics.ts L216-227 (agrégation kcal seul, pas de macros, pas d'adherence)",
+            "recommendation": "Dans fetchContext, agréger aussi protéines/glucides/lipides par jour, calculer une adherence_pct (jours loggés vs jours attendus, et écart kcal/macros vs active_plan_targets) et l'exposer explicitement. Sinon préciser dans le prompt que l'adherence se limite au kcal et que les macros ne sont pas disponibles."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "L'impl charge deux datasets jamais référencés dans le prompt : getCravingsSnapshot → ctx.cravings (L186-191) et getHabitsSnapshot → ctx.habits (L201-207). La section 'DATA DISPONIBLE EN CONTEXTE' du prompt (L70-98) ne mentionne ni cravings ni habits, et aucune règle n'explique comment les exploiter. Données chargées mais 'aveugles' pour le modèle (coût tokens + risque d'exploitation aléatoire/incohérente). habits.adherence_7day/30day_pct serait pourtant directement utile au diagnostic d'adherence comportementale (L25 'dérive comportementale').",
+            "location": "impl analytics.ts L185-191 (cravings) + L201-207 (habits) ; prompt analytics.ts L66-98 (section DATA, n'en parle pas)",
+            "recommendation": "Soit ajouter cravings et habits à la section DATA DISPONIBLE du prompt avec une consigne d'exploitation (ex: habits.adherence comme proxy d'adherence comportementale, cravings.recurrent_triggers pour expliquer weekends explosifs / sous-déclaration), soit retirer ces fetches de l'impl s'ils ne servent pas le rôle analytics."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "low",
+            "issue": "Décalage de noms de clés entre prompt et impl : le prompt annonce active_plan (L74) et food_logs_summary (L75), mais l'impl expose active_plan_targets (L99) et food_logs_7day_summary (L225). De même checkin_7day_history (prompt) inclut 'faim' mais l'impl mappe bien hunger (ok). Le LLM lit le JSON réel donc l'impact est faible, mais la doc du prompt ne décrit pas fidèlement les clés réellement reçues, ce qui nuit à la maintenance et peut induire le modèle en erreur si la clé est citée littéralement.",
+            "location": "prompt analytics.ts L74-75 vs impl analytics.ts L99 (active_plan_targets) et L225 (food_logs_7day_summary)",
+            "recommendation": "Aligner les noms : soit renommer les clés de l'impl pour matcher le prompt, soit corriger le prompt pour citer les noms exacts (active_plan_targets, food_logs_7day_summary). Faire de même pour toute la liste de la section DATA afin qu'elle reflète exactement le payload."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "low",
+            "issue": "Le prompt a une section CITATIONS (L104-107) listant 3 études (Rosenbaum & Leibel 2010, Helms 2014, Garthe 2011) que l'agent 'peut citer (max 1)'. Or fetchContext ne branche aucune source RAG : ces références sont codées en dur dans le prompt, pas récupérées. Ce n'est pas un bug en soi (citations figées = OK pour un domaine étroit), mais à la différence d'agents qui font du retrieval, analytics n'a pas de garde-fou anti-hallucination de chiffres/études : rien ne vérifie que la citation est correctement appariée au diagnostic.",
+            "location": "prompt analytics.ts L100-107 (CITATIONS) ; impl analytics.ts fetchContext (aucun appel RAG/retrieval)",
+            "recommendation": "Si la stratégie produit est 'citations figées', l'expliciter (commentaire impl + note prompt 'aucun RAG, références canoniques'). Sinon, brancher un petit retrieval sur la base de connaissances physio pour que les citations soient sourcées et vérifiables. À minima, garder le 'max 1' et interdire toute citation hors des 3 listées."
+          },
+          {
+            "dimension": "securite",
+            "severity": "low",
+            "issue": "La règle 'sous-déclaration probable' (règle 2, L48-52) inclut 'méta. baisse réelle' (adaptation métabolique). Le prompt déduit/insinue un mécanisme physiologique. C'est acceptable car formulé comme hypothèse de diagnostic data et l'agent ne prescrit pas. Mais la frontière avec le médical (ex: hypothyroïdie sous-jacente expliquant stagnation + fatigue + faim) n'est jamais posée : le prompt délègue nutrition/training/mental mais ne dit nulle part de passer la main à safety si le pattern fatigue+faim+stagnation persiste anormalement.",
+            "location": "prompt analytics.ts règle 2 L48-52 ; règle 5 L64 (délégation, mais safety absente sauf cas >150% rythme L94)",
+            "recommendation": "Ajouter une consigne : si pattern persistant énergie basse + faim élevée + stagnation malgré adherence correcte sur plusieurs semaines, signaler request_consult:['safety'] (cause potentiellement non-comportementale) plutôt que de conclure systématiquement à la sous-déclaration. Renforce le 'ne diagnostique pas médicalement'."
+          },
+          {
+            "dimension": "format_sortie",
+            "severity": "low",
+            "issue": "La sortie demande confidence basée sur 'jours data sur 7' (L117 : high si ≥7/7, medium 4-6, low <4) — cohérent avec la fenêtre 7j actuelle, mais en contradiction directe avec les règles plateau/TDEE qui réclament 3-4 semaines. Un user avec 7/7 jours mais aucune donnée au-delà aurait confidence=high alors qu'aucun diagnostic de plateau (>3 sem) n'est fondé. La confidence ne reflète pas la profondeur historique requise pour les diags multi-semaines.",
+            "location": "prompt analytics.ts L117 (confidence) vs règles L42-46 et L54-57",
+            "recommendation": "Conditionner la confidence à la profondeur d'historique requise par le type de diagnostic émis (ex: pour un verdict 'plateau', exiger ≥21 jours de data avant high). Une fois la fenêtre data étendue (cf. findings critical), recalibrer ce barème."
+          }
+        ]
+      },
+      {
+        "prompt": "safety",
+        "summary": "Prompt SafetyCoach solide sur le fond editorial : voix NoDream respectee (tutoiement, jamais \"regime\", pas de paternalisme, ne diagnostique pas, redirige sans rejeter), grille de severity claire, philosophie anti-chiffres-compulsifs bien posee, ressources de crise hardcodees (3114, FFAB) ce qui est le bon choix pour un agent de securite. Role PRIORITAIRE bien materialise (override critical, temperature 0.1 deterministe). MAIS plusieurs decalages prompt/impl reels sur la couverture data : le signal central \"perte de poids non sollicitee\" n'a pas l'objectif/goal de l'user dans le contexte pour distinguer solicitee vs non-solicitee ; les regles TRT/GLP-1 (hydratation) raisonnent sur un statut hormonal qui n'est PAS charge dans cet agent (risque d'inference TRT) ; l'amenorrhee est listee comme signal mais le cycle n'est jamais fetch alors qu'un getCycleSnapshot existe ; sleep+hrv sont charges mais jamais exploites par le prompt ; bloodwork numerique (Hb/hematocrite/CRP) reference par le prompt mais seulement expose en flags/note opaques.",
+        "role_fit": "oui — l'agent remplit bien son role prioritaire de detection/alerte/redirection non-medicale ; les manques sont des trous de couverture data, pas un defaut de cadrage.",
+        "findings": [
+          {
+            "dimension": "data_coverage",
+            "severity": "high",
+            "issue": "Le signal central 'Perte de poids non sollicitee >5%/mois' (prompt l.33) ne peut pas etre evalue correctement : fetchContext calcule bien weight_trend_30day.delta_pct, mais profile_flags (impl l.41-48) n'inclut PAS l'objectif de l'user (objective / goals). Sans connaitre si l'user est en lose_weight avec une duree choisie, le LLM ne peut pas distinguer une perte SOLICITEE (deficit assume) d'une perte NON sollicitee (drapeau rouge TCA/maladie). Risque des deux cotes : sur-alerter un cut volontaire normal, ou rater une perte pathologique chez quelqu'un dont l'objectif est gain_muscle.",
+            "location": "prompt l.33 + impl safety.ts fetchContext l.41-48 (profile_flags) et l.154-178 (weight_trend_30day)",
+            "recommendation": "Ajouter objective + goals.duration_chosen_weeks + target_weight_kg a profile_flags. Le NormalizedProfile les expose deja (snapshot.ts l.8, l.33-41). Permet au prompt de qualifier 'non sollicitee' = delta_pct negatif fort ALORS QUE l'objectif n'est pas une perte, ou perte tres au-dela du rythme cible."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "La section HYDRATATION du prompt (l.124-133) raisonne explicitement sur 'user sous TRT' et 'user sous GLP-1' (recommandations hematocrite/thrombose, re-evaluation dosage). Or NI hormonal_context NI uses_glp1 ne sont charges dans le contexte safety : profile_flags ne contient que age/sex/ed_history/comorbidities/medications, et HydrationSnapshot ne porte aucun statut hormonal. Le LLM devrait donc inferer le TRT/GLP-1 depuis medications (texte libre) ou le message user — exactement le risque d'inference TRT documente dans l'audit #4 (snapshot.ts l.18-26). La regle est donc soit morte, soit declenchee sur hallucination.",
+            "location": "prompt l.124-133 (HYDRATATION) ; impl profile_flags l.41-48 (manque hormonal_context, uses_glp1)",
+            "recommendation": "Ajouter hormonal_context et uses_glp1 (les deux exposes par NormalizedProfile, snapshot.ts l.17 et l.26) a profile_flags. Sinon retirer/affaiblir la section hydratation TRT/GLP-1 du prompt pour ne pas faire raisonner l'agent sur une donnee absente."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "Le prompt liste 'Amenorrhee (>3 cycles manques) chez la femme' comme signal sante physique (l.34) et comme warning (l.55). Mais fetchContext ne fetch JAMAIS le cycle, alors qu'un getCycleSnapshot complet existe (cycle/store.ts l.178 : last_period_start, settings de regularite, symptomes). L'agent ne detectera l'amenorrhee que si l'user la verbalise spontanement dans son message — il rate totalement le cas ou la donnee cycle est trackee mais l'absence de regles n'est pas mentionnee a l'oral.",
+            "location": "prompt l.34, l.55 ; impl fetchContext (aucun import de cycle/store, contrairement a sleep/hrv/hydration/substances)",
+            "recommendation": "Importer getCycleSnapshot et le charger conditionnellement (profile.sex === 'female' && !on_hormonal_contraception). Exposer last_period_start / regularite pour permettre une detection objective de l'amenorrhee, au lieu de dependre du seul texte."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "Donnees chargees mais jamais exploitees par le prompt : sleep (getSleepSnapshot) et hrv (getHrvSnapshot) sont fetch (impl l.140-152, commentaire 'signaux burnout/depression'), mais le PROMPT ne reference aucun seuil sommeil/HRV. La section EVENEMENTS DE VIE (burnout, l.119-121) s'appuie sur life_events + cravings cafeine + perte de poids, pas sur sleep.avg_hours_7day ni hrv.is_chronic_drift. Resultat : 2 snapshots Firestore lus a chaque run (cout + latence) sans contribuer a une regle definie. A l'inverse les 'Symptomes vagaux / lipothymie' (l.36) et 'fatigue extreme + sommeil detruit' (l.35) gagneraient justement a etre branches sur ces snapshots.",
+            "location": "impl l.140-152 (sleep, hrv) ; prompt l.35-36 (fatigue/sommeil) et l.110-122 (life events) qui ne citent pas sleep/hrv",
+            "recommendation": "Soit ajouter au prompt une regle exploitant sleep.short_nights_7day et hrv.is_chronic_drift (ex : alignes sur 'fatigue extreme + sommeil detruit' l.35 et le pattern burnout l.119), soit retirer ces deux fetch du contexte safety pour economiser appels/tokens si le signal reste couvert par checkin_7day.sleep_hours."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "medium",
+            "issue": "Le prompt raisonne sur des valeurs sanguines numeriques precises : 'BF >40% avec comorbidites' (l.37), 'Hb >17 g/dL' (l.130), 'bloodwork inflammatoire (CRP)' (l.104). Or l'impl n'expose le bloodwork qu'en bloodwork_recent = {date, flags, note} (l.106-110) — des champs opaques. Les valeurs Hb/hematocrite/CRP ne sont surfacees QUE si elles se trouvent deja dans flags/note. Le seuil quantitatif du prompt (Hb >17) n'a donc pas de donnee fiable a comparer.",
+            "location": "prompt l.37, l.104, l.130 ; impl bloodwork_recent l.98-114",
+            "recommendation": "Si le schema bloodwork porte des valeurs structurees (hb, hematocrit, crp), les exposer explicitement dans le snapshot plutot que via flags/note. Sinon, reformuler le prompt pour parler de 'flags bloodwork signalant Hb/CRP eleves' au lieu de seuils chiffres que l'agent ne peut pas verifier."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "low",
+            "issue": "Aucune recuperation RAG dans l'agent : les ressources de crise (FFAB, 3114, SOS Amitie, Alcool Info Service…) sont hardcodees dans le prompt (l.86-92, l.106-108). Pour un agent de SECURITE c'est defendable et meme preferable (numeros stables, pas de risque d'hallucination/fraicheur RAG sur un numero d'urgence). Mais c'est a noter : le header de l'agent ne mentionne pas de RAG et il n'y a pas de garde-fou contre le LLM qui inventerait un numero alternatif. Pas un defaut bloquant.",
+            "location": "prompt l.82-92, l.105-108 ; impl (pas d'appel rag-coach/store)",
+            "recommendation": "Conserver les numeros en dur (bon choix securite). Eventuellement ajouter au prompt une regle 'n'invente jamais de numero hors de cette liste' pour verrouiller, vu que confidence/severity sont deterministes (temp 0.1) mais que le texte des recommendations reste genere."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "low",
+            "issue": "La section SORTIE decrit request_consult comme 'generalement vide. Tu peux suggerer [mental] si... accompagnement psy leger' (l.147). C'est coherent, mais le prompt n'explicite jamais le comportement attendu quand severity=critical vis-a-vis de mental : un cas critical (idees noires) devrait-il systematiquement requester mental, ou la redirection pro suffit-elle ? L'ambiguite peut produire des outputs incoherents entre runs sur des cas a haut risque.",
+            "location": "prompt l.147 (request_consult) vs l.41-42 (idees noires = critical)",
+            "recommendation": "Preciser une regle : pour critical psychologique (idees noires), prioriser la redirection externe (3114) ET indiquer si mental doit etre consulte ou non, pour eviter une heuristique flottante sur les cas les plus sensibles."
+          },
+          {
+            "dimension": "perimetre_chevauchement",
+            "severity": "low",
+            "issue": "La section SUBSTANCES (l.94-108 : seuils AUDIT-C, OMS alcool, binge, cafeine/adrenal fatigue) et la section HYDRATATION/HRV recoupent potentiellement le perimetre d'analytics (correlations data) et de mental (gestion stress/cravings). Le prompt ne pose pas de frontiere : il dit 'flagger en warning' mais ne renvoie pas vers analytics/mental pour l'interpretation fine. Risque mineur de double-traitement si le Supervisor consulte aussi analytics sur les memes patterns substances.",
+            "location": "prompt l.94-108 (SUBSTANCES) vs roles analytics/mental",
+            "recommendation": "Ajouter une phrase de frontiere : safety FLAGGE le risque (binge, dependance) et redirige (addictologie) ; l'analyse de tendance fine et l'accompagnement comportemental reviennent a analytics/mental. Clarifie le hand-off et evite la redondance dans la reponse agregee."
+          },
+          {
+            "dimension": "cout_verbosite",
+            "severity": "low",
+            "issue": "fetchContext lance 8 lectures Firestore par run (profile, checkins x2 dont un 30j sans limit, alerts, bloodwork, hydration, substances, life_events, sleep, hrv). Le safety est PRIORITAIRE donc consulte souvent ; sleep+hrv (cf. finding non exploite) et le scan weight 30j sans limite ajoutent du cout/latence sur le chemin critique. Le query weight_trend (l.157-161) fait un where>= + orderBy sans .limit(), potentiellement large si l'user check-in plusieurs fois/jour.",
+            "location": "impl fetchContext l.34-180, en particulier l.154-178 (query sans limit) + l.140-152 (sleep/hrv)",
+            "recommendation": "Ajouter un .limit() raisonnable au query weight 30j et reevaluer la necessite de sleep/hrv ici (cf. finding data_coverage). Le check-in 7j chargeant deja weight/sleep_hours, une partie du 30j et du sleep snapshot fait doublon."
+          }
+        ]
+      },
+      {
+        "prompt": "mental",
+        "role_fit": "oui — l'agent reste bien dans le périmètre coach émotionnel/motivationnel léger, délègue le médical/TCA à safety et les chiffres aux autres agents ; quelques fuites de data (goals_history, last_debrief) et deux champs coach_state morts à corriger.",
+        "summary": "Le prompt mental est solide sur la voix NoDream (tutoiement, anti-paternalisme, anti-moralisation, validation > solution) et sur la sécurité (escalade safety bien cadrée, pas de diagnostic). Le principal problème est côté alignement prompt/impl : l'impl mappe deux champs coach_state (`tone_preferences`, `do_not_repeat`) qui n'existent PAS dans le schéma CoachState — ils sont toujours undefined — donc la mémoire anti-répétition promise dans l'en-tête de l'impl est encore morte malgré le fix du doc-id documenté juste au-dessus. À l'inverse, `goals_history` et `last_debrief` sont chargés mais jamais référencés par le prompt (data orpheline), tandis que le profil « pattern d'abandon » du prompt n'a aucun hook data. Un mot interdit par la mémoire utilisateur (« régime ») n'apparaît pas, bon point, mais le prompt lui-même bannit « discipline/perfection » de façon cohérente.",
+        "findings": [
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "L'impl lit `state.tone_preferences` (mental.ts impl ligne 54) mais le schéma CoachState (coach-state/schema.ts) ne contient AUCUN champ `tone_preferences`. La valeur sera toujours undefined. C'est un faux signal : le commentaire d'audit 2026-05-28 #12 (lignes 45-47) se félicite d'avoir réparé le doc-id ('state' -> 'main') pour ressusciter la règle §3, mais réintroduit immédiatement un mapping vers un champ inexistant.",
+            "location": "impl mental.ts L52-56 (ctx.coach_state = { response_style, tone_preferences, do_not_repeat }) vs coach-state/schema.ts L26-45 (interface CoachState)",
+            "recommendation": "Supprimer `tone_preferences` du mapping. Le seul champ de préférence de ton réel est `response_style` (déjà mappé et utilisé par §3). Si une préférence multi-tons est voulue, l'ajouter d'abord au schéma CoachState avant de la lire."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "L'impl mappe `state.do_not_repeat` (mental.ts impl ligne 55) — champ également absent de CoachState. Le vrai signal anti-répétition du schéma est `topics_discussed` (+ `personality_notes`). Conséquence : l'en-tête de l'impl (lignes 8-12) promet 'dernier session_debrief (pour ne pas répéter)' et la mémoire de sujets déjà couverts, mais aucune donnée de dé-duplication exploitable n'arrive réellement au modèle.",
+            "location": "impl mental.ts L52-56 vs coach-state/schema.ts L31-32 (topics_discussed) et L41-42 (personality_notes)",
+            "recommendation": "Remplacer `do_not_repeat` par `topics_discussed` (et éventuellement `personality_notes`) dans le mapping ctx.coach_state, puis ajouter une règle explicite dans le prompt instruisant l'agent à ne pas ré-expliquer les sujets listés dans `topics_discussed`."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "`goals_history` est récupéré (impl L129-135, avec le flag `is_unstable` = >=3 changements d'objectif en 90j, signal direct de 'pattern d'abandon') mais le prompt système ne le référence NULLE PART. Or le prompt décrit explicitement un profil « Identification / pattern d'abandon » (lignes 68-69) et invite à explorer les changements de timeline — exactement ce que `is_unstable`/`total_changes` matérialisent. Donnée chargée mais jamais exploitée, et profil prompt sans hook data.",
+            "location": "impl mental.ts L129-135 (getGoalsHistorySnapshot) ; goals-history/store.ts L72-83 (is_unstable, total_changes) ; prompt mental.ts L68-69 (profil pattern d'abandon)",
+            "recommendation": "Ajouter une section prompt 'GOALS HISTORY (si context.goals_history dispo)' reliant `is_unstable=true` au profil pattern d'abandon : valider sans juger, suggérer de creuser la raison des changements répétés, éventuellement request_consult planning. Sinon, retirer le fetch pour économiser une lecture Firestore."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "`last_debrief` (created_at, summary, mood_trend) est récupéré (impl L72-88) et présenté dans l'en-tête de l'impl comme servant à 'ne pas répéter', mais le prompt système ne mentionne jamais `last_debrief`, `session_debrief`, ni `mood_trend`. L'agent ne sait donc pas qu'il dispose de cette donnée ni quoi en faire — en particulier `mood_trend` qui serait directement pertinent pour jauger une dégradation émotionnelle.",
+            "location": "impl mental.ts L72-88 (ctx.last_debrief) ; prompt mental.ts (aucune occurrence de last_debrief/mood_trend)",
+            "recommendation": "Ajouter une règle prompt exploitant last_debrief : utiliser `summary` pour ne pas re-couvrir le même angle, et `mood_trend` comme signal supplémentaire de bascule (mood_trend en baisse persistante => vigilance + éventuel request_consult safety). Sinon retirer le fetch."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "medium",
+            "issue": "Aucune source RAG / récupération documentaire n'est branchée dans fetchContext alors que le prompt s'appuie sur des références théoriques nommées (Self-Determination Theory Deci & Ryan, ACT, Lally 2010 ~66j, Neff 2003) dans la section CITATIONS. Les citations reposent donc à 100% sur la mémoire paramétrique du modèle, sans grounding — risque d'attribution/chiffre erroné (ex: '~66 jours' Lally) présenté comme sourcé.",
+            "location": "impl mental.ts fetchContext L33-146 (aucune requête RAG) ; prompt mental.ts L159-167 (section CITATIONS)",
+            "recommendation": "Soit accepter explicitement l'absence de RAG (les citations restant 'soft', max 1, déjà cadré) — auquel cas c'est acceptable pour un coach léger ; soit, si la rigueur des citations compte, brancher une petite source RAG sur ces 4 cadres. A minima, garder la consigne 'max 1 citation' et ne jamais inventer de chiffre précis non listé."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "medium",
+            "issue": "Le prompt contient une règle dure 'Pas de chiffres' (§1 ligne 46 : 'pas de %', redirection vers autres agents) qui entre en tension directe avec plusieurs exemples du prompt lui-même qui FONT citer des chiffres : section Rumination ligne 60 ('sur les 28 derniers jours, tu as eu 24 jours dans la cible'), section recommendations ligne 175 ('la moyenne mobile baisse'), section Habitudes (adherence_7day_pct > 80% / < 50%). L'agent reçoit une instruction contradictoire sur le droit de verbaliser des chiffres de données comportementales.",
+            "location": "prompt mental.ts §1 L46 (Pas de chiffres) vs L60, L102-106, L175",
+            "recommendation": "Préciser la frontière : 'Pas de chiffres prescriptifs (macros, poids cible, % à viser → autres agents). Tu PEUX refléter des chiffres descriptifs déjà observés (jours dans la cible, adhérence) pour recadrer.' Lever l'ambiguïté évite que l'agent s'auto-censure sur les recadrages data prévus."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "low",
+            "issue": "Le prompt parle de `context.cycle` avec des phases en jours ('Lutéale J15-J28', 'Menstruelle J1-J5', etc.) mais le snapshot réel expose `current_phase` (enum CyclePhase déjà calculé), `cycle_day`, `symptoms_last_7day` et `on_hormonal_contraception`. La donnée nécessaire est présente (la phase est pré-calculée, donc l'agent n'a pas à dériver les bornes en jours), mais le prompt invite implicitement l'agent à raisonner sur des plages de jours qu'il n'a pas besoin de recalculer.",
+            "location": "prompt mental.ts L72-83 (plages J15-J28 etc.) vs cycle/store.ts L165-223 (current_phase, on_hormonal_contraception, symptoms_last_7day)",
+            "recommendation": "Référencer les champs réels dans le prompt : 'utilise context.cycle.current_phase (déjà calculé), context.cycle.symptoms_last_7day et on_hormonal_contraception'. Garder les bornes en jours uniquement comme glossaire, pas comme calcul attendu."
+          },
+          {
+            "dimension": "securite",
+            "severity": "low",
+            "issue": "Le prompt délègue correctement les signaux graves à safety, mais l'impl ne charge AUCUN signal de risque structuré (pas de snapshot safety/flags, pas d'historique d'alertes). La détection de bascule repose entièrement sur le texte de recent_chat. C'est acceptable pour un coach léger, mais le prompt évoque des déclencheurs concrets (antécédent TCA, binge alcool >6 unités, consommation cachée) dont seul un sous-ensemble est observable : `drinking_days_7day` est chargé via substances, mais l'intensité par épisode (>6 unités en 1 soir) n'est pas un champ exposé du snapshot.",
+            "location": "prompt mental.ts L144-145 (binge >6 unités) vs substances/store.ts (expose drinking_days_7day, pas d'unités-max-par-soir)",
+            "recommendation": "Soit reformuler le déclencheur prompt sur ce qui est mesurable ('jours de consommation fréquents OU mention verbale de binge') ; soit ajouter un champ max_units_single_day au snapshot substances. Garder l'escalade safety comme filet, ce qui est déjà fait."
+          },
+          {
+            "dimension": "voix_ton",
+            "severity": "low",
+            "issue": "Le prompt est globalement très aligné voix NoDream (tutoiement constant, anti-paternalisme, anti-moralisation, bannit explicitement 'régime'/'discipline'/'perfection'). Seule micro-friction : la section AUTO-COMPASSION cite 'Neff 2003' et 'self-compassion scale' en jargon académique au sein d'un prompt par ailleurs anti-jargon ; risque léger que l'agent fasse une 'tartine' théorique malgré la consigne 'pas de tartine zen' ligne 157.",
+            "location": "prompt mental.ts L148-157 (section AUTO-COMPASSION)",
+            "recommendation": "Aucune action obligatoire. Optionnel : rappeler en fin de section 'ne nomme jamais la théorie à l'user, applique-la silencieusement' pour verrouiller le registre conversationnel."
+          }
+        ]
+      },
+      {
+        "prompt": "social",
+        "summary": "Le prompt SocialCoach est clair, bien borné, fidèle à la voix NoDream (tutoiement, ban du mot \"régime\" via règle \"ne pas annoncer je suis au régime\", anti-moralisation explicite sur \"cheat\", anti-jugement de l'entourage). Le périmètre est proprement délégué (nutrition/safety/mental/analytics). Le vrai écart est côté implémentation : la règle 3 promet de comparer le \"BF mesuré\" et de rediriger vers analytics, mais fetchContext ne charge AUCUNE donnée de mensuration/composition ni d'historique — et l'agent n'a aucun RAG branché alors que ses stratégies \"Ottawa plate model\", protocoles de sortie, gestion couple gagneraient à être ancrées sur une base de connaissances. Plusieurs champs du profil chargés ne sont jamais référencés par le prompt (couverture partiellement aveugle).",
+        "role_fit": "oui — l'agent couvre fidèlement la pression sociale, normes, contexte familial/pro/amical et sorties, avec des délégations nettes vers les autres agents.",
+        "findings": [
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "La règle 3 du prompt promet : 'tu rappelles que le BF mesuré > l'œil de l'autre, et tu redirects vers data si besoin (request_consult: [\"analytics\"])'. Le prompt s'appuie donc sur une donnée de composition corporelle mesurée (body fat / mensurations / historique). Or fetchContext ne charge JAMAIS de mensuration, de BF, de poids ni d'historique analytics — uniquement des champs de profil statiques (household, work_context, lifestyle, travel_frequency, relationship_status). L'agent ne peut pas réellement opposer 'le BF mesuré' au commentaire de l'entourage : il ne dispose d'aucun chiffre. Il devra soit inventer, soit rester vague.",
+            "location": "PROMPT social.ts ligne 44 (Règle 3) vs IMPL social.ts lignes 25-31 (fetchContext, objet ctx.profile)",
+            "recommendation": "Soit charger un snapshot léger de la dernière mesure (BF/poids + date) dans fetchContext pour étayer la règle 3, soit reformuler la règle 3 pour ne PAS dépendre d'un chiffre absent (ex: 'tu rappelles que les données mesurées comptent plus que l'œil de l'autre, et tu rediriges vers analytics qui détient ces données via request_consult'). La délégation à analytics est la bonne posture ; aligner le wording pour que l'agent ne prétende pas connaître le BF."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "medium",
+            "issue": "Aucun RAG n'est branché dans fetchContext. Le prompt mobilise pourtant des références de connaissance concrètes ('assiette type plate model (Ottawa)', protocoles de sortie avant/pendant/après, stratégies couple/famille) qui sont typiquement adossées à une base de connaissances. L'agent produit ces recommandations purement de tête, sans ancrage documentaire, ce qui est incohérent avec les autres sous-agents s'ils utilisent un RAG.",
+            "location": "IMPL social.ts lignes 20-41 (fetchContext — aucune requête RAG / retrieval) ; PROMPT ligne 55 (réf 'plate model (Ottawa)')",
+            "recommendation": "Si le système dispose d'une couche RAG (comme suggéré par le rôle 'données + RAG' du fetchContext), ajouter une requête de retrieval ciblée sur les thèmes sociaux (gestion des sorties, pression de l'entourage, cohabitation alimentaire en couple) à partir des derniers messages du chat. Sinon, documenter explicitement que cet agent est volontairement no-RAG (léger) pour lever l'ambiguïté."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "Plusieurs champs de profil sont chargés mais ne sont reliés à aucune instruction du prompt — leur exploitation par le modèle est laissée au hasard. 'travel_frequency' est chargé et le prompt a bien une section Voyages + règle 4 'sorties fréquentes', donc OK ; mais 'lifestyle' et 'relationship_status' ne sont jamais nommés dans le prompt (le prompt parle de 'couple/famille' et 'travail' sans dire à l'agent de lire relationship_status/work_context du contexte). Risque : données chargées mais sous-exploitées, et inversement le prompt raisonne sur des situations (sport en groupe, pots pro) sans champ de données correspondant.",
+            "location": "IMPL social.ts lignes 25-31 (champs lifestyle, relationship_status) vs PROMPT sections DOMAINE/RÈGLES qui ne référencent jamais ces clés",
+            "recommendation": "Ajouter dans le prompt une courte section 'CONTEXTE DISPONIBLE' listant les champs effectivement fournis (household, work_context, lifestyle, travel_frequency, relationship_status) et comment les utiliser, pour que la donnée chargée serve réellement le raisonnement et éviter le chargement mort."
+          },
+          {
+            "dimension": "format_sortie",
+            "severity": "medium",
+            "issue": "Incohérence interne sur les valeurs de severity. La section SORTIE (ligne 56) dit 'severity : info presque toujours. Warning si...' (valeurs 'info'/'warning'), cohérent avec la règle 6 'severity=warning'. Mais aucun schéma d'énumération n'est posé et le prompt ne précise pas la liste fermée des valeurs autorisées de AgentOutput.severity (info/warning/... critical ?). Pour un agent qui détecte de l'isolement (signal potentiellement sérieux), l'absence de spec claire des niveaux peut produire un severity non conforme au type AgentOutput attendu par le superviseur.",
+            "location": "PROMPT social.ts ligne 47 (règle 6 'severity=warning') et ligne 56 (section SORTIE)",
+            "recommendation": "Expliciter l'énumération fermée de severity attendue par AgentOutput (ex: info | warning | critical) et confirmer qu'elle correspond exactement au type TS partagé. Préciser quand 'warning' suffit vs quand escalader, surtout pour l'isolement (règle 6) où mental+safety sont déjà sollicités."
+          },
+          {
+            "dimension": "perimetre_chevauchement",
+            "severity": "low",
+            "issue": "Léger chevauchement avec planning : règle 4 'si l'user a 4+ sorties/semaine, tu suggères de planifier les écarts'. La planification des écarts/calendrier relève potentiellement de l'agent planning. Le périmètre social devrait conseiller l'angle social ('anticiper plutôt que subir') et déléguer la mécanique de planification, sinon deux agents produisent des plannings concurrents.",
+            "location": "PROMPT social.ts ligne 45 (Règle 4)",
+            "recommendation": "Préciser que social donne le principe ('anticiper les sorties au lieu de les subir') et peut suggérer request_consult: [\"planning\"] (et/ou \"nutrition\") pour la mise en plan concrète, plutôt que de produire lui-même un planning détaillé."
+          },
+          {
+            "dimension": "risque_reponse",
+            "severity": "low",
+            "issue": "La règle 6 (isolement → warning + request_consult mental/safety) est une bonne garde-fou, mais le prompt ne dit pas explicitement à l'agent de NE PAS tenter de prendre en charge lui-même la détresse psychologique au-delà de la détection. Combiné à la règle 2 ('1-2 angles de discussion, pas une thérapie'), le risque est faible mais le prompt pourrait être plus ferme sur le fait que dès qu'un signal de détresse/TCA apparaît, social s'efface au profit de safety/mental sans donner de conseil psychologique substantiel.",
+            "location": "PROMPT social.ts lignes 43 (Règle 2) et 47 (Règle 6)",
+            "recommendation": "Ajouter une phrase de bornage : 'Dès qu'un signal de détresse, TCA ou isolement apparaît, tu te limites à valider et à escalader (request_consult mental/safety) — tu ne fournis pas de conseil psychologique ou clinique.' Cela renforce la délégation médicale/mentale déjà prévue."
+          }
+        ]
+      },
+      {
+        "prompt": "education",
+        "role_fit": "oui — l'agent est bien cantonné à la vulgarisation scientifique source-driven, sans data perso, et délègue l'application individuelle aux bons agents (nutrition/training/analytics) ; le périmètre est propre.",
+        "summary": "Le prompt est clair, bien structuré et fidèle au rôle (vulgarisation sourcée, pas de prescription perso, délégation correcte). Deux problèmes réels touchent la chaîne RAG : (1) le garde-fou anti-hallucination strict du module M9 (buildRAGPrompt « ne cite jamais hors liste fournie ») n'est PAS appliqué à cet agent, alors que le prompt impose des citations obligatoires ET fournit une liste d'auteurs hardcodée — risque d'émettre des labels/URLs non vérifiés quand le RAG ne renvoie rien ; (2) le message user français est passé tel quel à searchScientificCorpus, sans l'étape d'extraction de mots-clés EN décrite dans le README, ce qui dégrade fortement la branche PubMed. data_coverage conforme (aucune donnée perso nécessaire). Quelques manques de voix (mot « régime » non interdit, anti-paternalisme non explicité).",
+        "findings": [
+          {
+            "dimension": "rag_coherence",
+            "severity": "high",
+            "issue": "Le garde-fou anti-hallucination du module RAG (buildRAGPrompt dans rag-sourcing/prompts.ts, consigne 3-4 : « Ne cite JAMAIS de sources en dehors de la liste fournie ci-dessus. N'invente pas d'études, de PMIDs, de liens ou d'auteurs ») n'est PAS appliqué à l'EducationCoach. L'agent utilise EDUCATION_SYSTEM_PROMPT + base.buildUserPrompt, qui injecte les sources sous la clé ctx.scientific_sources via JSON.stringify, sans aucune consigne restreignant les citations à ce pool. Combiné au fait que le prompt rend les citations OBLIGATOIRES (min 1) et fournit une liste d'auteurs codée en dur (Helms 2014, Phillips 2011...), le modèle est incité à produire un label de citation même quand fetchContext n'a rien remonté — en puisant dans sa liste mémorisée, avec un risque d'URL/PMID fabriqué.",
+            "location": "agents/sub-agents/education.ts (fetchContext n'utilise pas buildRAGPrompt) + prompts/agents/education.ts SORTIE « citations : OBLIGATOIRE — minimum 1 source » + bloc SOURCES DE RÉFÉRENCE codé en dur",
+            "recommendation": "Ajouter au prompt une règle explicite : « Cite UNIQUEMENT les sources présentes dans [CONTEXTE DOMAINE].scientific_sources. Si ce tableau est vide ou non pertinent, NE FABRIQUE PAS de citation : mets citations à [] (ou laisse vide) et baisse confidence. » Et clarifier que la liste SOURCES DE RÉFÉRENCE n'est qu'un repère de vocabulaire, pas une autorisation de citer sans la source réellement remontée par le RAG. Idéalement, faire passer le bloc de sources par buildRAGPrompt pour réutiliser le garde-fou éprouvé."
+          },
+          {
+            "dimension": "rag_coherence",
+            "severity": "high",
+            "issue": "searchScientificCorpus reçoit input.user_message brut (français) sans étape d'extraction/traduction de mots-clés en anglais. Le README M9 décrit pourtant explicitement cette étape (« Gemini analyse la question et en extrait 2-3 mots-clés scientifiques en anglais, ex: 'protéines musculation' -> 'protein intake hypertrophy' »). La branche searchPubMed se contente de strip + split + join(' AND ') des termes français → des requêtes comme « protéine AND musculation AND hypertrophie » ne matchent quasiment rien sur PubMed. Le corpus interne (THEME_KEYWORDS en français) et FR-sources amortissent, mais la couverture PubMed (fallback large décrit comme central) est largement perdue.",
+            "location": "agents/sub-agents/education.ts L25 `await searchScientificCorpus(input.user_message)` ; client.ts searchPubMed L72-79 (aucune traduction) ; README.md L13 (étape extraction EN attendue)",
+            "recommendation": "Insérer l'extraction de mots-clés EN avant l'appel (soit dans fetchContext, soit dans searchScientificCorpus en amont de searchPubMed), conformément au README. À défaut, documenter que l'agent education s'appuie principalement sur le corpus interne FR et que PubMed est best-effort, pour ne pas surévaluer la couverture."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "medium",
+            "issue": "Le prompt ne référence jamais la clé exacte sous laquelle les sources sont injectées (ctx.scientific_sources). Le modèle reçoit un blob JSON [CONTEXTE DOMAINE] et doit deviner que scientific_sources est le pool de vérité à mapper vers le format de citation {label, url?}. Le format de sortie attendu ({label,url?}) ne correspond pas non plus à la forme remontée ({title,authors,source,year,url,abstractSnippet}) — le mapping (ex. label = `${authors} ${year} (${source})`) est laissé entièrement implicite, d'où risque d'incohérence de labels d'une réponse à l'autre.",
+            "location": "prompts/agents/education.ts (SORTIE + Format citations L67) vs agents/sub-agents/education.ts L27-34 (forme des objets scientific_sources) vs base.ts buildUserPrompt L56",
+            "recommendation": "Documenter dans le prompt : « Les sources réelles te sont fournies dans [CONTEXTE DOMAINE].scientific_sources. Pour chaque citation, construis label depuis authors+year+source et reprends url tel quel (jamais d'URL inventée). »"
+          },
+          {
+            "dimension": "voix_ton",
+            "severity": "medium",
+            "issue": "La règle de voix NoDream interdisant le mot « régime » (dire plan/transformation) n'est pas énoncée dans ce prompt. Sur un agent de vulgarisation nutrition qui parle de perte de poids, déficit, sèche, le terme « régime » est très probable en sortie. Le tutoiement, lui, est implicite mais jamais imposé explicitement comme dans le prompt RAG (buildRAGPrompt consigne 5 « tutoiement obligatoire ») — base.buildUserPrompt ne réinjecte pas cette règle.",
+            "location": "prompts/agents/education.ts (aucune section voix/ton ; absence de l'interdit « régime » et de l'obligation de tutoiement) ; à comparer à rag-sourcing/prompts.ts consigne 5",
+            "recommendation": "Ajouter une courte section VOIX : tutoiement obligatoire ; ne jamais écrire « régime » → dire « plan »/« transformation »/« déficit » ; ton de pair adulte, sans paternalisme ni moralisation."
+          },
+          {
+            "dimension": "securite",
+            "severity": "medium",
+            "issue": "Le prompt fixe severity=warning pour les questions révélant un comportement dangereux (jeûne 7 jours, surdosage suppléments) mais ne dit jamais de DÉLÉGUER à l'agent safety dans ce cas. La règle 5 ne prévoit request_consult que vers nutrition/training/analytics (application perso). Une question éducative qui révèle un risque réel (ex. « comment tenir un jeûne de 7 jours ») devrait remonter à safety, pas seulement être taguée warning. Risque de chevauchement non géré avec l'agent safety.",
+            "location": "prompts/agents/education.ts RÈGLES SPÉCIFIQUES 5 + SORTIE severity (warning sans consult safety)",
+            "recommendation": "Préciser : « Si la question révèle un comportement potentiellement dangereux pour la santé, severity=warning ET request_consult inclut 'safety'. Tu n'évalues pas le risque médical individuel toi-même (rôle de safety) : tu expliques le mécanisme et tu délègues. »"
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "low",
+            "issue": "Incohérence de longueur du diagnostic : la PHILOSOPHIE/SORTIE annonce « diagnostic 4-8 phrases » et la structure « 3 paragraphes courts » (définition → mécanisme → implication), mais la PHILOSOPHIE impose aussi « au moins 1 source par diagnostic », « différencier hypothèse/consensus/mythe », « effet taille/n », « pas d'extrapolation rongeurs→humains ». Tout cela tient difficilement en 4-8 phrases pour une question non triviale ; tension implicite entre exhaustivité épistémique demandée et budget de longueur.",
+            "location": "prompts/agents/education.ts PHILOSOPHIE (L33-37) vs RÈGLES 2 (3 paragraphes) vs SORTIE diagnostic (4-8 phrases)",
+            "recommendation": "Clarifier la priorité : « Vise 3 paragraphes / 4-8 phrases ; si la rigueur (taille d'échantillon, nuance hypothèse/consensus) exige plus, privilégie l'exactitude sur la concision, sans dépasser ~12 phrases. »"
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "low",
+            "issue": "fetchContext slice déjà à 5 (ctx.scientific_sources = sources.slice(0,5)) alors que searchScientificCorpus retourne déjà au plus 5 (client.ts .slice(0,5)). Redondance inoffensive mais signale un possible malentendu : si le cap interne change, le double-slice masquera le besoin réel. Par ailleurs abstractSnippet est mappé mais peut être undefined (PubMed le remplit avec le titre) — donnée chargée parfois vide, jamais signalée au modèle.",
+            "location": "agents/sub-agents/education.ts L27 `.slice(0, 5)` vs client.ts L64 `.slice(0, 5)` ; mapping abstractSnippet L142 (= titre côté PubMed)",
+            "recommendation": "Retirer le double slice (laisser le client gérer le cap) et, si possible, ne pas présenter abstractSnippet quand il est égal au titre, pour éviter du bruit redondant dans le prompt."
+          },
+          {
+            "dimension": "perimetre_chevauchement",
+            "severity": "low",
+            "issue": "Le bloc SOURCES DE RÉFÉRENCE catégorise « Entraînement » (Schoenfeld, Zourdos...) et « Nutrition » comme domaines de citation de l'agent education, ce qui est légitime pour expliquer un mécanisme, mais la frontière avec training/nutrition (qui « appliquent ») n'est rappelée que par la règle 5. Le risque résiduel est que l'agent dérive vers de la prescription d'entraînement déguisée en explication. Faible car la PHILOSOPHIE « pas de prescription perso » est claire.",
+            "location": "prompts/agents/education.ts SOURCES DE RÉFÉRENCE (Entraînement) + en-tête commentaire L8 « NE TRAITE PAS application individuelle »",
+            "recommendation": "Renforcer en une ligne : « Tu expliques le POURQUOI des mécanismes training/nutrition ; dès que la réponse devient un PLAN ou une dose/charge à appliquer, c'est training/nutrition → request_consult. »"
+          }
+        ]
+      },
+      {
+        "prompt": "planning",
+        "role_fit": "oui — le prompt et l'impl couvrent fidèlement le rôle de stratège long-terme (phases caloriques, reverse, recomp, year-long, prep), sans empiéter sur nutrition/training/analytics/safety qui sont correctement délégués via request_consult.",
+        "summary": "Le prompt planning est solide, bien borné, voix NoDream respectée (tutoiement, \"plan/transformation\" jamais \"régime\", délégation médicale à safety, pas de paternalisme). Mais l'alignement prompt↔impl a des trous nets : (1) la section CITATIONS offre 6 références scientifiques précises alors qu'AUCUN RAG n'est branché dans fetchContext — contrairement à nutrition/education/training — donc l'agent cite de mémoire (risque de chiffres hallucinés sur Helms/Garthe/Trexler) ; (2) le prompt s'appuie de façon répétée sur la libido comme signal de diet break / transition, mais checkin_summary_30day ne calcule jamais la libido ; (3) HRV est chargé par l'impl mais totalement absent du prompt (donnée payée en tokens, jamais exploitée). Plusieurs incohérences de nommage et données chargées-mais-non-instruites complètent le tableau.",
+        "findings": [
+          {
+            "dimension": "rag_coherence",
+            "severity": "high",
+            "issue": "Le prompt dédie une section entière CITATIONS (lignes 126-136) listant 6 références précises à citer (Helms 2014, Garthe 2011, Trexler 2014, Rosenbaum & Leibel 2010, Mountjoy 2014, Aragon & Schoenfeld 2013), et le prompt cite des CHIFFRES sourcés (0.5-0.7%/sem Garthe, cut >12 sem Trexler, RED-S Mountjoy). Or fetchContext (impl) ne fait AUCUNE récupération RAG : aucun import de searchScientificCorpus / searchNutritionGuides / buildCoachRagFragment, contrairement à education.ts (searchScientificCorpus), nutrition.ts (searchNutritionGuides) et training.ts (buildCoachRagFragment). BaseAgent ne fait pas de RAG non plus. L'agent doit donc produire ces citations + chiffres depuis sa mémoire paramétrique → risque réel de citations/valeurs hallucinées sur un domaine où le prompt fait autorité chiffrée.",
+            "location": "prompt planning.ts lignes 126-136 (section CITATIONS) + lignes 33-34 (chiffres Trexler/Garthe) vs impl planning.ts fetchContext (aucun import RAG, l.13-23) ; comparer à education.ts:13, nutrition.ts:15, training.ts:16",
+            "recommendation": "Brancher une récupération RAG corpus scientifique dans fetchContext (ex. searchScientificCorpus(input.user_message) comme education.ts) et injecter le fragment dans ctx.rag_evidence, OU — si décision produit de ne pas faire de RAG ici — retirer/atténuer la section CITATIONS et interdire explicitement de citer un chiffre/source non fourni en contexte ('ne cite que les références présentes dans rag_evidence ; sinon parle en principes sans numéro d'étude')."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "high",
+            "issue": "Le prompt s'appuie de manière répétée sur la LIBIDO comme signal objectif de transition de phase et de détection diet break : ligne 27 ('libido' dans transition criteria), ligne 47 ('Sommeil/libido/énergie en baisse marquée → signaux REDS'), ligne 116 ('checkin_summary : signaux long-terme énergie/libido/sommeil moyennés'). Or l'impl checkin_summary_30day (l.222-234) ne calcule QUE avg_energy, avg_mood, avg_sleep_h, avg_hunger — la libido n'est moyennée nulle part, ni dans aucun autre bloc de fetchContext. Le prompt promet un signal que la data ne fournit jamais ; l'agent risque soit de l'ignorer silencieusement, soit d'inventer une tendance libido.",
+            "location": "prompt l.27, l.47, l.116 (libido) vs impl l.228-234 (ctx.checkin_summary_30day n'inclut pas avg_libido)",
+            "recommendation": "Soit ajouter avg_libido au calcul de checkin_summary_30day (si le champ est loggé dans checkins_daily), soit retirer 'libido' des signaux cités par le prompt (l.27, 47, 116) pour ne garder que énergie/sommeil/humeur réellement disponibles. Aligner le doc-block de tête de l'impl (l.10) qui mentionne aussi 'libido' à tort."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "L'impl charge le snapshot HRV (l.204-210, getHrvSnapshot) avec un commentaire 'Phase 15 (ne pas démarrer cut agressif si HRV instable)' et le snapshot expose des signaux directement pertinents pour le planning (baseline_drift_pct, is_chronic_drift). Mais le PROMPT ne mentionne JAMAIS le HRV : ni dans 'DATA DISPONIBLE EN CONTEXTE' (l.99-124), ni dans les règles de transition. Donnée chargée (coût Firestore + tokens dans le prompt user) mais non instruite → l'agent ne sait pas qu'il l'a ni comment l'utiliser ; le signal 'is_chronic_drift = ne pas lancer de cut agressif' n'est pas réalisé.",
+            "location": "impl l.204-210 (ctx.hrv) ; absent du prompt (section DATA l.99-124 et règles l.37/86)",
+            "recommendation": "Ajouter HRV à la section DATA DISPONIBLE EN CONTEXTE du prompt et une règle d'exploitation (ex. 'si hrv.is_chronic_drift=true ou baseline_drift_pct fortement négatif → ne pas démarrer de cut agressif/mini-cut, recommander maintenance, éventuellement request_consult analytics/safety'). Sinon, retirer le fetch HRV du planning pour économiser tokens."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "L'impl charge profile.hormonal_context (l.51-52, champ explicite ex. 'trt') mais le prompt planning ne l'exploite jamais. Pour un stratège long-terme, le statut TRT change radicalement la physiologie d'un bulk/recomp (gain musculaire possible en déficit, recomp réaliste hors profil débutant) — c'est précisément le genre de variable que le planning devrait intégrer. Donnée chargée, instruction absente. (Le prompt traite bien la contraception hormonale, mais via cycle.on_hormonal_contraception, pas via ce champ-ci.)",
+            "location": "impl l.51-52 (ctx.profile.hormonal_context) ; prompt : aucune mention de hormonal_context / TRT côté planning",
+            "recommendation": "Ajouter au prompt une courte règle d'exploitation de hormonal_context (ex. 'si hormonal_context indique un protocole hormonal type TRT : la recomp/maintien de muscle en déficit est plus plausible ; rester factuel, ne JAMAIS conseiller de modifier un protocole médical → déléguer toute question dosage/santé à safety'), pour éviter à la fois la règle morte et une inférence silencieuse."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "low",
+            "issue": "Incohérences de nommage entre la section 'DATA DISPONIBLE EN CONTEXTE' du prompt et les clés réellement posées par fetchContext : le prompt annonce weight_history_60day (l.113) mais l'impl pose ctx.weight_trend_60day ; le prompt annonce checkin_summary (l.116) mais l'impl pose ctx.checkin_summary_30day ; le prompt annonce plans_history (l.114) mais l'impl pose ctx.recent_plans. Le modèle reçoit le JSON réel donc l'impact runtime est faible, mais le prompt l.110-111 réfère explicitement weight_trend_60day par nom dans une formule d'exploitation, créant une divergence avec le nom annoncé l.113 (weight_history_60day) dans le même document.",
+            "location": "prompt l.113 (weight_history_60day) vs l.110 (weight_trend_60day) et impl l.125 ; prompt l.116 (checkin_summary) vs impl l.228 (checkin_summary_30day) ; prompt l.114 (plans_history) vs impl l.145 (recent_plans)",
+            "recommendation": "Harmoniser les noms de clés entre prompt et impl (choisir weight_trend_60day, checkin_summary_30day, recent_plans partout dans la section DATA du prompt) pour supprimer l'ambiguïté interne et faciliter la maintenance."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "low",
+            "issue": "Le prompt décrit goals avec recommended_weeks_min/max (l.107) et le code expose aussi recommended_weeks_default (impl l.63, snapshot l.38) — non mentionné dans le prompt. Par ailleurs goals_history archive la clé 'deadline' (goals-history/store.ts l.9 GOALS_KEYS) alors que le reste du système (goals.target_date) utilise target_date : la comparaison de l'ancienne deadline par l'agent peut donc tomber sur un champ nommé différemment dans last_previous_goals.",
+            "location": "prompt l.107 (min/max, omet default) vs impl l.63 ; goals-history/store.ts l.9 (clé 'deadline') vs profil goals.target_date",
+            "recommendation": "Mentionner recommended_weeks_default dans le prompt (utile comme repère central de la fourchette). Vérifier la cohérence deadline vs target_date dans goals_history pour que l'agent puisse réellement lire l'objectif de date précédent ; documenter le champ effectif."
+          },
+          {
+            "dimension": "securite",
+            "severity": "low",
+            "issue": "La section CYCLE (l.79) demande à l'agent, en cas d'aménorrhée >3 cycles manqués, de poser severity=warning + request_consult safety + 'recommandation forte de pause cut'. C'est correct. Mais l'impl cycle snapshot ne fournit pas de champ 'cycles manqués / aménorrhée' calculé : CycleSnapshot expose current_phase, day_in_cycle, last_period_start, symptoms_last_7day — l'agent doit inférer l'aménorrhée de last_period_start, ce qui est fragile (un last_period_start ancien peut aussi venir d'un simple sous-tracking). Risque : faux positif/négatif sur un signal médical sérieux délégué à safety.",
+            "location": "prompt l.79 (aménorrhée >3 cycles) vs cycle/store.ts CycleSnapshot (l.163-176, pas de flag amenorrhea ni de compteur de cycles manqués)",
+            "recommendation": "Soit calculer un flag explicite (ex. days_since_last_period / amenorrhea_suspected) dans getCycleSnapshot et l'exposer, soit reformuler le prompt pour que le déclencheur s'appuie sur une donnée réellement présente et reste prudent ('si last_period_start très ancien ET tracking actif → suspecter, déléguer à safety sans conclure')."
+          },
+          {
+            "dimension": "cout_verbosite",
+            "severity": "low",
+            "issue": "fetchContext charge systématiquement 10 blocs de données (profile, goals, cycle, active_plan, weight_trend, recent_plans, tdee_history, measurements, life_events, goals_history, hrv, checkin_summary) à chaque consultation, indépendamment de la question. Pour une question planning typique (ex. 'quand passer en cut ?'), HRV, goals_history et measurements peuvent être superflus, et tout est sérialisé en JSON dans le prompt user (buildUserPrompt, base.ts l.56). Plusieurs de ces blocs (HRV, hormonal_context) ne sont même pas instruits côté prompt — donc tokens dépensés sans valeur d'usage.",
+            "location": "impl fetchContext l.33-240 (chargement inconditionnel) ; sérialisation base.ts l.56",
+            "recommendation": "Acceptable si le volume reste modéré, mais envisager de ne charger HRV/goals_history que si pertinent, et surtout n'inclure dans le contexte que des blocs effectivement exploités par le prompt (corollaire des findings HRV/hormonal_context). Priorité basse — à arbitrer après correction des données non instruites."
+          }
+        ]
+      },
+      {
+        "prompt": "coach-legacy",
+        "role_fit": "oui — c'est bien un prompt mono-bloc fallback complet (nutrition/training/mesure/suivi/safety) dont toute la data + RAG est injectée par la route ; il assume seul le rôle quand le multi-agent est off, conformément à l'attendu.",
+        "summary": "Prompt très solide et cohérent avec son impl : les contrats structurés (COACH_SAVE whitelist, COACH_PLAN_PATCH index, headers RAG exos/méthodes, bloc SÉANCES ACTIVES) matchent au caractère près le builder de contexte et les formatters RAG. Les garde-fous sécurité/argent/TRT sont propres. Deux vrais points : (1) la branche RAG scientifique dépend de flags.ragSourcing() qui est un résolveur CLIENT — côté serveur il ne lit QUE les env vars, donc le comportement réel diffère du commentaire du code et le §4 (whitelist d'auteurs hardcodée) coexiste avec un second régime de citation [Source #X] injecté, sans règle d'arbitrage. (2) Quelques promesses du prompt sans data correspondante (tendances de mensurations dans le temps, masse musculaire du scan toujours N/A) et un cap de longueur (§2 150-250 mots) en tension avec un contexte massivement enrichi.",
+        "findings": [
+          {
+            "dimension": "rag_coherence",
+            "severity": "high",
+            "issue": "La branche RAG scientifique est gardée par flags.ragSourcing() (route.ts L110). Or flags.ts est un résolveur CLIENT : resolveSync lit remoteCache (peuplé uniquement par fetchRemoteConfigClient qui retourne {} si typeof window==='undefined') et localStorage (window+dev only). Côté serveur (route API), seules les env vars FEATURE_RAG_SOURCING / NEXT_PUBLIC_FEATURE_RAG_SOURCING sont lues. Le commentaire d'en-tête de flags.ts dit explicitement 'Server-side flags live in flags-server.ts' — mais la route coach importe le module client. Conséquence : Remote Config n'a AUCUN effet sur l'activation du RAG scientifique en prod ; le flag se comporte comme un pur env-var server-side, contrairement à l'intention documentée. Même remarque pour flags.bloodworkUpload(), flags.profilePaths(), flags.glp1(), flags.fasting() utilisés dans la même route.",
+            "location": "app/api/ai/coach/route.ts L110, L175, L221-225, L232 ; lib/features/flags.ts L28-30, L73-80",
+            "recommendation": "Vérifier que la route utilise bien un resolver SERVEUR (flags-server.ts) pour ces gates ; sinon documenter que ces features ne sont pilotables qu'en env var en prod, ou basculer l'import vers le module serveur. Sans ça, un toggle Remote Config laissera croire que le RAG/bloodwork est on/off alors qu'il ne l'est pas."
+          },
+          {
+            "dimension": "coherence_interne",
+            "severity": "medium",
+            "issue": "Double régime de citation scientifique sans règle d'arbitrage. §4 du prompt fournit une whitelist FERMÉE d'auteurs/années citables (Garthe 2011, Helms 2014, etc.) avec 'max 1-2 par réponse'. En parallèle, quand le RAG est actif, buildRAGPrompt (prompts.ts) ET ragBlock (context-builder L445-462) injectent des sources PubMed/ANSES dynamiques avec consigne 'cite [Source #X]' et 'N'invente AUCUNE source en dehors de cette liste'. Les deux jeux d'instructions coexistent dans le même appel : le modèle reçoit à la fois 'tu PEUX citer cette liste fixe' et 'ne cite QUE les sources injectées'. Risque : citations contradictoires, ou le modèle cite un Garthe 2011 (autorisé §4) absent de la liste RAG injectée, ce que la consigne RAG interdit.",
+            "location": "prompt §4 (L76-94) vs lib/features/rag-sourcing/prompts.ts L32-36 + lib/vertex/context-builder.ts ragBlock L458-461",
+            "recommendation": "Ajouter dans le prompt une règle de préséance explicite : 'Les sources injectées [Source #X] s'AJOUTENT à la whitelist §4 ; tu peux citer l'une OU l'autre, jamais inventer hors de ces deux ensembles.' Aujourd'hui l'arbitrage est implicite et laissé au hasard du modèle."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "medium",
+            "issue": "Le scan corporel injecté affiche systématiquement 'Masse musculaire : N/A'. fetchBodyScanRecent force muscle_mass_kg=undefined (context-fetcher L237 'scanner doesn't estimate this yet') et le delta muscle est toujours undefined (L250). bodyScanBlock (context-builder L551) rend donc une ligne 'Masse musculaire : N/A' à chaque fois qu'un scan existe. C'est du bruit dans le prompt : on affiche un champ vide labellisé, ce qui peut amener le modèle à commenter une masse musculaire 'inconnue' au lieu de l'ignorer.",
+            "location": "lib/vertex/context-fetcher.ts L237, L250 ; lib/vertex/context-builder.ts L551",
+            "recommendation": "Omettre la portion 'Masse musculaire' de bodyScanBlock quand muscle_mass_kg est undefined (comme c'est fait pour les autres champs conditionnels), plutôt que d'imprimer 'N/A'. Réduit la verbosité et évite que le modèle raisonne sur une donnée absente."
+          },
+          {
+            "dimension": "data_coverage",
+            "severity": "low",
+            "issue": "Le §13 (Métriques de progression) demande au coach de suivre dans le TEMPS les mensurations (tour de taille hebdo, bras/cuisse bi-hebdo, ratios McCallum/Adonis comme objectif progressif). Or l'impl ne charge que les valeurs ACTUELLES de profile.*_cm (statiques, via profileBlock) — il n'existe aucun fetch d'historique de mensurations (alors qu'un historique checkins 7j EXISTE pour le poids/énergie/sommeil via fetchCheckin7DayHistory). Le coach ne peut donc PAS dire 'tu as perdu 2 cm de taille en 3 semaines' (pattern pourtant scripté §14 'Balance figée mais mesures qui baissent') faute de série temporelle de tour de taille.",
+            "location": "prompt §13 (L506-514) + §14 pattern L541-542 ; vs context-builder profileBlock L343-352 (valeurs statiques) et context-fetcher (aucun fetch mensurations historiques)",
+            "recommendation": "Soit charger un historique de tour de taille / mensurations (analogue à checkin7DayHistory) pour alimenter le pattern §14, soit adoucir le prompt pour préciser que seules les valeurs courantes sont disponibles et que les deltas doivent venir de ce que l'utilisateur rapporte en conversation. Sinon le coach promet une lecture de tendance qu'il ne peut pas fonder sur la data."
+          },
+          {
+            "dimension": "cout_verbosite",
+            "severity": "medium",
+            "issue": "Tension format vs contexte. §2 impose 'question simple → 150-250 mots max, format smartphone 375px'. Mais le system prompt enrichi agrège un volume considérable de blocs (profil + plan + séances indexées + coach_state + glp1 + fasting + bloodwork + last_session + food_jour + form_checks + streak + body_scan + wearables + checkins 7j + tdee_history + patches récents + RAG exos + RAG méthode jusqu'à 1500 chars + sources scientifiques). Chaque bloc se termine par une injonction d'action ('tu peux référencer...', 'cite explicitement les chiffres...', 'ouvre par une phrase qui le montre...'). L'accumulation de ces incitations pousse mécaniquement vers des réponses longues et multi-thèmes, en contradiction directe avec le plafond de 150-250 mots sur une question simple.",
+            "location": "prompt §2 (L47) vs context-builder.ts (injonctions par bloc : L496, L516, L635, L654, L671) + buildEnrichedSystemPrompt DEFAULT_OPTS tout-on L714-735",
+            "recommendation": "Renforcer dans §2 une règle de priorité : 'Le plafond de longueur prime sur les incitations des blocs de contexte ; n'exploite QUE les 1-2 blocs pertinents à la question posée, ignore le reste en silence.' Optionnellement, conditionner certains blocs (wearables, tdee_history) à la pertinence de la question plutôt que de tous les injecter par défaut."
+          },
+          {
+            "dimension": "alignement_prompt_impl",
+            "severity": "low",
+            "issue": "§15 (protocoles par tranche de poids, 'fallback Firestore') décrit un protocole nutritionnel 3 phases × 3 semaines 'si le système injecte un protocole par tranche de poids'. Aucun fetch ni bloc de ce protocole n'existe dans route.ts ni dans buildEnrichedSystemPrompt — il n'y a pas d'injection 'protocole par tranche de poids'. Le §18 dit aussi 'tu reçois éventuellement... protocole nutritionnel injecté' mais rien ne l'injecte dans le legacy. La section décrit donc un comportement conditionné à une donnée que l'impl actuelle ne fournit jamais.",
+            "location": "prompt §15 (L568-575) et §18 (L633) ; vs route.ts (aucun fetch de protocole par tranche) + context-builder (aucun block correspondant)",
+            "recommendation": "Confirmer si ce protocole est injecté ailleurs (ex. via generate-plan repris dans active_plan). Si non, marquer §15 comme conditionnel mort-né dans le legacy ou retirer la promesse, pour éviter que le modèle évoque un 'cadre par tranche de poids' qu'il n'a jamais reçu."
+          },
+          {
+            "dimension": "securite",
+            "severity": "low",
+            "issue": "Délégation médicale au safety bien respectée côté prompt (§3, §18 : pas de diagnostic, redirection, numéros FFAB/3114). Côté impl, runSafetyCheck (route.ts L80) est appelé AVANT le coach, ce qui est correct. MAIS le deep-check sémantique TCA/santé est gated par SAFETY_DEEP_CHECK==='1' (safety.ts L64) : si non activé, seul le fast-path par mots-clés + IMC<18.5 filtre. Les signaux §3 du prompt (aménorrhée, perte >5%/mois, plateau >4 sem, libido effondrée, mineur demandant sèche agressive) ne sont PAS détectés par le fast-path — ils reposent entièrement sur le jugement du modèle coach lui-même, qui n'est pas un détecteur fiable. Ce n'est pas un bug du prompt, mais un écart entre la couverture de détection annoncée (§3) et la couche de garde déterministe réelle quand le deep-check est off.",
+            "location": "prompt §3 (L57-70) ; vs lib/vertex/safety.ts fastPathCheck L27-58 + gate L64",
+            "recommendation": "S'assurer que SAFETY_DEEP_CHECK=1 est actif en prod (sinon la détection des signaux §3 hors mots-clés repose sur le LLM coach lui-même). À défaut, ne pas présenter §3 comme un filet de sécurité robuste : c'est une heuristique de ton, pas une barrière déterministe."
+          },
+          {
+            "dimension": "voix_ton",
+            "severity": "low",
+            "issue": "Voix NoDream respectée (tutoiement systématique, 'régime' proscrit §1, anti-moralisation TRT/cycle §1+§14, anti-paternalisme conforme aux préférences). Un seul micro-écart de registre injecté par l'impl, pas par le prompt : les pattern scriptés et blocs de contexte sont irréprochables, mais le message paywall serveur (route.ts L60) vouvoie implicitement le ton produit ('Ton essai est terminé. Passe à Premium') — cohérent en tutoiement, OK. RAS de bloquant. Je le note uniquement pour exhaustivité : la cohérence tu/vous est tenue partout y compris dans les messages d'erreur 429/402.",
+            "location": "route.ts L33, L60 ; prompt §1 L38-39",
+            "recommendation": "Aucune action requise — conforme. (Finding conservé pour traçabilité de la vérification voix/ton.)"
+          }
+        ]
+      }
+    ],
+    "infra": {
+      "prompt": "rag-data-infra",
+      "summary": "L'infrastructure est globalement bien pensée (préchargement profil anti-N+1, stores dédiés par domaine, fallback gracieux partout, cache LRU embeddings). Mais deux problèmes critiques de cohérence RAG existent : (1) le filtre RAG exos du TrainingCoach est cassé par un mauvais mapping de champs (cast `as ProfileForRag` qui masque l'erreur) → niveau et équipement utilisateur ignorés ; (2) le NutritionCoach cite Helms/Phillips/ANSES dans son prompt mais ne branche QUE les guides Ottawa — il n'appelle jamais searchScientificCorpus, donc ses citations sont des hallucinations non sourcées. Côté data_coverage : protocoles sèche, micronutrients, wearables/santé et fasting sont collectés mais lus par aucun agent (données mortes), et le snapshot normalisé n'expose pas plusieurs champs que les prompts agents attendent.",
+      "role_fit": "oui — l'analyse couvre la vue infrastructure transverse (RAG + couche données + 8 agents) demandée, pas un agent isolé.",
+      "findings": [
+        {
+          "dimension": "rag_coherence",
+          "severity": "critical",
+          "issue": "Le TrainingCoach construit son profil RAG avec les mauvais noms de champs : `profileForRag = { level: profile.training_level, equipment: profile.equipment } as ProfileForRag`. Or l'interface ProfileForRag attend `training_history`, `training_environment`, `available_equipment` (context.ts:78-82). Le cast `as ProfileForRag` masque l'erreur de typage. Conséquence runtime : levelFromProfile() lit profile.training_history = undefined → renvoie TOUJOURS 'intermediaire' ; equipmentFromProfile() lit profile.available_equipment/training_environment = undefined → renvoie undefined (AUCUN filtre équipement). Le RAG exos remonte donc des exos hors niveau et hors matériel réel de l'user, en contradiction directe avec les règles 2 et 3 du prompt TrainingCoach ('tu adaptes au profil', 'pas de soulevé de terre si pas de barre').",
+          "location": "lib/vertex/agents/sub-agents/training.ts:50-53 (vs lib/features/rag-coach/context.ts:78-100)",
+          "recommendation": "Mapper correctement : `profileForRag = { training_history: profile.training_level, available_equipment: profile.equipment ?? undefined, training_environment: profile.training_environment as TrainingEnvironment }`. Retirer le cast `as ProfileForRag` pour que TypeScript détecte ce type d'erreur, ou exposer un helper typé buildProfileForRag(NormalizedProfile). Ajouter un test unitaire qui vérifie que retrieveExercises reçoit bien maxLevel='debutant' pour un profil débutant."
+        },
+        {
+          "dimension": "rag_coherence",
+          "severity": "high",
+          "issue": "Le NutritionCoach n'appelle QUE searchNutritionGuides (guides Ottawa P1208). Il n'appelle jamais searchScientificCorpus (qui agrège sources curated Helms/Phillips/Garthe + ANSES/HAS/EFSA via CSE + PubMed). Pourtant son prompt l'autorise explicitement à citer Helms 2014, Phillips 2011, Garthe 2011, Rosenbaum & Leibel 2010, Bhasin 2018, Wilding 2021 (nutrition.ts:138-148). Sans ces sources injectées en contexte, ces citations deviennent des hallucinations de l'LLM (références non vérifiées, années/journaux potentiellement faux). C'est exactement le risque de crédibilité que le RAG est censé éliminer. Seul l'EducationCoach branche searchScientificCorpus — alors que la nutrition appliquée est le domaine le plus consommateur de citations chiffrées (g/kg protéines, vitesse de perte).",
+          "location": "lib/vertex/agents/sub-agents/nutrition.ts:137-149 ; prompt lib/vertex/prompts/agents/nutrition.ts:138-148",
+          "recommendation": "Ajouter dans NutritionCoach.fetchContext un appel à searchScientificCorpus(input.user_message) (ou au minimum searchInternalCorpus, qui contient les refs curated comme Helms) et l'injecter dans ctx.scientific_sources. Alternativement, durcir le prompt pour n'autoriser les citations QUE si elles apparaissent dans le contexte fourni (interdire la citation de mémoire)."
+        },
+        {
+          "dimension": "data_coverage",
+          "severity": "high",
+          "issue": "getProtocolForUser (protocoles sèche, content/protocoles_seche, indexé par poids+phase) n'est appelé par AUCUN agent ni route. Grep confirme : seule la définition existe (internal-corpus.ts:310) plus une copie dans backups/. C'est de la donnée seedée morte. Les agents Nutrition et Planning — qui en auraient l'usage le plus direct (kcal_target/macros par tranche de poids et phase de cut) — ne le consultent pas et recalculent tout via LLM.",
+          "location": "lib/features/rag-sourcing/internal-corpus.ts:305-338",
+          "recommendation": "Soit brancher getProtocolForUser(profile.weight_kg, plan.phase) dans NutritionCoach et/ou PlanningCoach pour ancrer les recos sur les protocoles seedés, soit supprimer la fonction + le seed associé si la décision est que les protocoles statiques sont obsolètes vs calcul dynamique TDEE. Trancher explicitement : aujourd'hui c'est un corpus payé en seed mais jamais lu."
+        },
+        {
+          "dimension": "data_coverage",
+          "severity": "high",
+          "issue": "Le module micronutrients (aggregator.ts, micronutrient-calc.ts, reference-db.ts) calcule les apports en micronutriments à partir des food_logs, mais AUCUN sous-agent ne le consomme. Le NutritionCoach lit les food_logs uniquement en macros+kcal (today_food_logs) et le prompt EducationCoach liste 'micronutriments' dans son domaine — sans jamais recevoir la donnée. Carence en fer/magnésium/vitamine D détectable mais jamais remontée au coach (un angle santé majeur en cut et chez la femme menstruée, que le prompt Nutrition évoque pourtant : 'besoins fer accrus').",
+          "location": "lib/features/micronutrients/aggregator.ts (non importé dans lib/vertex/agents/*) ; cf. nutrition.ts fetchContext qui n'agrège que totals macro",
+          "recommendation": "Brancher un getMicronutrientSnapshot (7j) dans NutritionCoach.fetchContext, au minimum les déficits flaggés (fer, magnésium, vit D, oméga-3). Cela alimenterait concrètement les règles cycle menstruel et cravings salés (carence magnésium) déjà écrites dans le prompt mais aujourd'hui sans data source."
+        },
+        {
+          "dimension": "data_coverage",
+          "severity": "medium",
+          "issue": "Données wearables/santé non lues par les agents multi : lib/features/wearables/sync-service.ts et lib/features/health/aggregator.ts existent (et l'ancien /coach via fetchEnrichmentContext lisait des wearables), mais aucun sous-agent du MAS ne les consulte. Le TrainingCoach/SafetyCoach lisent sleep et hrv via leurs stores dédiés, mais pas les pas/fréquence cardiaque/calories actives wearables agrégés. Asymétrie de couverture entre l'ancien coach mono (enrichi) et le multi-agent.",
+          "location": "lib/features/health/aggregator.ts, lib/features/wearables/sync-service.ts (non importés sous lib/vertex/agents/) ; cf. app/api/ai/coach/route.ts:194 fetchEnrichmentContext",
+          "recommendation": "Décider si les wearables doivent alimenter AnalyticsCoach (NEAT/pas → calibrage TDEE) et SafetyCoach (FC repos anormale). Si oui, ajouter getHealthSnapshot au fetchContext de ces deux agents. Si non, documenter que le MAS abandonne volontairement les wearables vs le coach mono (pour éviter une régression silencieuse de fonctionnalité lors du switch USE_MULTI_AGENT_BACKEND)."
+        },
+        {
+          "dimension": "data_coverage",
+          "severity": "medium",
+          "issue": "Le fasting est dans le scope déclaré du NutritionCoach (prompt nutrition.ts: 'Jeûne intermittent 16:8, 18:6, OMAD') et l'app a un module fasting complet (lib/features/fasting/ avec schema + util), mais NutritionCoach.fetchContext ne charge jamais l'état de jeûne en cours / l'historique de fenêtres. Le coach raisonne donc sur le jeûne à l'aveugle. coach-route-adapter.ts note d'ailleurs explicitement 'fasting flags : non utilisés' côté MAS.",
+          "location": "lib/vertex/agents/sub-agents/nutrition.ts (aucun import fasting) ; lib/features/fasting/",
+          "recommendation": "Ajouter un getFastingSnapshot (fenêtre active, durée, régularité 7j) au fetchContext nutrition, conditionné à la présence d'un protocole de jeûne actif. Sinon retirer le jeûne du scope annoncé du prompt pour éviter que le coach prétende suivre un jeûne qu'il ne voit pas."
+        },
+        {
+          "dimension": "data_coverage",
+          "severity": "medium",
+          "issue": "Import mort dans TrainingCoach : `getPrsSnapshot` est importé (training.ts:18) mais jamais appelé dans fetchContext. Le TrainingCoach ne voit donc pas la progression force (1RM, deltas 90j) alors que c'est central à la programmation (progression mesurable, règle 'tu encourages le tracking des charges'). Les PRs ne sont lus que par AnalyticsCoach. Un user qui demande 'je stagne au développé couché' au coach training n'aura pas ses 1RM en contexte.",
+          "location": "lib/vertex/agents/sub-agents/training.ts:18 (import) — non utilisé dans fetchContext",
+          "recommendation": "Soit brancher getPrsSnapshot dans TrainingCoach.fetchContext (cohérent avec son domaine), soit retirer l'import mort. Recommandation : le brancher — la progression force est plus pertinente pour le TrainingCoach que pour Analytics seul."
+        },
+        {
+          "dimension": "alignement_prompt_impl",
+          "severity": "medium",
+          "issue": "Plusieurs champs cités dans les prompts agents comme attendus dans context.profile ne sont pas exposés par le snapshot normalisé, ou exposés différemment. Ex : le prompt Nutrition raisonne sur LBM/BF ('besoins protéiques calculés sur LBM') mais NormalizedProfile n'a ni body_fat_pct ni LBM — seul AnalyticsCoach lit body_scans.bf_pct_estimated, jamais partagé avec Nutrition. Le PlanningCoach lit `profile.training_seniority_years ?? profile.training_level` en fallback hétérogène (un nombre d'années OU une string de niveau dans le même champ) — incohérence de type qui dégrade le raisonnement.",
+          "location": "lib/features/user-profile/snapshot.ts:3-50 (NormalizedProfile) vs prompts/agents/nutrition.ts:73-76 et sub-agents/planning.ts:44",
+          "recommendation": "Ajouter body_fat_pct / lbm_kg au snapshot (dérivés du dernier body_scan) pour que Nutrition/Planning calculent les protéines sur LBM comme le prompt l'exige. Normaliser training_seniority : ne pas mélanger années (number) et niveau (string) dans un même champ ; exposer les deux séparément dans le subset profile du PlanningCoach."
+        },
+        {
+          "dimension": "rag_coherence",
+          "severity": "low",
+          "issue": "Le searchInternalCorpus retourne language:'en' en dur pour TOUTES les sources scientifiques (internal-corpus.ts:230), y compris des sources potentiellement FR. Et searchScientificCorpus mélange 4 pools (internal/Ottawa/FR/PubMed) puis tronque à 5 sans dédup ni reranking par pertinence inter-pool — l'ordre est purement positionnel (internal d'abord, PubMed en dernier). Une query où PubMed a le meilleur match verra ce match potentiellement coupé par le slice(0,5) si les pools prioritaires renvoient du bruit faiblement scoré.",
+          "location": "lib/features/rag-sourcing/client.ts:37-65 ; internal-corpus.ts:230",
+          "recommendation": "Pour le low-hanging : conserver le score de chaque source et trier le pool fusionné par score normalisé avant slice(0,5), au lieu d'un simple ordre de priorité par pool. Corriger language sur les sources internes si certaines sont francophones. Optionnel : dédup par titre/DOI entre internal et PubMed (chevauchement possible)."
+        },
+        {
+          "dimension": "rag_coherence",
+          "severity": "low",
+          "issue": "Duplication de logique de fenêtre recent_chat : runMultiAgentCoach (coach-route-adapter.ts:48-58) et la route coach-multi (route.ts:108-119) construisent INDÉPENDAMMENT le même slice(0,-1).slice(-6) avec mapping de rôles identique. Deux entrées dans le MAS, deux implémentations à maintenir en parallèle — risque de divergence (ex : l'une passe à 8 messages, pas l'autre).",
+          "location": "lib/vertex/agents/coach-route-adapter.ts:48-58 et app/api/ai/coach-multi/route.ts:108-119",
+          "recommendation": "Extraire un helper partagé buildRecentChat(messages) dans lib/vertex/agents/ et l'appeler depuis les deux points d'entrée."
+        },
+        {
+          "dimension": "rag_coherence",
+          "severity": "low",
+          "issue": "Le RAG exos (rag-coach) charge ses index via require() de JSON statiques (retrieve.ts:62-69) avec dégradation silencieuse à vide si build:rag n'a pas tourné. En prod serverless, si le déploiement n'embarque pas exercises.json/methods.json, le TrainingCoach perd tout son RAG sans aucune alerte — juste un console.warn. Aucun signal observabilité (Sentry) ni health-check au boot pour détecter un index manquant.",
+          "location": "lib/features/rag-coach/retrieve.ts:56-74",
+          "recommendation": "Ajouter un check de présence des index au cold start avec capture Sentry (breadcrumb/warning) si manquants, ou un endpoint /api/health/rag qui retourne le nombre de records chargés par index. Permet de détecter une régression de build silencieuse avant qu'un user ne tombe sur un coach training sans bibliothèque d'exos."
+        }
+      ]
+    },
+    "synthesis": {
+      "cross_cutting": [
+        {
+          "type": "rag_incoherent",
+          "severity": "critical",
+          "prompts_involved": [
+            "nutrition",
+            "planning",
+            "analytics",
+            "education",
+            "rag-data-infra"
+          ],
+          "issue": "Incoherence systemique de la chaine citations a l'echelle du systeme : 4 agents promettent des citations scientifiques chiffrees (Helms 2014, Phillips 2011, Garthe 2011, Trexler 2014, Rosenbaum & Leibel 2010, etc.) mais 3 d'entre eux n'ont AUCUN branchement vers ces sources. Education est le SEUL agent qui appelle searchScientificCorpus, et meme lui le fait sans extraction de mots-cles EN (degradant PubMed) et sans garde-fou buildRAGPrompt. Nutrition ne branche que les guides Ottawa (searchNutritionGuides) alors que searchInternalCorpus existe dans le meme fichier avec Helms/Phillips. Planning et analytics ne branchent rien. Resultat : sur le domaine le plus consommateur de citations chiffrees (nutrition appliquee, vitesse de perte, g/kg proteines), le systeme hallucine ses references depuis la memoire parametrique du LLM — exactement le risque de credibilite que le RAG est cense eliminer. Un meme 'Helms 2014' peut sortir avec des annees/findings differents selon l'agent qui parle.",
+          "recommendation": "Standardiser un fragment RAG partage 'scientific_sources' branche identiquement dans nutrition/planning/analytics/education via un helper unique (buildScientificContext(user_message) -> {sources, ragGuardClause}). Imposer dans TOUS ces prompts une regle commune : 'cite UNIQUEMENT les sources presentes dans context.scientific_sources ; si vide, ne fabrique aucune citation, mets citations:[] et baisse confidence'. Reutiliser le garde-fou eprouve buildRAGPrompt. Pre-pendre l'extraction de mots-cles EN avant searchPubMed (une fois, partagee)."
+        },
+        {
+          "type": "donnee_manquante",
+          "severity": "critical",
+          "prompts_involved": [
+            "supervisor",
+            "nutrition",
+            "planning",
+            "analytics",
+            "training"
+          ],
+          "issue": "Le plan actif (active_plan : kcal, macros, phase cut/bulk, session_template) est fetche par nutrition/training/planning dans leur raw_data, MAIS : (1) le supervisor qui DECIDE le COACH_PLAN_PATCH ne le recoit jamais (raw_data exclu de buildAggregatePrompt) — il doit donc inventer kcal/macros/phase courants pour emettre un patch qui est ensuite POSTe vers apply-patch ; (2) il n'existe aucune source unique de verite du plan partagee : chaque agent le re-fetche independamment et le supervisor, decideur final, ne l'a pas. C'est le trou de donnees structurant du systeme : la regle de coherence calorique ('si tu modifies un macro, verifie kcal') et le refus de patch dangereux ('1200 kcal alors qu'il est deja en cut') sont litteralement inapplicables. Un patch macros incoherent ou dangereux peut etre emis faute de contexte.",
+          "recommendation": "Charger active_plan UNE fois au niveau supervisor (a cote du preloadedProfile) et l'injecter dans buildAggregatePrompt sous un bloc [PLAN ACTIF] (kcal, macros, phase, weeks_active, training.split). Le passer aussi aux sous-agents pour eliminer les fetchs redondants. Decision d'architecture a trancher : soit le supervisor reste decideur du patch (il lui faut alors plan+RAG exos), soit les sous-agents proposent les valeurs chiffrees du patch (ils ont deja active_plan) et le supervisor n'assemble que la balise."
+        },
+        {
+          "type": "conflit_entre_agents",
+          "severity": "high",
+          "prompts_involved": [
+            "nutrition",
+            "training",
+            "planning",
+            "analytics"
+          ],
+          "issue": "Aucune base de calcul commune n'est definie a l'echelle du systeme pour les proteines et la composition corporelle, alors que 4 agents raisonnent dessus. Nutrition utilise 3 referentiels divergents en interne (poids cible / poids actuel / LBM) ; training et nutrition invoquent un profil 'obesite musclee' base sur LBM/BF% ; mais NormalizedProfile n'expose NI body_fat_pct NI LBM (seul analytics lit body_scans.bf_pct_estimated, jamais partage). Consequence transversale : pour un meme user en surpoids, nutrition peut conseiller des proteines calculees sur poids cible, training raisonner sur du LBM qu'il n'a pas, et analytics detenir le seul BF% mesure sans le transmettre. Ecarts de 40-80 g proteines/jour selon l'agent qui repond — conseils chiffres contradictoires dans une reponse agregee 'une seule voix'.",
+          "recommendation": "Exposer body_fat_pct et lbm_kg dans NormalizedProfile (derives du dernier body_scan, partages a tous les agents). Definir une regle d'arbitrage UNIQUE des proteines (defaut = poids cible ; exception obesite musclee = LBM) dans un fragment partage injecte dans nutrition/training/planning. Toujours preciser 'g/kg de QUOI' dans le diagnostic."
+        },
+        {
+          "type": "donnee_inutilisee",
+          "severity": "high",
+          "prompts_involved": [
+            "rag-data-infra",
+            "nutrition",
+            "planning",
+            "analytics",
+            "safety",
+            "training"
+          ],
+          "issue": "Pattern systemique de donnees collectees/seedees mais jamais lues par l'agent concerne — cout Firestore + tokens sans valeur, et regles prompt mortes. Inventaire transversal : (1) getProtocolForUser (protocoles seche seedes par poids+phase) appele par AUCUN agent ni route — corpus mort ; (2) module micronutrients calcule mais consomme par aucun agent, alors que nutrition ('besoins fer accrus') et education ('micronutriments') en parlent ; (3) wearables/health aggregator non lus par le MAS alors que l'ancien coach mono les lisait — regression silencieuse au switch USE_MULTI_AGENT_BACKEND ; (4) fasting : module complet existe, dans le scope declare de nutrition, jamais fetche ; (5) getPrsSnapshot importe dans training mais jamais appele (section PERSONAL RECORDS du prompt morte) ; (6) favorite_recipes/shopping_lists fetches par nutrition en IDs opaques inexploitables ; (7) cravings/habits fetches par analytics mais absents de son prompt ; (8) sleep/hrv fetches par safety mais aucun seuil dans son prompt ; (9) goals_history/last_debrief fetches par mental mais jamais references.",
+          "recommendation": "Faire un audit binaire fetch<->prompt sur chaque agent : pour chaque donnee fetchee, soit ajouter une regle d'exploitation explicite dans le prompt (PRs->training, micronutrients/fasting->nutrition, cravings/habits->analytics, sleep/hrv->safety, goals_history/mood_trend->mental), soit retirer le fetch. Trancher explicitement protocoles seche (brancher dans nutrition/planning OU supprimer le seed) et wearables (alimenter analytics/safety OU documenter l'abandon volontaire pour eviter la regression silencieuse)."
+        },
+        {
+          "type": "incoherence_convention",
+          "severity": "high",
+          "prompts_involved": [
+            "training",
+            "mental",
+            "planning",
+            "analytics",
+            "safety",
+            "coach-legacy"
+          ],
+          "issue": "Le cycle menstruel est modelise de DEUX manieres incompatibles selon les prompts, alors que le snapshot fournit UNE seule forme. Training, mental, planning et coach-legacy raisonnent en numeros de jour explicites (J14 ovulation, J15-J28 luteale, J1-J5 menstruelle) et invitent implicitement le LLM a DERIVER la phase des bornes en jours. Or CycleSnapshot expose deja current_phase (enum pre-calcule), day_in_cycle, on_hormonal_contraception, symptoms_last_7day. Aucun de ces prompts ne dit au LLM quel champ lire — risque que le modele recalcule une phase deja calculee, ou ignore on_hormonal_contraception (qui devrait attenuer toute la lecture des phases). Pire : safety et planning listent l'amenorrhee (>3 cycles manques) comme signal critical/warning, mais aucun champ amenorrhea/cycles_manques n'est calcule — le declencheur repose sur une inference fragile de last_period_start, et safety ne fetche meme pas le cycle du tout.",
+          "recommendation": "Convention unique cross-prompts : 'utilise context.cycle.current_phase (deja calcule) + symptoms_last_7day + on_hormonal_contraception ; les bornes en jours ne sont qu'un glossaire pedagogique, pas une source de calcul'. Ajouter un flag explicite amenorrhea_suspected/days_since_last_period dans getCycleSnapshot et le brancher dans safety (qui doit fetcher le cycle) et planning, pour que le signal medical serieux ne dependent pas d'une inference."
+        },
+        {
+          "type": "incoherence_convention",
+          "severity": "high",
+          "prompts_involved": [
+            "nutrition",
+            "safety",
+            "training",
+            "planning",
+            "coach-legacy",
+            "supervisor"
+          ],
+          "issue": "Le statut hormonal (TRT / GLP-1) est traite de facon incoherente entre agents, avec un risque d'inference TRT documente. Nutrition et coach-legacy ont un excellent garde-fou anti-inference TRT, et nutrition declenche bien sur la mention texte — mais nutrition NE cable PAS le declencheur structure profile.uses_glp1 (un user GLP-1 declare qui ne le re-mentionne pas perd les adaptations). Safety raisonne explicitement sur 'user sous TRT/GLP-1' (hydratation, hematocrite) alors que NI hormonal_context NI uses_glp1 ne sont charges dans son contexte — la regle est soit morte soit declenchee sur hallucination (exactement le risque d'inference que les autres agents protegent). Planning charge hormonal_context mais ne l'exploite jamais. Resultat : la meme variable hormonale est tantot bien gardee, tantot inferee, tantot ignoree, tantot non chargee.",
+          "recommendation": "Convention unique : exposer hormonal_context + uses_glp1 dans le subset profile de TOUS les agents qui en parlent (notamment safety). Declencheur standardise : 'active la section TRT/GLP-1 si context.profile.hormonal_context/uses_glp1 OU mention explicite ; n'INFERE JAMAIS un statut hormonal depuis les medications en texte libre'. Factoriser le garde-fou anti-inference TRT (deja excellent dans nutrition) en un fragment partage."
+        },
+        {
+          "type": "trou_de_couverture",
+          "severity": "high",
+          "prompts_involved": [
+            "supervisor",
+            "nutrition",
+            "training",
+            "analytics",
+            "safety"
+          ],
+          "issue": "Le mecanisme request_consult (un agent demande la consultation d'un autre) est documente dans les types et utilise dans 6 prompts (nutrition->safety, analytics->safety, social->mental/planning, education->nutrition/training, mental->planning, etc.) MAIS n'est jamais consomme par le supervisor : un seul Promise.all, pas de 2e tour, buildAggregatePrompt n'inclut meme pas request_consult. Tout un pan de la collaboration inter-agents promis par les prompts est un chemin mort. Cas concret non couvert : nutrition detecte un signal TCA et pose request_consult:['safety'], mais si le supervisor n'a pas route vers safety au tour 1, personne ne traite le signal — le garde-fou de delegation croisee s'evapore. C'est un trou de couverture safety, pas seulement une fonctionnalite absente.",
+          "recommendation": "Implementer un mini second tour : si un output (surtout high-confidence ou avec signal safety) pose request_consult vers un agent non encore consulte, lancer cet agent puis re-agreger. A minima, traiter request_consult:['safety'] comme un override de routing systematique (lancer safety au tour 2 inconditionnellement). Sinon, retirer request_consult des contrats pour ne pas suggerer une collaboration inexistante — mais l'option safety doit rester."
+        },
+        {
+          "type": "redondance_factorisable",
+          "severity": "medium",
+          "prompts_involved": [
+            "supervisor",
+            "nutrition",
+            "training",
+            "mental",
+            "social",
+            "education",
+            "planning",
+            "safety",
+            "analytics",
+            "coach-legacy"
+          ],
+          "issue": "Plusieurs blocs d'instructions identiques sont copies-colles dans la quasi-totalite des prompts, sans fragment partage : (1) la VOIX NoDream (tutoiement, interdiction 'regime', anti-moralisation, anti-paternalisme, citations max 1-2) est re-redigee dans chaque prompt — d'ou les derives (education n'interdit pas 'regime', supervisor a un exemple paternaliste 'reste hydrate ce soir') ; (2) le contrat de FORMAT DE SORTIE (diagnostic/recommendations/citations/severity/request_consult, enum severity info|warning|critical) est redecrit partout, et social ne pose meme pas l'enum fermee ; (3) le garde-fou anti-inference TRT ; (4) la grille de delegation medicale->safety. La duplication garantit la derive : chaque correction de voix doit etre faite N fois et certains prompts sont deja desynchronises.",
+          "recommendation": "Extraire 3-4 fragments systeme partages prepenes a chaque sous-agent : NODREAM_VOICE_FRAGMENT (voix+tutoiement+mots interdits+anti-paternalisme), OUTPUT_CONTRACT_FRAGMENT (schema AgentOutput + enum severity ferme), SAFETY_DELEGATION_FRAGMENT, HORMONAL_GUARDRAIL_FRAGMENT. Les prompts agents ne gardent que leur expertise specifique. Corrige d'un coup les derives de voix (education, supervisor) et de format (social)."
+        },
+        {
+          "type": "incoherence_voix",
+          "severity": "medium",
+          "prompts_involved": [
+            "supervisor",
+            "education",
+            "mental",
+            "coach-legacy"
+          ],
+          "issue": "La voix NoDream est appliquee inegalement, avec deux violations directes de la memoire utilisateur (anti-paternalisme + interdiction 'regime'). (1) Le supervisor contient un exemple paternaliste 'Reste hydrate ce soir' sur un simple 'a demain' et un fallback hardcode borderline, exactement le type d'injonction sante non sollicitee que MEMORY interdit. (2) Education n'enonce NULLE PART l'interdiction du mot 'regime' ni l'obligation de tutoiement, alors que c'est un agent nutrition qui parlera de perte de poids/seche — divergence vs tous les autres prompts. (3) Mental cite 'Neff 2003 / self-compassion scale' en jargon academique malgre une consigne anti-jargon. La voix est donc tantot stricte, tantot relachee selon l'agent — incoherence percue par l'user dans une reponse pourtant 'une seule voix'.",
+          "recommendation": "Au-dela du fragment de voix partage (cf. redondance) : corriger immediatement l'exemple paternaliste du supervisor (-> 'Ok, a demain.'), ajouter la section VOIX a education (tutoiement + ban 'regime'), et ajouter a mental 'ne nomme jamais la theorie a l'user, applique-la silencieusement'."
+        },
+        {
+          "type": "donnee_manquante",
+          "severity": "medium",
+          "prompts_involved": [
+            "safety",
+            "nutrition",
+            "analytics",
+            "supervisor"
+          ],
+          "issue": "L'objectif de l'user (objective, target_weight, duration_chosen_weeks) et le rythme de poids observe ne sont pas disponibles aux agents qui en dependent pour leur logique safety. Safety ne peut pas distinguer une perte SOLLICITEE (cut volontaire) d'une perte NON sollicitee (drapeau rouge TCA/maladie) car objective/goals ne sont pas dans son profile_flags — risque de sur-alerter un cut normal OU de rater une perte pathologique. Analytics doit comparer le rythme observe au rythme cible et declencher request_consult:['safety'] si >150%, mais weight_trend_60day n'est calcule QUE dans planning, jamais dans analytics — le garde-fou perte-muscle ne s'execute jamais ou hallucine la valeur. Le rythme observe est donc calcule a un seul endroit et manquant la ou il sert de garde-fou.",
+          "recommendation": "Ajouter objective + target_weight + duration_chosen_weeks au profile_flags de safety. Factoriser le calcul weight_trend (deltaKg/deltaDays -> kg_per_week) en helper partage et l'exposer a analytics ET planning ET safety, pour que la regle '>150% du rythme cible -> safety' soit reellement applicable partout ou un prompt la mentionne."
+        },
+        {
+          "type": "donnee_manquante",
+          "severity": "medium",
+          "prompts_involved": [
+            "analytics",
+            "supervisor",
+            "coach-legacy"
+          ],
+          "issue": "Asymetrie de fenetre temporelle qui casse le coeur du role analytics : tout le diagnostic multi-semaines du prompt analytics (plateau >3 semaines, recalibrage TDEE sur N semaines, trends 14/30j) suppose 30-60 jours, mais fetchContext ne charge que 7 jours (checkins limit 7, food_logs 7j). Le coach-legacy a le meme manque cote mensurations (suit le tour de taille 'dans le temps' mais ne charge que les valeurs actuelles). Il est physiquement impossible de detecter un plateau de 3-4 semaines avec 7 points. La confidence=high basee sur '7/7 jours' contredit directement les regles plateau qui exigent 21+ jours. Aucun reviewer isole ne voit que c'est le MEME defaut de fenetre que sur les mensurations legacy.",
+          "recommendation": "Etendre les fenetres aux profondeurs requises par les diagnostics : analytics charge 30-60j de checkins/food_logs et calcule cote serveur moyennes mobiles 7/14/30j + plateau_weeks ; legacy charge un historique de tour de taille (analogue a checkin7DayHistory). Conditionner la confidence a la profondeur d'historique reelle requise par le type de diagnostic emis (plateau -> exiger >=21j avant high)."
+        },
+        {
+          "type": "chevauchement_mandat",
+          "severity": "medium",
+          "prompts_involved": [
+            "nutrition",
+            "analytics",
+            "social",
+            "planning"
+          ],
+          "issue": "Frontieres de routing floues sur 3 paires d'agents, generant du double-traitement potentiel dans la reponse agregee. (1) Nutrition ('obesite musclee') statue sur la sous-declaration via 'stagnation analytics' qu'il n'a pas en contexte (pas de serie temporelle), empietant sur le mandat analytics. (2) Social (regle 4 : 4+ sorties/semaine -> 'planifier les ecarts') produit potentiellement un planning concurrent de l'agent planning. (3) Substances/hydratation sont traites par safety ET pertinents pour analytics (correlations) et mental (cravings) sans frontiere posee. Comme le supervisor agrege en 'une seule voix', ces chevauchements produisent soit de la redondance, soit deux conclusions divergentes sur le meme signal.",
+          "recommendation": "Poser des frontieres explicites de hand-off : nutrition ne conclut pas a une stagnation sans signal analytics (sinon request_consult:['analytics']) ; social donne le PRINCIPE social ('anticiper les sorties') et delegue la mecanique de plan via request_consult:['planning'/'nutrition'] ; safety FLAGGE le risque substances et l'analyse de tendance fine revient a analytics/mental. Documenter qui possede quoi dans une matrice de routing partagee."
+        },
+        {
+          "type": "incoherence_convention",
+          "severity": "medium",
+          "prompts_involved": [
+            "analytics",
+            "planning",
+            "education",
+            "coach-legacy",
+            "supervisor"
+          ],
+          "issue": "Decalages de noms de cles entre prompts et impl, repandus sur tout le systeme — chaque prompt documente des cles que l'impl ne pose pas sous ce nom. Analytics : prompt dit active_plan/food_logs_summary, impl pose active_plan_targets/food_logs_7day_summary. Planning : prompt dit weight_history_60day/checkin_summary/plans_history, impl pose weight_trend_60day/checkin_summary_30day/recent_plans — et le prompt se contredit lui-meme (l.110 weight_trend_60day vs l.113 weight_history_60day). Le LLM lit le JSON reel donc impact runtime faible, mais nuit a la maintenance et peut induire le modele en erreur s'il cite la cle litteralement. Symptome d'une absence de contrat de payload partage prompt<->impl.",
+          "recommendation": "Generer la section 'DATA DISPONIBLE' de chaque prompt depuis une source unique (les noms de cles reels poses par fetchContext), ou au minimum faire une passe d'alignement des noms sur les 4 prompts. Idealement, typer le payload ctx et derouler la doc prompt depuis le type."
+        },
+        {
+          "type": "rag_incoherent",
+          "severity": "medium",
+          "prompts_involved": [
+            "rag-data-infra",
+            "training",
+            "coach-legacy"
+          ],
+          "issue": "Le RAG exos (la seule vraie source de verite des exercices, partagee par training MAS et coach-legacy) est doublement fragilise transversalement : (1) le mapping ProfileForRag est casse (cast 'as ProfileForRag' masquant l'erreur) -> filtre niveau ET equipement ignores pour TOUS les users, donc les regles 'pas de souleve de terre sans barre' et 'adapter au niveau' ne sont jamais appuyees par la data, ni dans le MAS ni potentiellement ailleurs ; (2) les index JSON sont charges via require() avec degradation silencieuse a vide si build:rag n'a pas tourne — en serverless, un deploiement sans exercises.json fait perdre tout le RAG sans aucune alerte. Le composant RAG le plus structurant cote training est a la fois mal filtre et non observable.",
+          "recommendation": "Corriger le mapping (training_history/training_environment/available_equipment) et retirer le cast pour que TypeScript attrape l'erreur ; ajouter un test unitaire (profil debutant -> maxLevel debutant). Ajouter un check de presence des index au cold start avec capture Sentry, ou un endpoint /api/health/rag, pour detecter une regression de build silencieuse avant qu'un user tombe sur un coach training sans bibliotheque d'exos."
+        },
+        {
+          "type": "redondance_factorisable",
+          "severity": "low",
+          "prompts_involved": [
+            "supervisor",
+            "rag-data-infra"
+          ],
+          "issue": "Duplication d'implementation (pas de prompt) a noter pour completude : la fenetre recent_chat (slice(0,-1).slice(-6) + mapping de roles) est construite independamment dans coach-route-adapter.ts et dans la route coach-multi — deux implementations a maintenir, risque de divergence (une passe a 8 messages, pas l'autre). De meme le meme SUPERVISOR_SYSTEM_PROMPT entier (avec toute la section persistance/patch) est envoye aux DEUX etapes route ET aggregate, alors que l'etape route n'en exploite qu'une fraction — cout input double sur du contenu non pertinent.",
+          "recommendation": "Extraire buildRecentChat(messages) en helper partage appele aux deux points d'entree. Scinder le prompt supervisor en ROUTE (routing+safety) et AGGREGATE (voix+persistance+patch) pour reduire le cout input de l'etape route."
+        },
+        {
+          "type": "donnee_inutilisee",
+          "severity": "low",
+          "prompts_involved": [
+            "mental",
+            "rag-data-infra"
+          ],
+          "issue": "Faux signaux de memoire conversationnelle dans mental : l'impl mappe state.tone_preferences et state.do_not_repeat qui n'existent PAS dans le schema CoachState (toujours undefined), alors que les vrais champs sont response_style, topics_discussed, personality_notes. La memoire anti-repetition promise dans l'en-tete de l'impl est donc morte malgre un fix de doc-id documente juste au-dessus. C'est un cas particulier (faux mapping vers champs inexistants) du pattern transversal 'donnee promise mais non cablee', a risque eleve de passer inapercu car le code 'compile' et semble fonctionner.",
+          "recommendation": "Remplacer tone_preferences/do_not_repeat par topics_discussed/personality_notes dans le mapping ctx.coach_state de mental, et ajouter une regle prompt 'ne re-explique pas les sujets listes dans topics_discussed'. Audit de type strict sur tous les mappings coach_state pour detecter d'autres champs fantomes."
+        }
+      ],
+      "top_priorities": [
+        "1. SOURCE UNIQUE DE VERITE DU PLAN + RAG citations (critical x2) : charger active_plan UNE fois au niveau supervisor et l'injecter dans buildAggregatePrompt, ET brancher un fragment scientific_sources partage (avec garde-fou anti-hallucination buildRAGPrompt) dans nutrition/planning/analytics. Debloque a la fois la securite du COACH_PLAN_PATCH (coherence calorique, refus patch dangereux) et la credibilite des citations sur le domaine le plus chiffre. C'est le plus fort ROI car cela touche securite + credibilite simultanement.",
+        "2. Reparer le RAG exos training (critical) : corriger le mapping ProfileForRag (training_history/training_environment/available_equipment), retirer le cast 'as ProfileForRag', ajouter un test unitaire profil-debutant. Sans ca, le filtre niveau/equipement est mort pour 100% des users — 'pas de souleve de terre sans barre' est non applique. Trivial a corriger, impact systeme immediat.",
+        "3. Audit binaire fetch<->prompt sur les 8 agents (high) : pour chaque donnee fetchee, soit ajouter une regle d'exploitation prompt, soit retirer le fetch. Cible prioritaire : brancher getPrsSnapshot (training, import mort), exploiter cravings/habits (analytics), sleep/hrv (safety), goals_history/mood_trend (mental) ; trancher protocoles seche, micronutrients, wearables, fasting (brancher OU documenter l'abandon). Elimine ~9 trous donnees-mortes + plusieurs regles prompt mortes.",
+        "4. Factoriser les fragments systeme partages (medium, fort ROI maintenance) : extraire NODREAM_VOICE, OUTPUT_CONTRACT (enum severity ferme), SAFETY_DELEGATION, HORMONAL_GUARDRAIL et les prepender a chaque sous-agent. Corrige d'un coup les derives de voix (education sans ban 'regime', supervisor paternaliste), de format (social sans enum severity) et le risque d'inference TRT inegal — et empeche la re-divergence future.",
+        "5. Standardiser cycle + statut hormonal cross-prompts (high) : convention unique 'utilise current_phase pre-calcule + on_hormonal_contraception, les J-numbers sont du glossaire' dans training/mental/planning/legacy ; exposer hormonal_context/uses_glp1 a safety (qui en parle sans les avoir) ; ajouter un flag amenorrhea_suspected calcule et le brancher dans safety+planning. Supprime un signal medical serieux base sur inference fragile.",
+        "6. Implementer (ou retirer) request_consult (high pour la partie safety) : a minima, traiter request_consult:['safety'] comme un override de routing au tour 2 pour que la delegation TCA croisee (nutrition/analytics->safety) ne soit pas un chemin mort ; idealement un vrai mini second tour de re-agregation."
+      ],
+      "overall_assessment": "Sante globale : architecture mature mais avec une dette de cohesion transversale qui annule une partie des qualites individuelles. Les prompts sont, pris isolement, d'un tres bon niveau (voix NoDream globalement soignee, perimetres nets, garde-fous safety serieux, delegation medicale claire) — la faiblesse n'est presque jamais dans la redaction d'un prompt, mais dans la COLLE entre prompts, impl et data. Trois fractures structurelles dominent : (1) PLAN ET CITATIONS NON PARTAGES — il n'existe pas de source unique de verite ni pour le plan actif (le supervisor patche a l'aveugle) ni pour les sources scientifiques (3 agents sur 4 hallucinent leurs citations), ce qui touche directement securite ET credibilite ; (2) DONNEES MORTES SYSTEMIQUES — au moins 9 datasets fetches/seedes ne sont jamais exploites (PRs, micronutrients, wearables, fasting, protocoles seche, cravings/habits, sleep/hrv, goals_history, recettes), payes en Firestore+tokens, avec des regles prompt qui les promettent dans le vide ; (3) ABSENCE DE FRAGMENTS PARTAGES — voix, contrat de sortie, garde-fou hormonal et delegation safety sont copies-colles dans chaque prompt, garantissant la derive (education sans ban 'regime', supervisor paternaliste, social sans enum severity). S'y ajoutent un bug RAG exos critique (filtre niveau/equipement mort pour tous via un cast masquant), une fenetre temporelle analytics inadaptee a son propre role (7j pour des diagnostics 30-60j), et un mecanisme de collaboration inter-agents (request_consult) promis partout mais jamais consomme — ce dernier point cree un vrai trou de couverture safety. La bonne nouvelle : la majorite des corrections sont des points de jonction localises (un fetch a brancher, un mapping a corriger, un fragment a factoriser), pas des refontes. En l'etat, le systeme fonctionne et parle d'une voix coherente en surface, mais ses garde-fous chiffres (coherence calorique du patch, refus de patch dangereux, perte >150% -> safety, sources verifiables) reposent souvent sur des donnees que l'agent decideur ne possede pas — c'est le risque principal a traiter avant tout enrichissement fonctionnel.\""
+    }
+  }
+}
