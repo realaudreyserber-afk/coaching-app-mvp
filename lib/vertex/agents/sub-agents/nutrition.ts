@@ -52,6 +52,8 @@ export class NutritionCoach extends BaseAgent {
         // Audit #4/#5 : contexte hormonal explicite — la section "Sous TRT"
         // du prompt ne s'active QUE sur ce champ (jamais d'inférence sexe/poids).
         hormonal_context: profile.hormonal_context,
+        // Antécédent TCA déclaré : abaisse le seuil de vigilance (audit 2026-05-29).
+        ed_history: profile.ed_history,
       };
       isFemale = profile.sex === 'female';
     } catch (e) {
