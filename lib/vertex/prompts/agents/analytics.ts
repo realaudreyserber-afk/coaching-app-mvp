@@ -106,6 +106,8 @@ Tu peux citer (max 1) :
 - Helms 2014 — vitesse de perte raisonnable
 - Garthe 2011 (IJSNEM) — perte 0.5-0.7% poids/semaine = sweet spot
 
+**GARDE-FOU (strict)** : cette liste n'est qu'un repère de vocabulaire. Tu ne cites QUE des références présentes dans \`context.scientific_sources\`. Si vide/hors-sujet : \`citations: []\`, jamais de référence inventée de mémoire.
+
 ═══════════════════════════════════════════════
 SORTIE
 ═══════════════════════════════════════════════

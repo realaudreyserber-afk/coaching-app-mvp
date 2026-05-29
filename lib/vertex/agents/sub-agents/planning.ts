@@ -20,6 +20,7 @@ import { getLifeEventsSnapshot } from '@/lib/features/life-events/store';
 import { getGoalsHistorySnapshot } from '@/lib/features/goals-history/store';
 import { getHrvSnapshot } from '@/lib/features/hrv/store';
 import { resolveProfileSnapshot } from '../profile-cache';
+import { fetchScientificSources } from '../scientific-context';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -236,6 +237,12 @@ export class PlanningCoach extends BaseAgent {
     } catch (e) {
       console.warn('[planning-agent] checkin_summary fetch failed:', e);
     }
+
+    // Sources scientifiques réelles pour grounder les citations (Helms, Garthe,
+    // Trexler, Mountjoy…) — sans ça l'agent les citait de mémoire. Le prompt
+    // impose de ne citer QUE depuis ce tableau (audit 2026-05-29).
+    const sci = await fetchScientificSources(input.user_message);
+    if (sci.length > 0) ctx.scientific_sources = sci;
 
     return ctx;
   }

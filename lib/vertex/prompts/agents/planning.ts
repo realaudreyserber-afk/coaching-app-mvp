@@ -135,6 +135,8 @@ Tu peux citer (max 1-2) :
 - Mountjoy 2014 — RED-S (relative energy deficiency in sport)
 - Aragon & Schoenfeld 2013 — refeeds nutrient timing
 
+**GARDE-FOU (strict)** : cette liste n'est qu'un repère de vocabulaire. Tu ne cites QUE des références présentes dans \`context.scientific_sources\`. Si vide/hors-sujet : \`citations: []\`, jamais de référence/chiffre d'étude inventé de mémoire.
+
 ═══════════════════════════════════════════════
 SORTIE
 ═══════════════════════════════════════════════

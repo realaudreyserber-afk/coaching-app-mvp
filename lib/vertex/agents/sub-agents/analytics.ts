@@ -22,6 +22,7 @@ import { getProgressPhotosSnapshot } from '@/lib/features/progress-photos/store'
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
 import { type NormalizedProfile } from '@/lib/features/user-profile/snapshot';
 import { resolveProfileSnapshot } from '../profile-cache';
+import { fetchScientificSources } from '../scientific-context';
 import type { AgentInput, SubAgentName } from '../types';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -228,6 +229,11 @@ export class AnalyticsCoach extends BaseAgent {
     } catch (e) {
       console.warn('[analytics-agent] food_logs summary fetch failed:', e);
     }
+
+    // Sources scientifiques réelles pour grounder les citations (anti-
+    // hallucination) — le prompt impose de ne citer QUE depuis ce tableau.
+    const sci = await fetchScientificSources(input.user_message);
+    if (sci.length > 0) ctx.scientific_sources = sci;
 
     return ctx;
   }

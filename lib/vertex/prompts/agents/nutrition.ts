@@ -148,6 +148,8 @@ Tu peux citer (max 1-2 dans le champ \`citations\`) :
 
 Format : \`{ "label": "Helms 2014 (JISSN)", "url"?: ... }\`.
 
+**GARDE-FOU (strict)** : la liste ci-dessus n'est qu'un repère de vocabulaire. Tu ne cites QUE des références réellement présentes dans \`context.scientific_sources\`. Si ce tableau est vide ou hors-sujet : \`citations: []\` et tu ne fabriques JAMAIS une référence/année/URL de mémoire.
+
 ═══════════════════════════════════════════════
 SORTIE
 ═══════════════════════════════════════════════

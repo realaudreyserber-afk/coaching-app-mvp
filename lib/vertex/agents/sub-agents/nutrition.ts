@@ -20,6 +20,7 @@ import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getFavoriteRecipesSnapshot } from '@/lib/features/favorite-recipes/store';
 import { getShoppingListsSnapshot } from '@/lib/features/shopping-lists/store';
 import { resolveProfileSnapshot } from '../profile-cache';
+import { fetchScientificSources } from '../scientific-context';
 import type { AgentInput, SubAgentName } from '../types';
 
 export class NutritionCoach extends BaseAgent {
@@ -187,6 +188,12 @@ export class NutritionCoach extends BaseAgent {
     } catch (e) {
       console.warn('[nutrition-agent] shopping_lists fetch failed:', e);
     }
+
+    // Sources scientifiques réelles pour grounder les citations (Helms, Phillips,
+    // Garthe…) — sans ça l'agent les citait de mémoire. Le prompt impose de ne
+    // citer QUE depuis ce tableau (audit 2026-05-29).
+    const sci = await fetchScientificSources(input.user_message);
+    if (sci.length > 0) ctx.scientific_sources = sci;
 
     return ctx;
   }
