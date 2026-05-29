@@ -197,22 +197,28 @@ export class TrainingCoach extends BaseAgent {
         epaule: 'epaules', biceps: 'biceps', triceps: 'triceps', abdo: 'abdominaux',
         gainage: 'abdominaux', ischio: 'ischio_jambiers', mollet: 'mollets',
       };
+      const FAMILIES: Record<string, string> = {
+        pousser: 'push', poussee: 'push', developpe: 'push', pompe: 'push',
+        tirer: 'pull', tirage: 'pull', rowing: 'pull', traction: 'pull',
+        squat: 'squat', fente: 'squat', souleve: 'hinge', charniere: 'hinge', hinge: 'hinge',
+      };
       let muscle: string | undefined;
-      for (const k of Object.keys(MUSCLES)) {
-        if (msg.includes(k)) { muscle = MUSCLES[k]; break; }
-      }
+      for (const k of Object.keys(MUSCLES)) if (msg.includes(k)) { muscle = MUSCLES[k]; break; }
+      let family: string | undefined;
+      for (const k of Object.keys(FAMILIES)) if (msg.includes(k)) { family = FAMILIES[k]; break; }
       const opts = searchExercises(
-        { maxLevel, equipment: profileForRag?.available_equipment, muscle },
+        { maxLevel, family, equipment: profileForRag?.available_equipment, muscle },
         10,
       );
       if (opts.length > 0) {
         ctx.exercise_library = opts.map((e) => ({
           name_fr: e.name_fr,
           name: e.name,
+          family: e.family,
           level: e.level,
           muscle: e.muscle,
           equipment: e.equipment,
-          pattern: e.pattern,
+          demo_url: e.demo_url,
         }));
       }
     } catch (e) {

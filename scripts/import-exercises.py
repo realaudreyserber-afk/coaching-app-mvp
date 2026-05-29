@@ -1,149 +1,103 @@
 """
-Importateur "Functional Fitness Exercise Database v2.9" (xlsx) -> JSON NoDream.
+Importateur exercices — version FR restructurée (00_MASTER_FR.xlsx).
+
+Source : exercises_FR (Functional Fitness v2.9 traduit + restructuré par famille).
+Bien mieux structuré que le xlsx EN : famille (push/pull/squat/hinge/core/autres),
+niveau, Nom (FR), muscle/équipement/pattern FR, mécanique, latéralité, ET liens
+démo + explication YouTube (extraits depuis les hyperliens des cellules).
 
 Produit lib/features/exercise-db/data/exercises.json :
-  [{ name, name_fr, level, muscle, equipment, pattern, mechanics, unilateral, body_region }]
+  [{ name, name_fr, family, level, muscle, equipment, pattern, mechanics,
+     unilateral, region, demo_url, explain_url }]
 
-- Niveaux 8 -> 3 (RAG : debutant / intermediaire / avance).
-- Équipement / muscles / patterns traduits via maps finies (alignées sur les
-  slugs rag-coach quand possible).
-- Noms : composition FR best-effort via glossaire (franglais assumé — usuel en
-  coaching FR) ; name (EN) conservé comme référence canonique.
-
-Usage : python scripts/import-exercises.py "H:/utilisateur/Downloads/Functional+Fitness+Exercise+Database+(version+2.9).xlsx"
-Source : Functional Fitness Exercise Database v2.9 (Jensen Van Diepen).
+Usage : python scripts/import-exercises.py "H:/utilisateur/Downloads/exercises_FR_2/exercises_FR/00_MASTER_FR.xlsx"
 """
-import sys, json, re, os
+import sys, json, re, os, unicodedata
 import openpyxl
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else r'H:/utilisateur/Downloads/Functional+Fitness+Exercise+Database+(version+2.9).xlsx'
+SRC = sys.argv[1] if len(sys.argv) > 1 else r'H:/utilisateur/Downloads/exercises_FR_2/exercises_FR/00_MASTER_FR.xlsx'
 OUT = os.path.join('lib', 'features', 'exercise-db', 'data', 'exercises.json')
 
-LEVEL_MAP = {
-    'beginner': 'debutant', 'novice': 'debutant',
-    'intermediate': 'intermediaire',
-    'advanced': 'avance', 'expert': 'avance', 'master': 'avance',
-    'grand master': 'avance', 'legendary': 'avance',
-}
-EQUIP_MAP = {
-    'kettlebell': 'kettlebell', 'dumbbell': 'halteres', 'barbell': 'barre',
-    'bodyweight': 'aucun', 'cable': 'poulie', 'gymnastic rings': 'anneaux',
-    'suspension trainer': 'sangles', 'pull up bar': 'barre_traction',
-    'superband': 'elastique', 'miniband': 'elastique', 'resistance band': 'elastique',
-    'weight plate': 'disque', 'stability ball': 'swiss_ball', 'macebell': 'macebell',
-    'clubbell': 'clubbell', 'landmine': 'landmine', 'sandbag': 'sac_leste',
-    'heavy sandbag': 'sac_leste', 'bulgarian bag': 'sac_bulgare',
-    'parallette bars': 'barres_paralleles', 'trap bar': 'trap_bar',
-    'medicine ball': 'medecine_ball', 'slam ball': 'slam_ball', 'sliders': 'sliders',
-    'ab wheel': 'roue_abdo', 'battle ropes': 'cordes', 'box': 'box', 'bench': 'banc',
-    'ez bar': 'barre_ez', 'indian club': 'club_indien', 'steel mace': 'masse',
-}
-MUSCLE_MAP = {
-    'quadriceps': 'quadriceps', 'shoulders': 'epaules', 'abdominals': 'abdominaux',
-    'back': 'dos', 'glutes': 'fessiers', 'chest': 'pectoraux', 'biceps': 'biceps',
-    'triceps': 'triceps', 'hip flexors': 'flechisseurs_hanche', 'calves': 'mollets',
-    'hamstrings': 'ischio_jambiers', 'forearms': 'avant_bras', 'abductors': 'abducteurs',
-    'adductors': 'adducteurs', 'trapezius': 'trapezes', 'shins': 'tibias',
-}
-PATTERN_MAP = {
-    'knee dominant': 'squat', 'hip hinge': 'hinge', 'vertical push': 'poussee_verticale',
-    'horizontal push': 'poussee_horizontale', 'vertical pull': 'tirage_vertical',
-    'horizontal pull': 'tirage_horizontal', 'rotational': 'rotation',
-    'isometric hold': 'gainage_iso', 'elbow flexion': 'flexion_coude',
-    'elbow extension': 'extension_coude', 'anti-extension': 'anti_extension',
-    'anti-rotational': 'anti_rotation', 'anti-lateral flexion': 'anti_flexion_laterale',
-    'spinal flexion': 'flexion_rachis', 'spinal rotational': 'rotation_rachis',
-    'hip internal rotation': 'rotation_interne_hanche',
-}
-# Glossaire pour composer un nom FR (remplacement de tokens, ordre conservé).
-NAME_GLOSSARY = {
-    'bodyweight': 'poids du corps', 'dumbbell': 'haltère', 'barbell': 'barre',
-    'kettlebell': 'kettlebell', 'cable': 'poulie', 'band': 'élastique',
-    'glute bridge': 'pont fessier', 'hip thrust': 'hip thrust', 'squat': 'squat',
-    'goblet': 'goblet', 'front squat': 'front squat', 'back squat': 'back squat',
-    'split squat': 'split squat', 'lunge': 'fente', 'reverse lunge': 'fente arrière',
-    'step up': 'montée sur box', 'deadlift': 'soulevé de terre', 'romanian': 'roumain',
-    'push up': 'pompe', 'pushup': 'pompe', 'bench press': 'développé couché',
-    'overhead press': 'développé militaire', 'shoulder press': 'développé épaules',
-    'row': 'rowing', 'pull up': 'traction', 'pullup': 'traction', 'chin up': 'traction supination',
-    'curl': 'curl', 'tricep': 'triceps', 'extension': 'extension', 'press': 'développé',
-    'plank': 'planche', 'dead bug': 'dead bug', 'bird dog': 'bird dog',
-    'mountain climber': 'mountain climber', 'crunch': 'crunch', 'sit up': 'sit up',
-    'calf raise': 'extension mollets', 'lateral raise': 'élévation latérale',
-    'swing': 'swing', 'clean': 'épaulé', 'snatch': 'arraché', 'thruster': 'thruster',
-    'carry': 'port', 'farmer': 'fermier', 'single arm': 'unilatéral', 'single leg': 'unilatéral',
-    'seated': 'assis', 'standing': 'debout', 'kneeling': 'à genoux', 'incline': 'incliné',
-    'decline': 'décliné', 'alternating': 'alterné',
-}
+def strip_accents(s):
+    return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
 def slug(s):
-    s = s.lower().strip()
+    s = strip_accents(str(s).lower().strip())
     s = re.sub(r'[^a-z0-9]+', '_', s).strip('_')
-    return s
+    return s or None
 
-# Équipement en TÊTE de nom -> rejeté en suffixe FR "(...)" (meilleur ordre FR).
-EQUIP_LEAD = {
-    'bodyweight': 'poids du corps', 'dumbbell': 'haltère', 'barbell': 'barre',
-    'kettlebell': 'kettlebell', 'cable': 'poulie', 'stability ball': 'swiss ball',
-    'gymnastic rings': 'anneaux', 'suspension trainer': 'sangles', 'clubbell': 'clubbell',
-    'macebell': 'macebell', 'landmine': 'landmine', 'sandbag': 'sac lesté',
-    'heavy sandbag': 'sac lesté', 'trap bar': 'trap bar', 'ez bar': 'barre EZ',
-    'medicine ball': 'médecine ball', 'slam ball': 'slam ball', 'superband': 'élastique',
-    'miniband': 'mini-élastique', 'weight plate': 'disque', 'pull up bar': 'barre de traction',
-    'parallette bars': 'barres parallèles', 'bulgarian bag': 'sac bulgare',
-    'indian club': 'club indien', 'steel mace': 'masse', 'battle ropes': 'cordes',
-    'ab wheel': 'roue abdo', 'sliders': 'sliders', 'box': 'box', 'bench': 'banc',
+LEVEL_MAP = {
+    'debutant': 'debutant', 'novice': 'debutant',
+    'intermediaire': 'intermediaire',
+    'avance': 'avance', 'expert': 'avance', 'expert_plus': 'avance', 'expert+': 'avance',
+    'master': 'avance', 'grand_master': 'avance', 'legendary': 'avance',
+}
+EQUIP_MAP = {
+    'poids_de_corps': 'aucun', 'haltere': 'halteres', 'halteres': 'halteres',
+    'barre': 'barre', 'kettlebell': 'kettlebell', 'poulie': 'poulie', 'cable': 'poulie',
+    'elastique': 'elastique', 'superband': 'elastique', 'miniband': 'elastique',
+    'anneaux': 'anneaux', 'anneaux_de_gymnastique': 'anneaux', 'sangles': 'sangles',
+    'trx': 'sangles', 'entraineur_en_suspension': 'sangles',
+    'barre_de_traction': 'barre_traction', 'swiss_ball': 'swiss_ball',
+    'ballon_de_stabilite': 'swiss_ball', 'disque': 'disque', 'plaque_de_poids': 'disque',
+    'trap_bar': 'trap_bar', 'barre_ez': 'barre_ez', 'sac_de_sable': 'sac_leste',
+    'sac_de_sable_lourd': 'sac_leste', 'sac_bulgare': 'sac_bulgare',
+    'barres_paralleles': 'barres_paralleles', 'parallettes': 'barres_paralleles',
+    'medecine_ball': 'medecine_ball', 'sliders': 'sliders', 'banc': 'banc', 'box': 'box',
 }
 
-def fr_name(name_en):
-    n = name_en.strip()
-    low = n.lower()
-    suffix = ''
-    for en in sorted(EQUIP_LEAD, key=len, reverse=True):
-        if low.startswith(en + ' '):
-            suffix = f' ({EQUIP_LEAD[en]})'
-            n = n[len(en):].strip()
-            break
-    n = n.lower()
-    for en in sorted(NAME_GLOSSARY, key=len, reverse=True):
-        n = re.sub(r'\b' + re.escape(en) + r'\b', NAME_GLOSSARY[en], n)
-    n = (n[:1].upper() + n[1:]) if n else name_en
-    return n + suffix
-
 def main():
-    wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
-    ws = wb['Exercises']
-    rows = list(ws.iter_rows(min_row=17, values_only=True))  # données dès la ligne 17
+    wb = openpyxl.load_workbook(SRC, data_only=True)  # full load (pour les hyperliens)
+    ws = wb['Master FR']
+    hdr = [str(c.value).strip() if c.value else '' for c in ws[1]]
+    col = {h: i for i, h in enumerate(hdr)}
+
+    def get(row, name):
+        i = col.get(name)
+        return row[i].value if i is not None and row[i].value not in (None, '') else None
+
+    def link(row, name):
+        i = col.get(name)
+        c = row[i] if i is not None else None
+        return c.hyperlink.target if (c is not None and c.hyperlink) else None
+
     out = []
     seen = set()
-    for r in rows:
-        name = (r[1] or '').strip() if r[1] else ''
+    for row in ws.iter_rows(min_row=2):
+        name = (str(get(row, 'Exercice (EN)')).strip() if get(row, 'Exercice (EN)') else '')
         if not name or name.lower() in seen:
             continue
         seen.add(name.lower())
-        lvl = LEVEL_MAP.get(str(r[4] or '').strip().lower(), 'intermediaire')
-        muscle_en = str(r[5] or '').strip().lower()
-        equip_en = str(r[9] or '').strip().lower()
-        pat_en = str(r[21] or '').strip().lower()
+        lvl_raw = slug(get(row, 'Niveau') or '')
+        equip_raw = slug(get(row, 'Équipement') or '')
         out.append({
             'name': name,
-            'name_fr': fr_name(name),
-            'level': lvl,
-            'muscle': MUSCLE_MAP.get(muscle_en, slug(muscle_en) if muscle_en else None),
-            'equipment': EQUIP_MAP.get(equip_en, slug(equip_en) if equip_en else None),
-            'pattern': PATTERN_MAP.get(pat_en, None),
-            'mechanics': 'compose' if str(r[29] or '').strip().lower() == 'compound' else ('isolation' if str(r[29] or '').strip().lower() == 'isolation' else None),
-            'unilateral': str(r[30] or '').strip().lower() in ('unilateral', 'contralateral', 'ipsilateral'),
-            'body_region': slug(str(r[27] or '').strip().lower()) or None,
+            'name_fr': (str(get(row, 'Nom (FR)')).strip() if get(row, 'Nom (FR)') else name),
+            'family': slug(get(row, 'Famille') or ''),
+            'level': LEVEL_MAP.get(lvl_raw, 'intermediaire'),
+            'muscle': slug(get(row, 'Groupe musculaire') or ''),
+            'equipment': EQUIP_MAP.get(equip_raw, equip_raw),
+            'pattern': slug(get(row, 'Pattern') or ''),
+            'mechanics': 'compose' if slug(get(row, 'Mécanique') or '') in ('polyarticulaire', 'compose', 'compound')
+                         else ('isolation' if slug(get(row, 'Mécanique') or '') == 'isolation' else None),
+            'unilateral': slug(get(row, 'Latéralité') or '') in ('unilateral', 'contralateral', 'ipsilateral'),
+            'region': slug(get(row, 'Région') or ''),
+            'demo_url': link(row, 'Démo orig.'),
+            'explain_url': link(row, 'Explic. orig.'),
         })
+
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False)
     size_kb = os.path.getsize(OUT) / 1024
+    sys.stdout.reconfigure(encoding='utf-8')
     print(f'OK {len(out)} exercices -> {OUT} ({size_kb:.0f} Ko)')
-    # petit échantillon
-    for ex in out[:4]:
-        print('  ', ex['name'], '->', ex['name_fr'], '|', ex['level'], '|', ex['muscle'], '|', ex['equipment'], '|', ex['pattern'])
+    from collections import Counter
+    print('familles:', dict(Counter(e['family'] for e in out)))
+    print('niveaux:', dict(Counter(e['level'] for e in out)))
+    print('avec demo_url:', sum(1 for e in out if e['demo_url']))
+    for e in out[:3]:
+        print('  ', e['name_fr'], '|', e['family'], e['level'], e['muscle'], e['equipment'], '| demo:', (e['demo_url'] or '')[:40])
 
 if __name__ == '__main__':
     main()

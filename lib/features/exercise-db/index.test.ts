@@ -38,4 +38,16 @@ describe('exercise-db (Functional Fitness v2.9)', () => {
       expect(['debutant', 'intermediaire', 'avance']).toContain(e.level);
     }
   });
+
+  it('filtre par famille (push/pull/squat/hinge/core/autres)', () => {
+    const squat = searchExercises({ family: 'squat' }, 20);
+    expect(squat.length).toBeGreaterThan(0);
+    expect(squat.every((e) => e.family === 'squat')).toBe(true);
+  });
+
+  it('expose des liens démo vidéo (demo_url)', () => {
+    const withDemo = searchExercises({}, 200).filter((e) => e.demo_url);
+    expect(withDemo.length).toBeGreaterThan(0);
+    expect(withDemo[0].demo_url).toMatch(/^https?:\/\//);
+  });
 });
