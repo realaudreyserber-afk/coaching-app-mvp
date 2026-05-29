@@ -49,4 +49,20 @@ describe('food-composition (CIQUAL 2025)', () => {
     expect(getFoodByCode(code)?.code).toBe(code);
     expect(getFoodByCode('___inexistant___')).toBeNull();
   });
+
+  it('respecte le niveau de transformation (brut ≠ transformé)', () => {
+    const breast = matchFood('blanc de poulet');
+    const nuggets = matchFood('nuggets de poulet');
+    expect(breast?.name.toLowerCase()).toContain('poulet');
+    expect(breast?.name.toLowerCase()).not.toContain('nugget'); // pas de blanc -> nuggets
+    expect(nuggets?.name.toLowerCase()).toContain('nugget'); // nuggets -> bien les nuggets
+    const cacao = matchFood('poudre de cacao non sucré');
+    expect(cacao?.name.toLowerCase()).toContain('cacao');
+  });
+
+  it('rejette les produits de marque / suppléments sans équivalent (pas de faux match brut)', () => {
+    expect(matchFood('whey isolate vanille')).toBeNull();
+    expect(matchFood('barre protéinée Myprotein')).toBeNull();
+    expect(matchFood('Skyr Danone')).toBeNull();
+  });
 });

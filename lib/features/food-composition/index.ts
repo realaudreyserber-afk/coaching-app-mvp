@@ -51,13 +51,38 @@ function normalize(s: string): string {
     .trim();
 }
 
-// Index construits une fois au chargement (module serveur, ~3.5k entrées).
+// Mots vides FR + marqueurs d'état non discriminants (matching robuste).
+const STOP_WORDS = new Set([
+  'au', 'aux', 'de', 'des', 'du', 'la', 'le', 'les', 'et', 'en', 'a',
+  'sans', 'avec', 'ou', 'sur', 'cru', 'crue', 'nature',
+]);
+
+/** Retire les pluriels simples (amandes -> amande). */
+function stem(t: string): string {
+  return t.length >= 4 && t.endsWith('s') ? t.slice(0, -1) : t;
+}
+function tokenize(norm: string): string[] {
+  return norm
+    .split(' ')
+    .map(stem)
+    .filter((t) => t.length > 1 && !STOP_WORDS.has(t));
+}
+
+// Index construit une fois au chargement (module serveur, ~3.5k entrées).
 const BY_CODE = new Map<string, RawFood>();
-const NORM: Array<{ raw: RawFood; norm: string; tokens: Set<string> }> = [];
+interface IndexEntry {
+  raw: RawFood;
+  norm: string;
+  head: string;
+  tokens: Set<string>;
+  nTok: number;
+}
+const INDEX: IndexEntry[] = [];
 for (const r of RAW) {
   BY_CODE.set(r.c, r);
   const norm = normalize(r.n);
-  NORM.push({ raw: r, norm, tokens: new Set(norm.split(' ').filter(Boolean)) });
+  const toks = tokenize(norm);
+  INDEX.push({ raw: r, norm, head: toks[0] ?? '', tokens: new Set(toks), nTok: toks.length });
 }
 
 export function getFoodByCode(code: string): FoodComposition | null {
@@ -66,45 +91,68 @@ export function getFoodByCode(code: string): FoodComposition | null {
 }
 
 export interface FoodSearchHit extends FoodComposition {
-  /** Score de pertinence (plus haut = meilleur match) */
+  /** Score de pertinence (plus haut = meilleur) */
   score: number;
+  /** Part des tokens de la requête couverts par l'aliment (0-1) */
+  coverage: number;
 }
 
+/** Seuils d'acceptation d'un match FIABLE (cf. matchFood). */
+export const MATCH_MIN_SCORE = 4;
+export const MATCH_MIN_COVERAGE = 0.6;
+
 /**
- * Recherche d'aliments par nom (tolérante aux accents/casse). Score :
- *  - +3 si le nom normalisé contient la requête entière
- *  - +1 par token de la requête présent dans le nom
- *  - bonus si le match est en début de nom (aliment générique)
- * Sert à mapper un aliment loggé (texte libre) vers sa composition CIQUAL.
+ * Recherche d'aliments par nom (tolérante accents/casse/pluriels).
+ *
+ * Le scoring favorise l'aliment qui "EST" la requête (head-token) et pénalise
+ * les plats composés (tokens en trop) — pour ne pas matcher "amandes" ->
+ * "Croissant aux amandes". `coverage` = part des tokens de la requête réellement
+ * présents ; il sert à REJETER (via matchFood) les produits transformés / de
+ * marque sans équivalent CIQUAL plutôt que de retomber sur un mauvais aliment
+ * brut — la justesse nutritionnelle dépend du niveau de transformation
+ * (blanc de poulet ≠ nuggets, cacao ≠ Nesquik).
  */
 export function searchFoods(query: string, limit = 8): FoodSearchHit[] {
-  const q = normalize(query);
-  if (q.length < 2) return [];
-  const qTokens = q.split(' ').filter(Boolean);
+  const nq = normalize(query);
+  const qTokens = tokenize(nq);
+  if (qTokens.length === 0) return [];
 
   const hits: FoodSearchHit[] = [];
-  for (const entry of NORM) {
-    let score = 0;
-    if (entry.norm.includes(q)) score += 3;
-    if (entry.norm.startsWith(q)) score += 2;
-    for (const t of qTokens) {
-      if (entry.tokens.has(t)) score += 1;
-      else if (t.length >= 4 && entry.norm.includes(t)) score += 0.5;
-    }
-    if (score > 0) {
-      // Préfère les noms courts (aliments génériques) à pertinence égale
-      score += Math.max(0, 1 - entry.norm.length / 120);
-      hits.push({ ...toFood(entry.raw), score: Math.round(score * 100) / 100 });
-    }
+  for (const e of INDEX) {
+    let overlap = 0;
+    for (const t of qTokens) if (e.tokens.has(t)) overlap++;
+    const sub = nq.length >= 3 && e.norm.includes(nq);
+    if (overlap === 0 && !sub) continue;
+
+    const coverage = overlap / qTokens.length;
+    let score = overlap * 2 + coverage * 3;
+    if (e.norm === nq) score += 10;
+    else if (e.norm.startsWith(nq)) score += 3;
+    if (e.head && qTokens.includes(e.head)) score += 3; // l'aliment "est" un mot de la requête
+    score -= Math.max(0, e.nTok - qTokens.length) * 0.4; // préfère les aliments simples
+
+    hits.push({
+      ...toFood(e.raw),
+      score: Math.round(score * 100) / 100,
+      coverage: Math.round(coverage * 100) / 100,
+    });
   }
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, limit);
 }
 
-/** Meilleur match unique pour un nom d'aliment loggé (ou null). */
+/**
+ * Meilleur match FIABLE pour un aliment loggé (texte libre), ou null si le top
+ * est sous les seuils (score + couverture). On PRÉFÈRE "non identifié" à un
+ * mauvais match : un produit transformé/de marque sans équivalent CIQUAL ne doit
+ * JAMAIS être assimilé à l'aliment brut (composition très différente).
+ */
 export function matchFood(query: string): FoodComposition | null {
   const [top] = searchFoods(query, 1);
-  return top ?? null;
+  if (!top || top.score < MATCH_MIN_SCORE || top.coverage < MATCH_MIN_COVERAGE) {
+    return null;
+  }
+  return { code: top.code, name: top.name, group: top.group, per100g: top.per100g };
 }
 
 /** Teneurs pour une portion en grammes (scale per100g × g/100). */
