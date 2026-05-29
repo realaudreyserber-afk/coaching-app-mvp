@@ -75,12 +75,17 @@ interface GenerateOptions {
    * PAS passer systemInstruction en parallèle). Supporté uniquement via le SDK
    * @google/genai (requires GEMINI_API_KEY).
    *
-   * ⚠️ INUTILISÉ à dessein : le cache EXPLICITE exige un minimum de 32 768
-   * tokens par entrée (doc Google 2026). Or nos prompts système font < ~4k
-   * tokens (superviseur ~4,1k, agents ~1,2-3,5k, mono-prompt ~11k) → création
-   * rejetée. Le cache IMPLICITE (auto, gratuit, sans seuil, -90% sur les hits)
-   * couvre déjà ces prompts statiques sur Gemini 2.5+. Param conservé pour un
-   * éventuel futur contexte volumineux (>32k tokens).
+   * ⚠️ INUTILISÉ à dessein — pour raison ÉCONOMIQUE, pas technique :
+   * - Nos prompts (superviseur ~4,1k, agents ~1,2-3,5k tok) dépassent le seuil
+   *   mini (~1024 tok sur 2.5/3.5 Flash) → techniquement cachables.
+   * - MAIS le cache explicite facture le STOCKAGE (~1$/M tok/heure), rentable
+   *   seulement à fort trafic soutenu (~4 req/h par M tok cachés, dans la TTL).
+   *   Sur serverless bas trafic (cache par instance + cold starts) =
+   *   break-even voire négatif.
+   * - Le cache IMPLICITE (activé par défaut sur 2.5+, gratuit, SANS stockage,
+   *   -90% quand un hit survient) couvre déjà ces prompts statiques, sans code.
+   * Param conservé pour un éventuel gros contexte partagé à fort trafic.
+   * (Le "32768 min" parfois cité = chiffre périmé ère Gemini 1.5.)
    */
   cachedContentName?: string;
 }
