@@ -15,6 +15,7 @@
  */
 
 import { matchFood, nutrientsForPortion } from '@/lib/features/food-composition';
+import { classifyTransformation } from '@/lib/features/food-composition/nova';
 import { athleteAdjustedRda } from '@/lib/features/nutrition-db/athlete-targets';
 import { getNutrient } from '@/lib/features/nutrition-db/nutrients';
 
@@ -48,6 +49,16 @@ export interface MicronutrientIntakeAnalysis {
   reliable: boolean;
   /** Nutriments < seuil de couverture (uniquement si reliable) */
   low: MicronutrientLow[];
+  /**
+   * Qualité diététique sur la période (null si non reliable). Indicatif :
+   * la transformation est heuristique, à manier sans dogme "clean".
+   */
+  diet_quality: {
+    /** Part des calories IDENTIFIÉES issues d'aliments ultra-transformés (0-1). */
+    aut_calorie_share: number | null;
+    /** Densité protéique moyenne : g protéines / 100 kcal (levier satiété en cut). */
+    protein_per_100kcal: number | null;
+  } | null;
   /** Formulation prudente prête pour le coach (jamais "carence"). */
   note: string;
 }
@@ -79,6 +90,9 @@ export function analyzeMicronutrientIntake(
 
   let itemsTotal = 0;
   let itemsMatched = 0;
+  let totalKcal = 0;
+  let autKcal = 0;
+  let totalProtein = 0;
   const perDay: Array<Record<string, number>> = [];
 
   for (const day of days) {
@@ -93,6 +107,12 @@ export function analyzeMicronutrientIntake(
       for (const k of MICRO_KEYS) {
         if (typeof n[k] === 'number') totals[k] = (totals[k] ?? 0) + n[k];
       }
+      // Densité + transformation (degré, indépendamment des micros)
+      if (typeof n.kcal === 'number') {
+        totalKcal += n.kcal;
+        if (classifyTransformation(food.name, food.group).ultra_processed) autKcal += n.kcal;
+      }
+      if (typeof n.protein_g === 'number') totalProtein += n.protein_g;
     }
     perDay.push(totals);
   }
@@ -131,6 +151,14 @@ export function analyzeMicronutrientIntake(
       ? `Apports bas sur les aliments identifiés (${pctMatch}%, ${daysAnalyzed} j) : ${low.map((l) => l.name_fr).join(', ')}. Indicatif (pas un diagnostic) — suggérer des sources alimentaires ; déléguer à safety si signal clinique.`
       : `Apports micronutritionnels corrects sur les aliments identifiés (${pctMatch}%, ${daysAnalyzed} j).`;
 
+  const diet_quality = reliable
+    ? {
+        aut_calorie_share: totalKcal > 0 ? Math.round((autKcal / totalKcal) * 100) / 100 : null,
+        protein_per_100kcal:
+          totalKcal > 0 ? Math.round((totalProtein / totalKcal) * 100 * 10) / 10 : null,
+      }
+    : null;
+
   return {
     days_analyzed: daysAnalyzed,
     items_total: itemsTotal,
@@ -138,6 +166,7 @@ export function analyzeMicronutrientIntake(
     match_rate: Math.round(matchRate * 100) / 100,
     reliable,
     low,
+    diet_quality,
     note,
   };
 }

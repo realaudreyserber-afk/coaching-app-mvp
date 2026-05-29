@@ -30,6 +30,10 @@ describe('analyzeMicronutrientIntake (CIQUAL × cibles sportives)', () => {
       expect(l.food_sources_fr.length).toBeGreaterThan(0);
       expect(l.avg_coverage_pct).toBeLessThan(70);
     }
+    // diet_quality calculé (aliments bruts -> AUT ~0, densité protéique correcte)
+    expect(a.diet_quality).not.toBeNull();
+    expect(a.diet_quality!.aut_calorie_share).toBe(0);
+    expect(a.diet_quality!.protein_per_100kcal).toBeGreaterThan(0);
   });
 
   it('NON fiable si trop peu de jours → pas de "low", note prudente', () => {
