@@ -142,47 +142,70 @@ export interface GenerateTextResult {
  * Utilisée par le système multi-agent pour cost tracking par session
  * (cf. lib/vertex/agents/). Comportement identique sinon.
  */
-export async function generateTextWithUsage(options: GenerateOptions): Promise<GenerateTextResult> {
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash';
+/**
+ * Modèle utilisé côté Vertex AI. ⚠️ `gemini-3.5-flash` N'EXISTE PAS sur Vertex
+ * (404 Publisher Model) — c'est un nom propre à l'API Gemini/AI Studio. Sur
+ * Vertex le modèle disponible est `gemini-2.5-flash`. Override : VERTEX_AI_MODEL.
+ */
+const VERTEX_MODEL = process.env.VERTEX_AI_MODEL || 'gemini-2.5-flash';
+const DEV_API_MODEL_DEFAULT = 'gemini-3.5-flash';
 
-  if (geminiApiKey) {
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-    const response = await withRetry(() => ai.models.generateContent({
-      model: modelName,
-      contents: options.contents,
-      config: {
-        temperature: options.temperature ?? 0.3,
-        responseMimeType: options.responseMimeType,
-        responseSchema: options.responseSchema,
-        // Audit COACH 2026-05-28 #3 : explicite maxOutputTokens pour éviter
-        // les troncatures sur réponses coach longues (multi-agent aggregate).
-        maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        // Cache et systemInstruction sont mutuellement exclusifs :
-        // si un cache est fourni, son systemInstruction prime.
-        ...(options.cachedContentName
-          ? { cachedContent: options.cachedContentName }
-          : { systemInstruction: options.systemInstruction }),
-        abortSignal: options.signal,
-      } as any,
-    }), options.signal);
+/**
+ * Ordre des backends LLM. Par DÉFAUT Vertex AI en premier : il est facturé sur
+ * le projet GCP (crédits d'essai gratuits), alors que la clé API Gemini/AI Studio
+ * a une facturation SÉPARÉE qui peut être à sec (429 "prepayment credits depleted").
+ * Repli automatique sur l'API Gemini si la clé est présente. Override explicite :
+ * `LLM_BACKEND=gemini` (Gemini d'abord) ou `LLM_BACKEND=vertex` (Vertex seul).
+ */
+function backendOrder(): Array<'vertex' | 'gemini'> {
+  const hasKey = !!process.env.GEMINI_API_KEY;
+  const pref = (process.env.LLM_BACKEND || '').toLowerCase();
+  if (pref === 'gemini') return hasKey ? ['gemini', 'vertex'] : ['vertex'];
+  if (pref === 'vertex') return ['vertex'];
+  return hasKey ? ['vertex', 'gemini'] : ['vertex'];
+}
 
-    const usage = (response as any).usageMetadata ?? {};
-    return {
-      text: response.text || '',
-      tokens: {
-        input: usage.promptTokenCount ?? 0,
-        output: usage.candidatesTokenCount ?? 0,
-      },
-    };
-  }
+/** Erreur qui justifie de basculer sur l'autre backend (indispo/quota/permission/billing/modèle absent). */
+function isFailoverError(err: unknown): boolean {
+  if (isRetryableError(err)) return true;
+  const e = err as { status?: number; code?: number; message?: string } | undefined;
+  if (!e) return false;
+  if ([403, 404].includes(e.status ?? -1) || [403, 404].includes(e.code ?? -1)) return true;
+  return (
+    typeof e.message === 'string' &&
+    /permission|quota|exhaust|credit|billing|forbidden|not found|RESOURCE_EXHAUSTED/i.test(e.message)
+  );
+}
 
+async function callGeminiApiOnce(options: GenerateOptions): Promise<GenerateTextResult> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await withRetry(() => ai.models.generateContent({
+    model: options.model || DEV_API_MODEL_DEFAULT,
+    contents: options.contents,
+    config: {
+      temperature: options.temperature ?? 0.3,
+      responseMimeType: options.responseMimeType,
+      responseSchema: options.responseSchema,
+      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      ...(options.cachedContentName
+        ? { cachedContent: options.cachedContentName }
+        : { systemInstruction: options.systemInstruction }),
+      abortSignal: options.signal,
+    } as any,
+  }), options.signal);
+  const usage = (response as any).usageMetadata ?? {};
+  return {
+    text: response.text || '',
+    tokens: { input: usage.promptTokenCount ?? 0, output: usage.candidatesTokenCount ?? 0 },
+  };
+}
+
+async function callVertexOnce(options: GenerateOptions): Promise<GenerateTextResult> {
   const model = vertexAI.getGenerativeModel({
-    model: modelName,
+    model: VERTEX_MODEL,
     generationConfig: {
       temperature: options.temperature ?? 0.3,
       responseMimeType: options.responseMimeType,
-      // Audit COACH 2026-05-28 #3 : pareil pour le path Vertex AI
       maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       ...(options.responseSchema ? { responseSchema: options.responseSchema as any } : {}),
     },
@@ -190,21 +213,32 @@ export async function generateTextWithUsage(options: GenerateOptions): Promise<G
       ? { role: 'system', parts: [{ text: options.systemInstruction }] }
       : undefined,
   });
-
-  const response = await withRetry(
-    () => model.generateContent({ contents: options.contents }),
-    options.signal
-  );
-
+  const response = await withRetry(() => model.generateContent({ contents: options.contents }), options.signal);
   const responseResult = response.response;
   const usage = (responseResult as any).usageMetadata ?? {};
   return {
     text: responseResult.candidates?.[0]?.content?.parts?.[0]?.text || '',
-    tokens: {
-      input: usage.promptTokenCount ?? 0,
-      output: usage.candidatesTokenCount ?? 0,
-    },
+    tokens: { input: usage.promptTokenCount ?? 0, output: usage.candidatesTokenCount ?? 0 },
   };
+}
+
+export async function generateTextWithUsage(options: GenerateOptions): Promise<GenerateTextResult> {
+  const order = backendOrder();
+  let lastErr: unknown;
+  for (let i = 0; i < order.length; i++) {
+    const backend = order[i];
+    try {
+      return backend === 'vertex' ? await callVertexOnce(options) : await callGeminiApiOnce(options);
+    } catch (err) {
+      lastErr = err;
+      const hasNext = i < order.length - 1;
+      if (!hasNext || !isFailoverError(err)) throw err;
+      console.warn(
+        `[vertex/client] backend "${backend}" KO (${String((err as Error)?.message).slice(0, 120)}) → repli sur "${order[i + 1]}"`,
+      );
+    }
+  }
+  throw lastErr;
 }
 
 export function parseLLMJson<T = unknown>(raw: string): T {
@@ -231,38 +265,31 @@ export function parseLLMJson<T = unknown>(raw: string): T {
   }
 }
 
-export async function* generateTextStream(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  const modelName = options.model || process.env.VERTEX_AI_MODEL_PRO || 'gemini-3.5-flash';
-
-  if (geminiApiKey) {
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-    const stream = await ai.models.generateContentStream({
-      model: modelName,
-      contents: options.contents,
-      config: {
-        temperature: options.temperature ?? 0.3,
-        responseMimeType: options.responseMimeType,
-        // Audit COACH 2026-05-28 #3 : explicite cap pour éviter troncatures
-        maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-        // Cache et systemInstruction sont mutuellement exclusifs (cf. generateText).
-        ...(options.cachedContentName
-          ? { cachedContent: options.cachedContentName }
-          : { systemInstruction: options.systemInstruction }),
-        abortSignal: options.signal,
-      } as any,
-    });
-
-    for await (const chunk of stream) {
-      if (options.signal?.aborted) return;
-      const text = chunk.text;
-      if (text) yield text;
-    }
-    return;
+async function* streamGeminiApi(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const stream = await ai.models.generateContentStream({
+    model: options.model || DEV_API_MODEL_DEFAULT,
+    contents: options.contents,
+    config: {
+      temperature: options.temperature ?? 0.3,
+      responseMimeType: options.responseMimeType,
+      maxOutputTokens: options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      ...(options.cachedContentName
+        ? { cachedContent: options.cachedContentName }
+        : { systemInstruction: options.systemInstruction }),
+      abortSignal: options.signal,
+    } as any,
+  });
+  for await (const chunk of stream) {
+    if (options.signal?.aborted) return;
+    const text = chunk.text;
+    if (text) yield text;
   }
+}
 
+async function* streamVertex(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
   const model = vertexAI.getGenerativeModel({
-    model: modelName,
+    model: VERTEX_MODEL,
     generationConfig: {
       temperature: options.temperature ?? 0.3,
       responseMimeType: options.responseMimeType,
@@ -272,14 +299,33 @@ export async function* generateTextStream(options: GenerateOptions): AsyncGenera
       ? { role: 'system', parts: [{ text: options.systemInstruction }] }
       : undefined,
   });
-
-  const streamingResult = await model.generateContentStream({
-    contents: options.contents,
-  });
-
+  const streamingResult = await model.generateContentStream({ contents: options.contents });
   for await (const item of streamingResult.stream) {
     if (options.signal?.aborted) return;
     const text = item.candidates?.[0]?.content?.parts?.[0]?.text;
     if (text) yield text;
+  }
+}
+
+export async function* generateTextStream(options: GenerateOptions): AsyncGenerator<string, void, unknown> {
+  const order = backendOrder();
+  for (let i = 0; i < order.length; i++) {
+    const backend = order[i];
+    const gen = backend === 'vertex' ? streamVertex(options) : streamGeminiApi(options);
+    let yielded = false;
+    try {
+      for await (const text of gen) {
+        yielded = true;
+        yield text;
+      }
+      return;
+    } catch (err) {
+      const hasNext = i < order.length - 1;
+      // Repli seulement si rien n'a encore été streamé (sinon on ne peut pas annuler).
+      if (yielded || !hasNext || !isFailoverError(err)) throw err;
+      console.warn(
+        `[vertex/client] stream "${backend}" KO avant 1er chunk → repli sur "${order[i + 1]}"`,
+      );
+    }
   }
 }
