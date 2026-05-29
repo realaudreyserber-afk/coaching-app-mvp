@@ -149,6 +149,18 @@ export async function runAgentSession(
     tokensOutputTotal += routeResult.tokens.output;
 
     routingDecision = parseRoutingDecision(routeResult.text);
+
+    // Garde-fou DÉTERMINISTE grossesse / allaitement (cf. enforcePregnancySafety) :
+    // force safety + annule un éventuel skip. Médicalement sensible → couverture
+    // non probabiliste, indépendante du routeur LLM.
+    {
+      const before = routingDecision.sub_agents.length;
+      routingDecision = enforcePregnancySafety(routingDecision, input.user_message);
+      if (routingDecision.sub_agents.length !== before) {
+        trace.supervisor('pregnancy_safety_forced', 'info', {});
+      }
+    }
+
     trace.supervisor('route_decided', 'info', {
       sub_agents: routingDecision.sub_agents.map((s) => s.name),
       skip: routingDecision.skip_sub_agents ?? false,
@@ -427,6 +439,43 @@ function buildAggregatePrompt(
  * Parse + valide le RoutingDecision retourné par Gemini.
  * Fallback safe si parse fail : on consulte personne et on dit qu'on a pas compris.
  */
+/**
+ * Détection DÉTERMINISTE d'un contexte grossesse / allaitement dans le message.
+ * Pregnancy est médicalement sensible : la couverture safety ne doit pas dépendre
+ * d'un routeur LLM probabiliste.
+ */
+export function mentionsPregnancy(message: string): boolean {
+  return /enceinte|enceins|grossesse|allaite|allaitement|post[- ]?partum/i.test(message);
+}
+
+/**
+ * Garde-fou grossesse/allaitement : si le message le mentionne, on FORCE safety
+ * dans le set d'agents et on annule un éventuel skip. Le cadrage change tout
+ * (jamais de déficit calorique, clairance médicale, contre-indications training)
+ * et ne doit jamais être manqué. Pur + testable.
+ */
+export function enforcePregnancySafety(
+  decision: RoutingDecision,
+  message: string,
+): RoutingDecision {
+  if (!mentionsPregnancy(message)) return decision;
+  const hasSafety = decision.sub_agents.some((a) => a.name === 'safety');
+  return {
+    ...decision,
+    skip_sub_agents: false,
+    sub_agents: hasSafety
+      ? decision.sub_agents
+      : [
+          ...decision.sub_agents,
+          {
+            name: 'safety',
+            reason_for_consult:
+              'Grossesse/allaitement mentionné — cadrage de sécurité obligatoire (pas de déficit, clairance médicale, contre-indications entraînement).',
+          },
+        ],
+  };
+}
+
 export function parseRoutingDecision(raw: string): RoutingDecision {
   try {
     const parsed = parseLLMJson<{

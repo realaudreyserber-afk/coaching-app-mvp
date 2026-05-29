@@ -22,8 +22,13 @@ vi.mock('../client', async () => {
   return { ...actual, generateTextWithUsage: vi.fn() };
 });
 
-import { parseRoutingDecision, arbitrateOutputs } from './supervisor';
-import type { AgentOutput, SubAgentName } from './types';
+import {
+  parseRoutingDecision,
+  arbitrateOutputs,
+  mentionsPregnancy,
+  enforcePregnancySafety,
+} from './supervisor';
+import type { AgentOutput, RoutingDecision, SubAgentName } from './types';
 
 function makeOutput(agent: SubAgentName, severity: AgentOutput['severity']): AgentOutput {
   return {
@@ -176,5 +181,47 @@ describe('supervisor — arbitrateOutputs', () => {
       training: makeOutput('training', 'info'),
     });
     expect(out).toBeUndefined();
+  });
+});
+
+describe('supervisor — garde-fou grossesse/allaitement', () => {
+  it('détecte enceinte / grossesse / allaitement (insensible casse + accents partiels)', () => {
+    expect(mentionsPregnancy('je suis enceinte de 4 mois')).toBe(true);
+    expect(mentionsPregnancy('Grossesse: quel sport ?')).toBe(true);
+    expect(mentionsPregnancy("j'allaite, je peux faire une sèche ?")).toBe(true);
+    expect(mentionsPregnancy('post-partum reprise sport')).toBe(true);
+    expect(mentionsPregnancy('je veux sécher pour cet été')).toBe(false);
+    expect(mentionsPregnancy('plan de prise de masse')).toBe(false);
+  });
+
+  function decision(names: SubAgentName[], skip = false): RoutingDecision {
+    return {
+      sub_agents: names.map((name) => ({ name, reason_for_consult: 'x' })),
+      reasoning: 'r',
+      skip_sub_agents: skip,
+    };
+  }
+
+  it('force safety quand grossesse mentionnée et safety absent', () => {
+    const out = enforcePregnancySafety(decision(['nutrition']), 'je suis enceinte, un plan ?');
+    expect(out.sub_agents.map((a) => a.name)).toContain('safety');
+    expect(out.skip_sub_agents).toBe(false);
+  });
+
+  it('annule un skip_sub_agents si grossesse mentionnée', () => {
+    const out = enforcePregnancySafety(decision([], true), 'enceinte');
+    expect(out.skip_sub_agents).toBe(false);
+    expect(out.sub_agents.map((a) => a.name)).toEqual(['safety']);
+  });
+
+  it('ne duplique pas safety s\'il est déjà routé', () => {
+    const out = enforcePregnancySafety(decision(['safety', 'nutrition']), 'grossesse');
+    expect(out.sub_agents.filter((a) => a.name === 'safety')).toHaveLength(1);
+  });
+
+  it('laisse la décision intacte si pas de grossesse', () => {
+    const d = decision(['training']);
+    const out = enforcePregnancySafety(d, 'plan de sèche');
+    expect(out).toBe(d);
   });
 });
