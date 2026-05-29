@@ -26,6 +26,7 @@ import {
   getUserProfileSnapshot,
   type NormalizedProfile,
 } from '@/lib/features/user-profile/snapshot';
+import { adminDb } from '@/lib/firebase/admin';
 import {
   AGENT_SCHEMA_VERSION,
   createEmptySharedMemory,
@@ -38,6 +39,38 @@ import {
 } from './types';
 
 const SUPERVISOR_MODEL = 'gemini-3.5-flash';
+
+/**
+ * Sous-ensemble du plan actif dont le superviseur a besoin à l'étape AGGREGATE
+ * pour décider un COACH_PLAN_PATCH SÛR : cohérence calorique (modifier un macro
+ * sans casser kcal) et refus de patch dangereux au vu de la phase courante.
+ */
+interface ActivePlanContext {
+  kcal?: number;
+  macros?: { p?: number; c?: number; f?: number };
+  phase?: string;
+  training?: { split?: string; frequency_per_week?: number };
+}
+
+/** Charge le subset du plan actif (1 lecture). Best-effort. */
+async function loadActivePlanContext(uid: string): Promise<ActivePlanContext | null> {
+  const snap = await adminDb
+    .collection('users').doc(uid)
+    .collection('plans')
+    .where('active', '==', true)
+    .limit(1)
+    .get();
+  const plan = snap.docs[0]?.data();
+  if (!plan) return null;
+  return {
+    kcal: plan.kcal,
+    macros: plan.macros,
+    phase: plan.phase,
+    training: plan.training
+      ? { split: plan.training.split, frequency_per_week: plan.training.frequency_per_week }
+      : undefined,
+  };
+}
 
 export interface RunAgentSessionInput {
   uid: string;
@@ -156,6 +189,17 @@ export async function runAgentSession(
       trace.supervisor('profile_preload_failed', 'warn', { err: String(e) });
     }
 
+    // Plan actif chargé UNE fois pour l'étape AGGREGATE : le superviseur décide
+    // les COACH_PLAN_PATCH et doit connaître kcal/macros/phase courants pour
+    // vérifier la cohérence calorique + refuser un patch dangereux. Sans ça il
+    // inventait ces valeurs (audit 2026-05-29, critical sécurité).
+    let activePlan: ActivePlanContext | null = null;
+    try {
+      activePlan = await loadActivePlanContext(input.uid);
+    } catch (e) {
+      trace.supervisor('active_plan_preload_failed', 'warn', { err: String(e) });
+    }
+
     const runs = await Promise.all(
       validAgents.map(async ({ name, reason_for_consult }) => {
         safeEmit(input.onPhase, { type: 'agent_start', agent: name, reason: reason_for_consult });
@@ -191,7 +235,7 @@ export async function runAgentSession(
 
     // 5. Étape AGGREGATE
     safeEmit(input.onPhase, { type: 'aggregate_start' });
-    const aggregatePrompt = buildAggregatePrompt(input, subOutputs, arbitration);
+    const aggregatePrompt = buildAggregatePrompt(input, subOutputs, arbitration, activePlan);
     const aggregateResult = await generateTextWithUsage({
       model: SUPERVISOR_MODEL,
       systemInstruction: SUPERVISOR_SYSTEM_PROMPT,
@@ -291,6 +335,7 @@ function buildAggregatePrompt(
   input: RunAgentSessionInput,
   outputs: Partial<Record<SubAgentName, AgentOutput>>,
   arbitration: SessionRecord['arbitration'],
+  activePlan: ActivePlanContext | null,
 ): string {
   // On n'inclut PAS les agents en error dans le prompt aggregate :
   // sinon le Supervisor risque de leak "L'agent X a échoué" à l'user.
@@ -315,15 +360,28 @@ function buildAggregatePrompt(
     ? `\n[ARBITRATION]\n${arbitration.disagreements.length > 0 ? `Désaccords: ${arbitration.disagreements.join('; ')}\n` : ''}Résolution: ${arbitration.resolution}\n`
     : '';
 
+  const safetyCritical = outputs.safety?.severity === 'critical';
+
+  // [PLAN ACTIF] : valeurs courantes réelles pour ancrer COACH_PLAN_PATCH.
+  // Sans ce bloc le superviseur inventait kcal/macros/phase (audit 2026-05-29).
+  const planBlock = activePlan
+    ? `\n[PLAN ACTIF — valeurs courantes réelles]\n${JSON.stringify(activePlan)}\n` +
+      `Pour tout COACH_PLAN_PATCH : appuie-toi UNIQUEMENT sur ces valeurs. Vérifie la cohérence calorique (si tu modifies un macro, ajuste kcal en conséquence) et refuse tout patch dangereux compte tenu de la phase courante. Ne DEVINE JAMAIS kcal/macros/phase.\n`
+    : `\n[PLAN ACTIF]\n(aucun plan actif chargé)\nN'émets PAS de COACH_PLAN_PATCH qui supposerait des valeurs de plan que tu ne possèdes pas.\n`;
+
   return (
     `[ÉTAPE: aggregate]\n\n` +
     `[MESSAGE USER]\n${input.user_message}\n\n` +
     `[OUTPUTS DES SOUS-AGENTS]\n${outputsSummary || '(aucun output utilisable)'}\n` +
+    planBlock +
     arbitrationBlock +
     `\nAssemble une réponse unifiée pour l'user dans la voix coach NoDream. ` +
     `Pas de mention des agents ni de l'architecture interne. Tutoiement. Pas le mot "régime". ` +
     `Si severity=critical sur safety, sa réponse prime — ton sérieux, redirection pro santé. ` +
-    `Si aucun output utilisable : "Je n'ai pas réussi à analyser ta question, peux-tu reformuler ?".`
+    `Si aucun output utilisable : "Je n'ai pas réussi à analyser ta question, peux-tu reformuler ?".` +
+    (safetyCritical
+      ? `\n\nSAFETY CRITICAL : n'émets AUCUNE balise COACH_PLAN_PATCH ni COACH_SAVE dans cette réponse — la priorité absolue est la réponse de sécurité.`
+      : ``)
   );
 }
 
