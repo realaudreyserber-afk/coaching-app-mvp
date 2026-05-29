@@ -69,13 +69,18 @@ interface GenerateOptions {
    */
   maxOutputTokens?: number;
   /**
-   * Optional cached content reference (Gemini explicit caching).
-   * Format : "cachedContents/{id}" returned by ai.caches.create().
-   * When provided, the cache's systemInstruction + contents are reused,
-   * billed at ~10% of normal input rate. The caller must NOT pass
-   * systemInstruction in parallel — it's already in the cache. Only
-   * supported via the @google/genai SDK path (requires GEMINI_API_KEY).
-   * Cf. lib/vertex/cached-coach-prompt.ts pour l'helper coach.
+   * Optional cached content reference (Gemini EXPLICIT caching).
+   * Format : "cachedContents/{id}" returned by ai.caches.create(). Réutilise
+   * le systemInstruction du cache, facturé ~10% du tarif input (caller ne doit
+   * PAS passer systemInstruction en parallèle). Supporté uniquement via le SDK
+   * @google/genai (requires GEMINI_API_KEY).
+   *
+   * ⚠️ INUTILISÉ à dessein : le cache EXPLICITE exige un minimum de 32 768
+   * tokens par entrée (doc Google 2026). Or nos prompts système font < ~4k
+   * tokens (superviseur ~4,1k, agents ~1,2-3,5k, mono-prompt ~11k) → création
+   * rejetée. Le cache IMPLICITE (auto, gratuit, sans seuil, -90% sur les hits)
+   * couvre déjà ces prompts statiques sur Gemini 2.5+. Param conservé pour un
+   * éventuel futur contexte volumineux (>32k tokens).
    */
   cachedContentName?: string;
 }
