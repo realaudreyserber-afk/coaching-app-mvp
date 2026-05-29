@@ -14,6 +14,7 @@ import { adminDb } from '@/lib/firebase/admin';
 import { BaseAgent } from './base';
 import { TRAINING_SYSTEM_PROMPT } from '../../prompts/agents/training';
 import { buildCoachRagFragment, buildProfileForRag } from '@/lib/features/rag-coach/context';
+import { searchExercises, type ExerciseLevel } from '@/lib/features/exercise-db';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { getPrsSnapshot } from '@/lib/features/personal-records/store';
 import { getSleepSnapshot } from '@/lib/features/sleep/store';
@@ -177,6 +178,45 @@ export class TrainingCoach extends BaseAgent {
       if (prs) ctx.prs = prs;
     } catch (e) {
       console.warn('[training-agent] prs fetch failed:', e);
+    }
+
+    // Bibliothèque d'exercices (Functional Fitness v2.9) filtrée par NIVEAU +
+    // équipement (+ muscle si mentionné dans le message) — pool concret,
+    // niveau-approprié, complémentaire du RAG embeddings (audit/feature 2026-05-29).
+    try {
+      const lvlMap: Record<string, ExerciseLevel> = {
+        beginner: 'debutant',
+        intermediate: 'intermediaire',
+        advanced: 'avance',
+      };
+      const maxLevel = lvlMap[String(profileForRag?.training_history ?? '').toLowerCase()] ?? 'intermediaire';
+      const msg = input.user_message.toLowerCase();
+      const MUSCLES: Record<string, string> = {
+        fessier: 'fessiers', glute: 'fessiers', quadri: 'quadriceps', cuisse: 'quadriceps',
+        jambe: 'quadriceps', dos: 'dos', pec: 'pectoraux', poitrine: 'pectoraux',
+        epaule: 'epaules', biceps: 'biceps', triceps: 'triceps', abdo: 'abdominaux',
+        gainage: 'abdominaux', ischio: 'ischio_jambiers', mollet: 'mollets',
+      };
+      let muscle: string | undefined;
+      for (const k of Object.keys(MUSCLES)) {
+        if (msg.includes(k)) { muscle = MUSCLES[k]; break; }
+      }
+      const opts = searchExercises(
+        { maxLevel, equipment: profileForRag?.available_equipment, muscle },
+        10,
+      );
+      if (opts.length > 0) {
+        ctx.exercise_library = opts.map((e) => ({
+          name_fr: e.name_fr,
+          name: e.name,
+          level: e.level,
+          muscle: e.muscle,
+          equipment: e.equipment,
+          pattern: e.pattern,
+        }));
+      }
+    } catch (e) {
+      console.warn('[training-agent] exercise library fetch failed:', e);
     }
 
     return ctx;
