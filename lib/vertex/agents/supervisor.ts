@@ -416,21 +416,33 @@ function buildAggregatePrompt(
   // Sans ce bloc le superviseur inventait kcal/macros/phase (audit 2026-05-29).
   const planBlock = activePlan
     ? `\n[PLAN ACTIF — valeurs courantes réelles]\n${JSON.stringify(activePlan)}\n` +
-      `Pour tout COACH_PLAN_PATCH : appuie-toi UNIQUEMENT sur ces valeurs. Vérifie la cohérence calorique (si tu modifies un macro, ajuste kcal en conséquence) et refuse tout patch dangereux compte tenu de la phase courante. Ne DEVINE JAMAIS kcal/macros/phase.\n`
-    : `\n[PLAN ACTIF]\n(aucun plan actif chargé)\nN'émets PAS de COACH_PLAN_PATCH qui supposerait des valeurs de plan que tu ne possèdes pas.\n`;
+      `Ces valeurs sont RÉELLES : sers-t'en pour conseiller (chiffres exacts). Mais tu ne peux PAS modifier le plan depuis le chat — si un ajustement s'impose, explique-le et dis à l'user de l'appliquer dans la page Plan. Ne prétends JAMAIS avoir changé le plan/les macros.\n`
+    : `\n[PLAN ACTIF]\n(aucun plan actif chargé) — ne devine pas de valeurs de plan.\n`;
+
+  // En multi-agent, la SEULE action réellement exécutée est log_weight (cf.
+  // lib/features/coach-actions + route coach-multi). Garde-fou anti-hallucination.
+  const today = new Date().toISOString().slice(0, 10);
+  const actionsBlock =
+    `\n[DATE DU JOUR] ${today}\n` +
+    `[ACTION RÉELLE — ENREGISTRER UNE PESÉE]\n` +
+    `Si l'user demande d'enregistrer / ajouter / logger un POIDS (ex: « logge 82 », « ajoute ma pesée de 142 kg au 1er avril »), TERMINE ta réponse par CE bloc EXACT :\n` +
+    `<COACH_ACTION>{"type":"log_weight","weight_kg":<nombre>,"date":"YYYY-MM-DD"}</COACH_ACTION>\n` +
+    `Date = aujourd'hui (${today}) si non précisée ; sinon convertis la date donnée en YYYY-MM-DD (année courante). Le système l'enregistre VRAIMENT et retire le bloc de l'affichage. C'est ta seule façon d'écrire une pesée.\n` +
+    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté / mis à jour » QUE pour une pesée via ce bloc. Tu n'as AUCUN autre pouvoir d'écriture (plan, macros, profil, mensurations, photos, séances) — tu peux CONSEILLER, mais tu dis à l'user de l'appliquer dans l'app. Ne prétends JAMAIS avoir fait/enregistré ce que tu n'as pas réellement exécuté.\n`;
 
   return (
     `[ÉTAPE: aggregate]\n\n` +
     `[MESSAGE USER]\n${input.user_message}\n\n` +
     `[OUTPUTS DES SOUS-AGENTS]\n${outputsSummary || '(aucun output utilisable)'}\n` +
     planBlock +
+    actionsBlock +
     arbitrationBlock +
     `\nAssemble une réponse unifiée pour l'user dans la voix coach NoDream. ` +
     `Pas de mention des agents ni de l'architecture interne. Tutoiement. Pas le mot "régime". ` +
     `Si severity=critical sur safety, sa réponse prime — ton sérieux, redirection pro santé. ` +
     `Si aucun output utilisable : "Je n'ai pas réussi à analyser ta question, peux-tu reformuler ?".` +
     (safetyCritical
-      ? `\n\nSAFETY CRITICAL : n'émets AUCUNE balise COACH_PLAN_PATCH ni COACH_SAVE dans cette réponse — la priorité absolue est la réponse de sécurité.`
+      ? `\n\nSAFETY CRITICAL : n'émets AUCUN bloc <COACH_ACTION> (pas d'enregistrement) — la priorité absolue est la réponse de sécurité.`
       : ``)
   );
 }

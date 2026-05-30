@@ -28,6 +28,7 @@ import { checkRateLimit } from '@/lib/firebase/rate-limit';
 import { runSafetyCheck } from '@/lib/vertex/safety';
 import { runAgentSession, type PhaseEvent } from '@/lib/vertex/agents/supervisor';
 import { buildRecentChat } from '@/lib/vertex/agents/recent-chat';
+import { parseCoachActions, applyCoachAction } from '@/lib/features/coach-actions';
 
 // Vercel : laisser 60s au max — 1 route + N sous-agents + 1 aggregate = jusqu'à 9 appels Gemini.
 export const maxDuration = 60;
@@ -132,9 +133,27 @@ export async function POST(req: NextRequest) {
             onPhase: (evt: PhaseEvent) => sse(evt.type, evt),
           });
 
+          // Exécution RÉELLE des actions demandées (ex: log_weight) + nettoyage du
+          // texte affiché. En multi-agent c'est le SEUL pouvoir d'écriture du coach ;
+          // le prompt lui interdit de prétendre en avoir d'autres.
+          let finalText = result.finalResponse;
+          try {
+            const { actions, cleaned } = parseCoachActions(finalText);
+            if (actions.length > 0) {
+              const today = new Date().toISOString().slice(0, 10);
+              const results = await Promise.all(actions.map((a) => applyCoachAction(uid, a, today)));
+              finalText = cleaned;
+              const failed = results.filter((r) => !r.ok);
+              if (failed.length > 0) finalText += `\n\n⚠️ ${failed.map((f) => f.message).join(' ')}`;
+              sse('actions', { results }); // le client peut rafraîchir ses données
+            }
+          } catch (e) {
+            console.warn('[coach-multi] coach actions failed:', e);
+          }
+
           // Stream final response en UN chunk (v1 — pas de streaming token-by-token
           // sur l'aggregate. Phase 4b future si latence perçue trop élevée).
-          sse('chunk', { text: result.finalResponse });
+          sse('chunk', { text: finalText });
           sse('done', {
             session_id: result.sessionRecord.session_id,
             cost_estimate_usd: result.sessionRecord.cost_estimate_usd,
