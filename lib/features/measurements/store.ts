@@ -12,6 +12,8 @@ import { adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
   deltaBetween,
+  mergeUnifiedEntries,
+  weeklyToMeasurementFields,
   MEASUREMENT_FIELDS,
   type MeasurementEntry,
   type MeasurementField,
@@ -82,6 +84,48 @@ export async function listRecentMeasurements(
 }
 
 /**
+ * Série de mensurations UNIFIÉE. Source de vérité = collection `measurements`,
+ * COMPLÉTÉE (sans écrasement) par les mensurations du check-in hebdo
+ * (checkins_weekly, G/D moyennés) et par la baseline d'onboarding. Réconcilie les
+ * deux stores historiques sur UNE seule lecture : le coach, les agents et la page
+ * Suivi voient toutes les mensurations quelle que soit la porte d'entrée. Aucune
+ * écriture, aucune migration — checkins_weekly conserve ses G/D bruts (zéro perte).
+ */
+export async function listUnifiedMeasurements(uid: string): Promise<MeasurementEntry[]> {
+  const canonical = await listRecentMeasurements(uid, 100);
+  let weekly: Array<{ date: string; fields: Partial<Record<MeasurementField, number>> }> = [];
+  let baseline: { date: string; fields: Partial<Record<MeasurementField, number>> } | undefined;
+  try {
+    const userRef = adminDb.collection('users').doc(uid);
+    const [userSnap, weeklySnap] = await Promise.all([
+      userRef.get(),
+      userRef.collection('checkins_weekly').orderBy('created_at', 'desc').limit(104).get(),
+    ]);
+    weekly = weeklySnap.docs
+      .map((d) => {
+        const data = d.data();
+        const date = typeof data.created_at === 'string' ? data.created_at.slice(0, 10) : '';
+        return { date, fields: weeklyToMeasurementFields(data.measurements) };
+      })
+      .filter((w) => w.date && Object.keys(w.fields).length > 0);
+    const u = userSnap.data();
+    const bm = u?.baseline?.measurements;
+    if (bm) {
+      const fields = weeklyToMeasurementFields(bm);
+      if (Object.keys(fields).length > 0) {
+        const bdate =
+          (typeof u?.baseline?.bf_measured_at === 'string' ? u.baseline.bf_measured_at.slice(0, 10) : '') ||
+          (userSnap.createTime ? userSnap.createTime.toDate().toISOString().slice(0, 10) : '');
+        if (bdate) baseline = { date: bdate, fields };
+      }
+    }
+  } catch (e) {
+    console.warn('[measurements/store] listUnifiedMeasurements (weekly/baseline) failed:', e);
+  }
+  return mergeUnifiedEntries(canonical, weekly, baseline);
+}
+
+/**
  * Synthèse pour agents : pour chaque champ, dernière valeur + delta vs 30j et 90j.
  * Renvoie null si pas d'historique.
  */
@@ -102,7 +146,7 @@ export async function getMeasurementsSnapshot(
   uid: string,
 ): Promise<MeasurementsSnapshot | null> {
   try {
-    const entries = await listRecentMeasurements(uid, 100);
+    const entries = await listUnifiedMeasurements(uid);
     if (entries.length === 0) return null;
 
     // Tri ascendant pour faciliter les recherches d'entries à T-30j / T-90j

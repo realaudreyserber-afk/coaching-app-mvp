@@ -71,6 +71,64 @@ export const MEASUREMENT_FIELDS = [
 export type MeasurementField = (typeof MEASUREMENT_FIELDS)[number];
 
 /**
+ * Mappe les mensurations du check-in hebdo (checkins_weekly / baseline) vers les
+ * champs canoniques `*_cm`. Schémas non superposables :
+ *   - hebdo a thigh_l/thigh_r + arm_l/arm_r (G/D) → moyennés en thigh_cm / arm_cm
+ *     (c'est DÉJÀ ce qui est affiché partout : (arm_l+arm_r)/2). G/D bruts conservés
+ *     côté checkins_weekly (zéro perte).
+ *   - hebdo n'a ni shoulder/chest/forearm/wrist/calf → simplement absents.
+ * 0 = champ non renseigné (convention du formulaire hebdo) → ignoré.
+ */
+export function weeklyToMeasurementFields(
+  m: Record<string, unknown> | undefined | null,
+): Partial<Record<MeasurementField, number>> {
+  const out: Partial<Record<MeasurementField, number>> = {};
+  if (!m) return out;
+  const num = (v: unknown): number | null => (typeof v === 'number' && v > 0 ? v : null);
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const neck = num(m.neck); if (neck !== null) out.neck_cm = neck;
+  const waist = num(m.waist); if (waist !== null) out.waist_cm = waist;
+  const hips = num(m.hips); if (hips !== null) out.hips_cm = hips;
+  const arms = [num(m.arm_l), num(m.arm_r)].filter((x): x is number => x !== null);
+  if (arms.length) out.arm_cm = round1(arms.reduce((a, b) => a + b, 0) / arms.length);
+  const thighs = [num(m.thigh_l), num(m.thigh_r)].filter((x): x is number => x !== null);
+  if (thighs.length) out.thigh_cm = round1(thighs.reduce((a, b) => a + b, 0) / thighs.length);
+  return out;
+}
+
+/**
+ * Fusionne les sources de mensurations en UNE série canonique (source de vérité
+ * = collection `measurements`). Par (date, champ) : la valeur canonique (A) gagne ;
+ * sinon on complète avec l'hebdo / la baseline (B). Aucune valeur n'est écrasée →
+ * zéro perte. Retourne la série triée par date croissante.
+ */
+export function mergeUnifiedEntries(
+  canonical: MeasurementEntry[],
+  weekly: Array<{ date: string; fields: Partial<Record<MeasurementField, number>> }>,
+  baseline?: { date: string; fields: Partial<Record<MeasurementField, number>> },
+): MeasurementEntry[] {
+  const byDate = new Map<string, MeasurementEntry>();
+  // 1) Graine = canonique (A) : prioritaire, jamais écrasé.
+  for (const e of canonical) {
+    if (e?.date) byDate.set(e.date, { ...e });
+  }
+  // 2) Complète avec B (hebdo puis baseline) sans écraser les champs déjà posés.
+  const fill = (date: string, fields: Partial<Record<MeasurementField, number>>) => {
+    if (!date) return;
+    const cur = byDate.get(date) ?? { date, source: 'self' as const };
+    for (const [k, v] of Object.entries(fields)) {
+      if (typeof v === 'number' && typeof (cur as Record<string, unknown>)[k] !== 'number') {
+        (cur as Record<string, unknown>)[k] = v;
+      }
+    }
+    byDate.set(date, cur);
+  };
+  for (const w of weekly) fill(w.date, w.fields);
+  if (baseline) fill(baseline.date, baseline.fields);
+  return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/**
  * Calcule la variation absolue + % entre deux entries.
  * Retourne null si l'une des deux valeurs est absente.
  */

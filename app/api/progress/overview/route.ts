@@ -14,7 +14,7 @@ import { getHydrationSnapshot } from '@/lib/features/hydration/store';
 import { getHabitsSnapshot } from '@/lib/features/habits/store';
 import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
-import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
+import { getMeasurementsSnapshot, listUnifiedMeasurements } from '@/lib/features/measurements/store';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
 import { computeForme } from '@/lib/features/progress/forme';
 
@@ -73,11 +73,11 @@ export async function GET(req: NextRequest) {
     const series = await safe(
       (async () => {
         const ucol = adminDb.collection('users').doc(uid);
-        const [hyd, slp, prsDocs, measDocs] = await Promise.all([
+        const [hyd, slp, prsDocs, unifiedMeas] = await Promise.all([
           ucol.collection('hydration_log').orderBy('date', 'desc').limit(14).get(),
           ucol.collection('sleep_log').orderBy('date', 'desc').limit(14).get(),
           ucol.collection('prs').limit(30).get(),
-          ucol.collection('measurements').orderBy('date', 'desc').limit(40).get(),
+          listUnifiedMeasurements(uid),
         ]);
         const hydration = hyd.docs.map((d) => ({ date: d.id, ml: typeof d.data().total_ml === 'number' ? d.data().total_ml : 0 })).reverse();
         const sleep = slp.docs
@@ -111,12 +111,12 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Historique des mensurations par champ (chronologique).
-        const measRows = measDocs.docs.map((d) => d.data()).reverse();
-        const FIELDS = ['waist_cm', 'arm_cm', 'chest_cm', 'thigh_cm', 'hips_cm', 'neck_cm', 'shoulder_cm', 'calf_cm'];
+        // Historique des mensurations par champ — source UNIFIÉE (collection
+        // measurements ∪ check-in hebdo ∪ baseline), déjà triée chronologiquement.
+        const FIELDS = ['waist_cm', 'arm_cm', 'chest_cm', 'thigh_cm', 'hips_cm', 'neck_cm', 'shoulder_cm', 'calf_cm'] as const;
         const measure: Record<string, Array<{ date: string; cm: number }>> = {};
         for (const f of FIELDS) {
-          const pts = measRows.filter((r) => typeof r[f] === 'number').map((r) => ({ date: r.date as string, cm: r[f] as number }));
+          const pts = unifiedMeas.filter((r) => typeof r[f] === 'number').map((r) => ({ date: r.date, cm: r[f] as number }));
           if (pts.length >= 2) measure[f] = pts;
         }
 

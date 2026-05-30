@@ -346,15 +346,6 @@ export default function ProgressPage() {
   const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
   const hydraPct = hydration ? (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100 : 0;
 
-  // Lignes du comparateur de mensurations (source : checkins_weekly G/D).
-  const measureRows = recordA && recordB ? [
-    { label: 'Cou', a: recordA.measurements.neck, b: recordB.measurements.neck },
-    { label: 'Taille (nombril)', a: recordA.measurements.waist, b: recordB.measurements.waist },
-    { label: 'Hanches', a: recordA.measurements.hips, b: recordB.measurements.hips },
-    { label: 'Bras (G/D moy)', a: (recordA.measurements.arm_l + recordA.measurements.arm_r) / 2, b: (recordB.measurements.arm_l + recordB.measurements.arm_r) / 2 },
-    { label: 'Cuisses (G/D moy)', a: (recordA.measurements.thigh_l + recordA.measurements.thigh_r) / 2, b: (recordB.measurements.thigh_l + recordB.measurements.thigh_r) / 2 },
-  ] : [];
-
   const iconTitle = (Icon: React.ElementType, label: string, color: string) => (
     <span className="flex items-center gap-2"><Icon className="h-4 w-4" style={{ color }} aria-hidden="true" /> {label}</span>
   );
@@ -441,69 +432,31 @@ export default function ProgressPage() {
         )}
       </Section>
 
-      {/* MENSURATIONS — comparateur point A → point B (cm, source checkins_weekly) */}
-      <Section id="mesures" code="COMPARATEUR-MENS" title={iconTitle(Ruler, 'Mensurations', 'var(--gold-400)')} accent="gold"
+      {/* MENSURATIONS — courbes départ→actuel (source UNIFIÉE : measurements ∪ check-in hebdo ∪ baseline) */}
+      <Section id="mesures" code="MENSURATIONS · CM" title={iconTitle(Ruler, 'Mensurations', 'var(--gold-400)')} accent="gold"
         right={<Link href="/progress/measurements" className="mono inline-flex items-center gap-1.5" style={{ height: 30, padding: '0 10px', background: 'var(--accent-tech-tint)', border: '1px solid var(--accent-tech)', color: 'var(--accent-tech)', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)' }}><Ruler className="h-3 w-3" aria-hidden="true" /> Saisir</Link>}>
-        {weeklyRecords.length < 1 ? (
-          <Hint>« tour de taille 96, bras 38 » — ou complète l'onboarding</Hint>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label style={labelStyle}>Point A · Départ</label>
-                <select value={compareWeekA} onChange={(e) => setCompareWeekA(e.target.value)} className="mono" style={inputBase}>
-                  {weeklyRecords.map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Point B · Arrivée</label>
-                <select value={compareWeekB} onChange={(e) => setCompareWeekB(e.target.value)} className="mono" style={inputBase}>
-                  {[...weeklyRecords].reverse().map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
-                </select>
-              </div>
-            </div>
-            {measureRows.length > 0 && (
-              <div style={tile}>
-                {measureRows.map((row, idx, arr) => (
-                  <div key={row.label} className="flex justify-between items-center" style={{ padding: '10px 0', borderBottom: idx < arr.length - 1 ? '1px solid var(--glass-border)' : 'none' }}>
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)', letterSpacing: '0.04em' }}>{row.label}</span>
-                    {(!row.a || !row.b) ? (
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>—</span>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>{row.a.toFixed(1)}</span>
-                        <span className="mono" style={{ fontSize: 11, color: 'var(--gold-400)', fontWeight: 700 }}>→ {row.b.toFixed(1)}</span>
-                        <Delta value={row.b - row.a} unit=" cm" />
-                      </div>
-                    )}
+        {series?.measure && Object.keys(series.measure).length > 0 ? (
+          <div className="space-y-3">
+            {Object.entries(series.measure).map(([f, pts]) => {
+              const a = pts[0], b = pts[pts.length - 1];
+              const delta = Math.round((b.cm - a.cm) * 10) / 10;
+              return (
+                <div key={f} style={tile}>
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="mono" style={{ fontSize: 12, color: 'var(--fg-2)', letterSpacing: '0.04em' }}>{MEASURE_LABELS[f] ?? f}</span>
+                    {delta !== 0 ? <Delta value={delta} unit=" cm" /> : <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>inchangé</span>}
                   </div>
-                ))}
-              </div>
-            )}
-            {weeklyRecords.length > 1 && (
-              <div>
-                <PanelHeader code="HIST-HEBDO" title="Historique complet" accent="gold" right={<Tag accent="gold">{weeklyRecords.length}</Tag>} />
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {[...weeklyRecords].reverse().map((rec) => (
-                    <div key={rec.id} style={tile}>
-                      <div className="flex justify-between items-center" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: 6, marginBottom: 6 }}>
-                        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>{rec.date}</span>
-                        <Tag accent={rec.id === 'baseline' ? 'gold' : 'tech'}>{rec.id !== 'baseline' ? rec.id : 'INIT'}</Tag>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5 text-center">
-                        {[{ lbl: 'Taille', val: rec.measurements.waist }, { lbl: 'Cou', val: rec.measurements.neck }, { lbl: 'Hanches', val: rec.measurements.hips }].map((m) => (
-                          <div key={m.lbl} style={{ padding: 4, background: 'var(--ink-900)', border: '1px solid var(--glass-border)' }}>
-                            <span className="mono" style={{ color: 'var(--fg-5)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m.lbl}</span>
-                            <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>{m.val}<span style={{ fontSize: 8, color: 'var(--fg-5)', marginLeft: 1 }}>cm</span></div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                  <MiniLine values={pts.map((p) => p.cm)} color={HUD.gold} h={48} markEnds />
+                  <div className="flex items-baseline justify-between mt-2 mono" style={{ fontSize: 10 }}>
+                    <span style={{ color: 'var(--fg-5)' }}>{a.date} · <span style={{ color: 'var(--fg-3)' }}>{a.cm} cm</span></span>
+                    <span style={{ color: 'var(--fg-5)' }}><span style={{ color: 'var(--fg-1)', fontWeight: 700 }}>{b.cm} cm</span> · {b.date}</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })}
           </div>
+        ) : (
+          <Hint>« tour de taille 96, bras 38 » — dicte au coach, page Saisir, ou check-in hebdo</Hint>
         )}
       </Section>
 
