@@ -11,6 +11,7 @@ import { TacticalHeader } from "@/components/nodream/tactical-header";
 import { TacticalBottomNav } from "@/components/nodream/tactical-bottom-nav";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { Paywall } from "@/components/billing/paywall";
+import { CoachWidget } from "@/components/nodream/coach-widget";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, hasProfile } = useAuth();
@@ -83,6 +84,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     !onAllowlistedRoute &&
     !isOnboarding;
 
+  // Widget coach flottant : présent partout SAUF Ops (/settings), onboarding,
+  // séance live, les pages coach (redondant) et derrière le paywall.
+  const hideWidget =
+    isOnboarding ||
+    isLiveSession ||
+    showPaywall ||
+    !!pathname?.startsWith("/settings") ||
+    !!pathname?.startsWith("/coach");
+
   return (
     <ConfirmProvider>
       <div className="min-h-screen flex flex-col bg-background">
@@ -101,6 +111,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {showPaywall ? <Paywall /> : children}
         </main>
         {!hideBottomNav && <TacticalBottomNav />}
+        {!hideWidget && <CoachWidget />}
       </div>
     </ConfirmProvider>
   );
