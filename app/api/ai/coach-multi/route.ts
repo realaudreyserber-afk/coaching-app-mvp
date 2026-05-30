@@ -140,12 +140,20 @@ export async function POST(req: NextRequest) {
           try {
             const { actions, cleaned } = parseCoachActions(finalText);
             if (actions.length > 0) {
-              const today = new Date().toISOString().slice(0, 10);
-              const results = await Promise.all(actions.map((a) => applyCoachAction(uid, a, today)));
-              finalText = cleaned;
-              const failed = results.filter((r) => !r.ok);
-              if (failed.length > 0) finalText += `\n\n⚠️ ${failed.map((f) => f.message).join(' ')}`;
-              sse('actions', { results }); // le client peut rafraîchir ses données
+              finalText = cleaned; // on retire les blocs de l'affichage dans tous les cas
+              // VERROU SAFETY DÉTERMINISTE (pas seulement une consigne de prompt) :
+              // si l'agent safety a flaggé critical/warning ce tour, AUCUNE écriture.
+              const sev = result.sessionRecord?.sub_agent_outputs?.safety?.severity;
+              if (sev === 'critical' || sev === 'warning') {
+                console.warn('[coach-multi] actions désarmées par le verrou safety:', sev);
+                sse('actions', { results: [], blocked: 'safety' });
+              } else {
+                const today = new Date().toISOString().slice(0, 10);
+                const results = await Promise.all(actions.map((a) => applyCoachAction(uid, a, today)));
+                const failed = results.filter((r) => !r.ok);
+                if (failed.length > 0) finalText += `\n\n⚠️ ${failed.map((f) => f.message).join(' ')}`;
+                sse('actions', { results }); // le client peut rafraîchir ses données
+              }
             }
           } catch (e) {
             console.warn('[coach-multi] coach actions failed:', e);

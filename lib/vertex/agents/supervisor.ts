@@ -424,11 +424,13 @@ function buildAggregatePrompt(
   const today = new Date().toISOString().slice(0, 10);
   const actionsBlock =
     `\n[DATE DU JOUR] ${today}\n` +
-    `[ACTION RÉELLE — ENREGISTRER UNE PESÉE]\n` +
-    `Si l'user demande d'enregistrer / ajouter / logger un POIDS (ex: « logge 82 », « ajoute ma pesée de 142 kg au 1er avril »), TERMINE ta réponse par CE bloc EXACT :\n` +
-    `<COACH_ACTION>{"type":"log_weight","weight_kg":<nombre>,"date":"YYYY-MM-DD"}</COACH_ACTION>\n` +
-    `Date = aujourd'hui (${today}) si non précisée ; sinon convertis la date donnée en YYYY-MM-DD (année courante). Le système l'enregistre VRAIMENT et retire le bloc de l'affichage. C'est ta seule façon d'écrire une pesée.\n` +
-    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté / mis à jour » QUE pour une pesée via ce bloc. Tu n'as AUCUN autre pouvoir d'écriture (plan, macros, profil, mensurations, photos, séances) — tu peux CONSEILLER, mais tu dis à l'user de l'appliquer dans l'app. Ne prétends JAMAIS avoir fait/enregistré ce que tu n'as pas réellement exécuté.\n`;
+    `[ACTIONS RÉELLES — tu peux ENREGISTRER ces données toi-même]\n` +
+    `Quand l'user DICTE une de ces données chiffrées, TERMINE ta réponse par le bloc correspondant. Le système l'écrit VRAIMENT et retire le bloc de l'affichage. Restitue la valeur en clair AVANT le bloc (« je note… »). Date = ${today} si non précisée, sinon convertis-la en YYYY-MM-DD (année courante).\n` +
+    `• Pesée : <COACH_ACTION>{"type":"log_weight","weight_kg":82,"date":"YYYY-MM-DD"}</COACH_ACTION>\n` +
+    `• Mensuration(s) : <COACH_ACTION>{"type":"log_measurement","waist_cm":84,"arm_cm":38,"date":"YYYY-MM-DD"}</COACH_ACTION> — champs autorisés : waist_cm, neck_cm, hips_cm, shoulder_cm, chest_cm, arm_cm, forearm_cm, wrist_cm, thigh_cm, calf_cm, weight_kg, bf_pct.\n` +
+    `• Hydratation : <COACH_ACTION>{"type":"log_hydration","ml":500,"drink_type":"water"}</COACH_ACTION> — drink_type : water|tea|coffee|sparkling|electrolyte ; max 2000 ml/prise.\n` +
+    `• Record de force (PR) : <COACH_ACTION>{"type":"log_pr","exercise":"développé couché","weight_kg":100,"reps":1}</COACH_ACTION> — le 1RM est calculé par le système ; le poids/reps viennent de l'user, ne les invente JAMAIS.\n` +
+    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté » QUE si tu émets l'action correspondante. Pour tout ce que tu ne peux PAS écrire (modifier le plan / les macros / l'objectif, le profil, les repas, les séances, les photos) → tu CONSEILLES mais tu renvoies l'user vers la page concernée de l'app. Ne prétends JAMAIS avoir fait/enregistré ce que tu n'as pas réellement exécuté. N'émets une action QUE sur une vraie valeur fournie par l'user (jamais une estimation de ta part).\n`;
 
   return (
     `[ÉTAPE: aggregate]\n\n` +
