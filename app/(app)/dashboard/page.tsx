@@ -13,7 +13,7 @@ import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-char
 import { Loader } from "@/components/ui/loader";
 import { KPICard } from "@/components/ui/kpi-card";
 import { RadialProgress } from "@/components/ui/radial-progress";
-import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy, Scale, Flame, Award } from "lucide-react";
+import { Calendar, MessageSquare, TrendingUp, Sparkles, Plus, Clock, CheckSquare, Trophy, Scale, Flame, Award, Dumbbell } from "lucide-react";
 import { HudCard, PanelHeader, Tag } from "@/components/nodream";
 import { flags } from "@/lib/features/flags";
 import { getFastingState } from "@/lib/features/fasting/fasting-util";
@@ -625,8 +625,15 @@ export default function DashboardPage() {
         </Button>
         <Button
           variant="outline"
-          onClick={() => router.push("/checkin/weekly")}
+          onClick={() => router.push("/exercices-musculation")}
           className="flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
+        >
+          <Dumbbell className="h-4 w-4 text-primary" /> Exercices
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => router.push("/checkin/weekly")}
+          className="hidden lg:flex flex-col items-center justify-center gap-1 h-16 rounded-xl text-xs font-semibold"
         >
           <Calendar className="h-4 w-4 text-primary" /> Bilan Hebdomadaire
         </Button>
