@@ -416,11 +416,12 @@ function buildAggregatePrompt(
   // Sans ce bloc le superviseur inventait kcal/macros/phase (audit 2026-05-29).
   const planBlock = activePlan
     ? `\n[PLAN ACTIF — valeurs courantes réelles]\n${JSON.stringify(activePlan)}\n` +
-      `Ces valeurs sont RÉELLES : sers-t'en pour conseiller (chiffres exacts). Mais tu ne peux PAS modifier le plan depuis le chat — si un ajustement s'impose, explique-le et dis à l'user de l'appliquer dans la page Plan. Ne prétends JAMAIS avoir changé le plan/les macros.\n`
-    : `\n[PLAN ACTIF]\n(aucun plan actif chargé) — ne devine pas de valeurs de plan.\n`;
+      `Pour tout COACH_PLAN_PATCH : appuie-toi UNIQUEMENT sur ces valeurs. Vérifie la cohérence calorique (si tu modifies un macro, ajuste kcal en conséquence) et refuse tout patch dangereux compte tenu de la phase courante. Ne DEVINE JAMAIS kcal/macros/phase.\n`
+    : `\n[PLAN ACTIF]\n(aucun plan actif chargé)\nN'émets PAS de COACH_PLAN_PATCH qui supposerait des valeurs de plan que tu ne possèdes pas.\n`;
 
-  // En multi-agent, la SEULE action réellement exécutée est log_weight (cf.
-  // lib/features/coach-actions + route coach-multi). Garde-fou anti-hallucination.
+  // Actions data exécutées CÔTÉ SERVEUR (log_weight/measurement/hydration/pr via
+  // lib/features/coach-actions). COACH_SAVE (profil/objectif) + COACH_PLAN_PATCH
+  // (plan) sont, eux, appliqués par le frontend /coach (cf. prompt système §PERSISTANCE).
   const today = new Date().toISOString().slice(0, 10);
   const actionsBlock =
     `\n[DATE DU JOUR] ${today}\n` +
@@ -430,7 +431,7 @@ function buildAggregatePrompt(
     `• Mensuration(s) : <COACH_ACTION>{"type":"log_measurement","waist_cm":84,"arm_cm":38,"date":"YYYY-MM-DD"}</COACH_ACTION> — champs autorisés : waist_cm, neck_cm, hips_cm, shoulder_cm, chest_cm, arm_cm, forearm_cm, wrist_cm, thigh_cm, calf_cm, weight_kg, bf_pct.\n` +
     `• Hydratation : <COACH_ACTION>{"type":"log_hydration","ml":500,"drink_type":"water"}</COACH_ACTION> — drink_type : water|tea|coffee|sparkling|electrolyte ; max 2000 ml/prise.\n` +
     `• Record de force (PR) : <COACH_ACTION>{"type":"log_pr","exercise":"développé couché","weight_kg":100,"reps":1}</COACH_ACTION> — le 1RM est calculé par le système ; le poids/reps viennent de l'user, ne les invente JAMAIS.\n` +
-    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté » QUE si tu émets l'action correspondante. Pour tout ce que tu ne peux PAS écrire (modifier le plan / les macros / l'objectif, le profil, les repas, les séances, les photos) → tu CONSEILLES mais tu renvoies l'user vers la page concernée de l'app. Ne prétends JAMAIS avoir fait/enregistré ce que tu n'as pas réellement exécuté. N'émets une action QUE sur une vraie valeur fournie par l'user (jamais une estimation de ta part).\n`;
+    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté / mis à jour » QUE si tu émets RÉELLEMENT la balise qui le fait — COACH_ACTION pour les logs ci-dessus, COACH_SAVE pour le profil/l'objectif, COACH_PLAN_PATCH pour le plan (cf. ton prompt système §PERSISTANCE). Tout ce que tu ne peux pas écrire (repas, séances, photos) → tu CONSEILLES et renvoies vers la page concernée. Ne prétends JAMAIS avoir fait ce que tu n'as pas émis. N'émets une action QUE sur une vraie valeur donnée par l'user (jamais une estimation/déduction).\n`;
 
   return (
     `[ÉTAPE: aggregate]\n\n` +
@@ -444,7 +445,7 @@ function buildAggregatePrompt(
     `Si severity=critical sur safety, sa réponse prime — ton sérieux, redirection pro santé. ` +
     `Si aucun output utilisable : "Je n'ai pas réussi à analyser ta question, peux-tu reformuler ?".` +
     (safetyCritical
-      ? `\n\nSAFETY CRITICAL : n'émets AUCUN bloc <COACH_ACTION> (pas d'enregistrement) — la priorité absolue est la réponse de sécurité.`
+      ? `\n\nSAFETY CRITICAL : n'émets AUCUNE balise <COACH_ACTION> / <COACH_SAVE> / <COACH_PLAN_PATCH> — la priorité absolue est la réponse de sécurité.`
       : ``)
   );
 }
