@@ -100,22 +100,18 @@ export function OverviewBilan() {
   const { prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective } = data;
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
-  const hasAny = prs || sleep || hrv || hydration || habits || measurements || (subjective && subjective.length);
-
-  if (!hasAny) {
-    return (
-      <div className="text-center py-12 text-zinc-400 space-y-2">
-        <span className="material-symbols-outlined text-zinc-600" style={{ fontSize: 40 }}>insights</span>
-        <p>Rien à afficher encore. Pèse-toi, dicte ton ressenti ou tes mensurations au coach (« mal dormi 5 h », « tour de taille 96 », « PR 100 kg au squat ») — tout s'affichera ici.</p>
-      </div>
-    );
-  }
+  const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
+  const Hint = ({ children }: { children: React.ReactNode }) => (
+    <p className="text-sm text-zinc-500 leading-snug">
+      Aucune donnée — <span className="text-amber-400">{children}</span>
+    </p>
+  );
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {/* FORCE */}
-      {prs && prs.top_exercises.length > 0 && (
-        <Card icon="exercise" title="Force — 1RM">
+      {/* FORCE — toujours visible */}
+      <Card icon="exercise" title="Force — 1RM">
+        {prs && prs.top_exercises.length > 0 ? (
           <ul className="space-y-2">
             {prs.top_exercises.slice(0, 5).map((e) => (
               <li key={e.exercise_name} className="flex items-baseline justify-between gap-2">
@@ -127,63 +123,71 @@ export function OverviewBilan() {
               </li>
             ))}
           </ul>
-        </Card>
-      )}
+        ) : (
+          <Hint>dis « PR : 100 kg au développé couché » au coach</Hint>
+        )}
+      </Card>
 
-      {/* RÉCUPÉRATION */}
-      {(sleep || hrv) && (
-        <Card icon="bedtime" title="Récupération" accent="#a78bfa">
-          {sleep && (
-            <div className="mb-2">
-              <p className="text-2xl font-bold text-zinc-100">{sleep.avg_hours_7day.toFixed(1)} h<span className="text-sm text-zinc-500 font-normal"> /nuit (7j)</span></p>
-              <p className="text-xs text-zinc-400">Qualité {sleep.avg_quality_7day.toFixed(0)}/10 · {sleep.short_nights_7day} nuit(s) courte(s)</p>
-            </div>
-          )}
-          {hrv && hrv.avg_hrv_7day !== null && (
-            <p className="text-xs">
-              HRV {hrv.avg_hrv_7day} ms ·{' '}
-              <span className={hrv.is_chronic_drift ? 'text-red-400' : 'text-emerald-400'}>
-                {hrv.is_chronic_drift ? 'fatigue cumulée' : 'stable'}
-              </span>
-              {hrv.baseline_drift_pct !== null && <span className="text-zinc-500"> ({hrv.baseline_drift_pct > 0 ? '+' : ''}{hrv.baseline_drift_pct}%)</span>}
+      {/* RÉCUPÉRATION — toujours visible */}
+      <Card icon="bedtime" title="Récupération" accent="#a78bfa">
+        {sleep || hrv ? (
+          <>
+            {sleep && (
+              <div className="mb-2">
+                <p className="text-2xl font-bold text-zinc-100">{sleep.avg_hours_7day.toFixed(1)} h<span className="text-sm text-zinc-500 font-normal"> /nuit (7j)</span></p>
+                <p className="text-xs text-zinc-400">Qualité {sleep.avg_quality_7day.toFixed(0)}/10 · {sleep.short_nights_7day} nuit(s) courte(s)</p>
+              </div>
+            )}
+            {hrv && hrv.avg_hrv_7day !== null && (
+              <p className="text-xs">
+                HRV {hrv.avg_hrv_7day} ms ·{' '}
+                <span className={hrv.is_chronic_drift ? 'text-red-400' : 'text-emerald-400'}>
+                  {hrv.is_chronic_drift ? 'fatigue cumulée' : 'stable'}
+                </span>
+              </p>
+            )}
+          </>
+        ) : (
+          <Hint>dis « mal dormi, 6 h » au coach (ou fais ton check-in du jour)</Hint>
+        )}
+      </Card>
+
+      {/* HYDRATATION — toujours visible */}
+      <Card icon="water_drop" title="Hydratation" accent="#38bdf8">
+        {hydration ? (
+          <>
+            <p className="text-2xl font-bold text-zinc-100">
+              {(hydration.today_effective_ml / 1000).toFixed(1)} L
+              <span className="text-sm text-zinc-500 font-normal"> / {(hydration.today_target_ml / 1000).toFixed(1)} L</span>
             </p>
-          )}
-        </Card>
-      )}
+            <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-full bg-sky-400" style={{ width: `${Math.min(100, (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100)}%` }} />
+            </div>
+            <p className="text-xs text-zinc-400 mt-1.5">Moy. 7j : {(hydration.avg_7day_ml / 1000).toFixed(1)} L · cible atteinte {hydration.days_target_hit_7day}/7</p>
+          </>
+        ) : (
+          <Hint>dis « j&apos;ai bu 1,5 L » au coach</Hint>
+        )}
+      </Card>
 
-      {/* HYDRATATION */}
-      {hydration && (
-        <Card icon="water_drop" title="Hydratation" accent="#38bdf8">
-          <p className="text-2xl font-bold text-zinc-100">
-            {(hydration.today_effective_ml / 1000).toFixed(1)} L
-            <span className="text-sm text-zinc-500 font-normal"> / {(hydration.today_target_ml / 1000).toFixed(1)} L</span>
-          </p>
-          <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
-            <div className="h-full bg-sky-400" style={{ width: `${Math.min(100, (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100)}%` }} />
-          </div>
-          <p className="text-xs text-zinc-400 mt-1.5">Moy. 7j : {(hydration.avg_7day_ml / 1000).toFixed(1)} L · cible atteinte {hydration.days_target_hit_7day}/7</p>
-        </Card>
-      )}
-
-      {/* RESSENTI */}
-      {subjective && subjective.length > 0 && (
-        <Card icon="mood" title="Ressenti" accent="#34d399">
+      {/* RESSENTI — toujours visible */}
+      <Card icon="mood" title="Ressenti" accent="#34d399">
+        {latestSubj ? (
           <div className="space-y-2">
-            <div>
-              <p className="text-xs text-zinc-400 mb-1">Énergie (14j)</p>
-              <Spark values={energy} max={10} color="#34d399" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-400 mb-1">Humeur (14j)</p>
-              <Spark values={mood} max={10} color="#f59e0b" />
-            </div>
+            <p className="text-xs text-zinc-400">
+              Dernier : énergie {latestSubj.energy ?? '—'}/10 · humeur {latestSubj.mood ?? '—'}/10 · faim {latestSubj.hunger ?? '—'}/10
+            </p>
+            <div><p className="text-xs text-zinc-500 mb-1">Énergie (14j)</p><Spark values={energy} max={10} color="#34d399" /></div>
+            <div><p className="text-xs text-zinc-500 mb-1">Humeur (14j)</p><Spark values={mood} max={10} color="#f59e0b" /></div>
           </div>
-        </Card>
-      )}
+        ) : (
+          <Hint>dis « crevé, mal dormi » au coach</Hint>
+        )}
+      </Card>
 
-      {/* MENSURATIONS (synthèse) */}
-      {measurements && Object.keys(measurements.latest).length > 0 && (
-        <Card icon="straighten" title="Mensurations" accent="#22d3ee">
+      {/* MENSURATIONS — toujours visible */}
+      <Card icon="straighten" title="Mensurations" accent="#22d3ee">
+        {measurements && Object.keys(measurements.latest).length > 0 ? (
           <ul className="space-y-1.5">
             {Object.entries(measurements.latest).slice(0, 5).map(([k, v]) => (
               <li key={k} className="flex items-baseline justify-between gap-2">
@@ -195,8 +199,10 @@ export function OverviewBilan() {
               </li>
             ))}
           </ul>
-        </Card>
-      )}
+        ) : (
+          <Hint>dis « tour de taille 96, bras 38 » au coach</Hint>
+        )}
+      </Card>
 
       {/* HABITUDES */}
       {habits && habits.habits_summary.length > 0 && (
