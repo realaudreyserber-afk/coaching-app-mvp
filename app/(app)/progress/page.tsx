@@ -455,7 +455,7 @@ export default function ProgressPage() {
       </div>
 
       {/* BILAN TAB */}
-      {activeTab === "bilan" && <OverviewBilan />}
+      {activeTab === "bilan" && <OverviewBilan onNavigate={(t) => setActiveTab(t)} />}
 
       {/* WEIGHT TAB */}
       {activeTab === "weight" && (

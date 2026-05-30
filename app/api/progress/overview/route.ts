@@ -124,6 +124,49 @@ export async function GET(req: NextRequest) {
       })(),
     );
 
+    // Poids — série + tendance 7j (même source que la courbe : checkins_daily).
+    const weight = await safe(
+      (async () => {
+        const snap = await adminDb
+          .collection('users').doc(uid).collection('checkins_daily')
+          .orderBy('created_at', 'desc').limit(90).get();
+        const rows = snap.docs
+          .map((d) => ({ date: d.id, kg: d.data().weight }))
+          .filter((r): r is { date: string; kg: number } => typeof r.kg === 'number')
+          .reverse(); // chronologique
+        if (rows.length === 0) return null;
+        const points = rows.slice(-30);
+        const current = points[points.length - 1].kg;
+        // Référence ~7 jours avant la dernière pesée (sinon premier point).
+        const target = Date.parse(points[points.length - 1].date) - 7 * 86400000;
+        let ref = points[0];
+        for (const p of points) if (Date.parse(p.date) <= target) ref = p;
+        const delta_kg = Math.round((current - ref.kg) * 10) / 10;
+        const delta_pct = ref.kg ? Math.round(((current - ref.kg) / ref.kg) * 1000) / 10 : null;
+        return { current, delta_kg, delta_pct, points };
+      })(),
+    );
+
+    // Photos — résumé (nb de séries avec ≥1 photo + dernière série).
+    const photos = await safe(
+      (async () => {
+        const snap = await adminDb
+          .collection('users').doc(uid).collection('checkins_weekly')
+          .orderBy('created_at', 'desc').limit(52).get();
+        let count = 0;
+        let latest: { date: string; face?: string; profile?: string; back?: string } | null = null;
+        for (const d of snap.docs) {
+          const p = d.data().photos ?? {};
+          if (p.face || p.profile || p.back) {
+            count++;
+            if (!latest) latest = { date: d.id, face: p.face, profile: p.profile, back: p.back };
+          }
+        }
+        if (count === 0) return null;
+        return { count, latest };
+      })(),
+    );
+
     // Score "Forme du jour" (readiness) — synthèse des signaux dispo.
     const recentEnergy = (subjective ?? [])
       .map((s) => s.energy)
@@ -135,7 +178,7 @@ export async function GET(req: NextRequest) {
     const forme = computeForme({ sleep, hrv, hydration, energyAvg });
 
     return NextResponse.json({
-      forme, prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective, series,
+      forme, prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective, series, weight, photos,
     });
   });
 }

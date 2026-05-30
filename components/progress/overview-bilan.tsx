@@ -29,7 +29,12 @@ interface Overview {
     lifts?: Record<string, Array<{ date: string; e1rm: number }>>;
     measure?: Record<string, Array<{ date: string; cm: number }>>;
   } | null;
+  weight: { current: number; delta_kg: number; delta_pct: number | null; points: Array<{ date: string; kg: number }> } | null;
+  photos: { count: number; latest: { date: string; face?: string; profile?: string; back?: string } | null } | null;
 }
+
+/** Cible de navigation vers un onglet plein de la page Suivi. */
+type NavTab = 'weight' | 'measurements' | 'photos';
 
 /** Carte façon Samsung Health : coin arrondi, chip d'icône coloré, titre. */
 function Card({ icon, title, color, children, wide, onClick }: { icon: string; title: string; color: string; children: React.ReactNode; wide?: boolean; onClick?: () => void }) {
@@ -144,12 +149,12 @@ function MultiLine({ series, h = 130, legend = true }: { series: Array<{ label: 
   );
 }
 
-const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c' };
+const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c', weight: '#a78bfa', photo: '#ec4899' };
 const LIFT_META: Record<string, { label: string; color: string }> = { squat: { label: 'Squat', color: '#f59e0b' }, bench: { label: 'Développé couché', color: '#22d3ee' }, deadlift: { label: 'Soulevé de terre', color: '#a78bfa' } };
 const MEASURE_LABELS: Record<string, string> = { waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules', chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet' };
-const DETAIL_TITLE: Record<string, string> = { hydration: 'Hydratation', sleep: 'Récupération', force: 'Force · 1RM', ressenti: 'Ressenti', measure: 'Mensurations' };
+const DETAIL_TITLE: Record<string, string> = { weight: 'Poids', hydration: 'Hydratation', sleep: 'Récupération', force: 'Force · 1RM', ressenti: 'Ressenti', measure: 'Mensurations' };
 
-export function OverviewBilan() {
+export function OverviewBilan({ onNavigate }: { onNavigate?: (tab: NavTab) => void }) {
   const { getFreshToken } = useAuth();
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,14 +178,16 @@ export function OverviewBilan() {
 
   if (loading) return <p className="text-zinc-500 text-sm py-10 text-center">Chargement du bilan…</p>;
   if (!data) return <p className="text-zinc-500 text-sm py-10 text-center">Impossible de charger le bilan.</p>;
-  return <OverviewBilanView data={data} />;
+  return <OverviewBilanView data={data} onNavigate={onNavigate} />;
 }
 
 /** Vue présentationnelle (data en props) — réutilisable pour preview/test. */
-export function OverviewBilanView({ data }: { data: Overview }) {
-  const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective, series } = data;
+export function OverviewBilanView({ data, onNavigate }: { data: Overview; onNavigate?: (tab: NavTab) => void }) {
+  const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective, series, weight, photos } = data;
   const formeColor = forme?.score == null ? '#71717a' : forme.score >= 60 ? '#34d399' : forme.score >= 40 ? '#f59e0b' : '#fb7185';
-  const [sel, setSel] = useState<'hydration' | 'sleep' | 'force' | 'ressenti' | 'measure' | null>(null);
+  const [sel, setSel] = useState<'weight' | 'hydration' | 'sleep' | 'force' | 'ressenti' | 'measure' | null>(null);
+  const [photoErr, setPhotoErr] = useState(false);
+  const latestPhoto = photos?.latest ? (photos.latest.face || photos.latest.profile || photos.latest.back) : undefined;
   const liftSeries = series?.lifts
     ? Object.entries(series.lifts).map(([k, pts]) => ({ label: LIFT_META[k]?.label ?? k, color: LIFT_META[k]?.color ?? C.force, unit: 'kg', points: pts.map((p) => ({ date: p.date, value: p.e1rm })) }))
     : [];
@@ -216,7 +223,18 @@ export function OverviewBilanView({ data }: { data: Overview }) {
 
       {/* CARTES */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-        {/* HYDRATATION — anneau */}
+        {/* POIDS — gros chiffre + courbe départ→actuel */}
+      <Card icon="monitor_weight" title="Poids" color={C.weight} onClick={weight ? () => setSel('weight') : undefined}>
+        {weight ? (
+          <>
+            <p className="text-3xl font-bold text-zinc-50 leading-none">{weight.current.toFixed(1)}<span className="text-base text-zinc-500 font-normal"> kg</span></p>
+            <p className="text-[11px] text-zinc-400 mt-1">{weight.delta_kg === 0 ? 'stable · 7j' : `${weight.delta_kg > 0 ? '+' : ''}${weight.delta_kg} kg · 7j`}</p>
+            {weight.points.length >= 2 && <div className="mt-2"><MiniLine values={weight.points.map((p) => p.kg)} color={C.weight} markEnds /></div>}
+          </>
+        ) : <Hint>« je pèse 82,4 kg »</Hint>}
+      </Card>
+
+      {/* HYDRATATION — anneau */}
       <Card icon="water_drop" title="Hydratation" color={C.hydra} onClick={hydration ? () => setSel('hydration') : undefined}>
         {hydration ? (
           <>
@@ -313,6 +331,24 @@ export function OverviewBilanView({ data }: { data: Overview }) {
         ) : <Hint>« tour de taille 96, bras 38 »</Hint>}
       </Card>
 
+      {/* PHOTOS — vignette + nb de séries (ouvre l'onglet Photos) */}
+      <Card icon="photo_camera" title="Photos" color={C.photo} onClick={photos && onNavigate ? () => onNavigate('photos') : undefined}>
+        {photos ? (
+          <div className="flex items-center gap-3">
+            {latestPhoto && !photoErr ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={latestPhoto} alt="" referrerPolicy="no-referrer" onError={() => setPhotoErr(true)} className="h-16 w-12 object-cover rounded-lg border border-zinc-800 shrink-0" />
+            ) : (
+              <span className="h-16 w-12 rounded-lg border border-zinc-800 bg-zinc-900 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-zinc-600" style={{ fontSize: 20 }}>image</span></span>
+            )}
+            <div className="min-w-0">
+              <p className="text-2xl font-bold text-zinc-50 leading-none">{photos.count}</p>
+              <p className="text-[11px] text-zinc-400 mt-1">série(s){photos.latest?.date ? ` · ${photos.latest.date}` : ''}</p>
+            </div>
+          </div>
+        ) : <Hint>ajoute une photo hebdo</Hint>}
+      </Card>
+
       {/* Conditionnels */}
       {substances && (substances.avg_7day_caffeine_mg > 0 || substances.total_alcohol_7day > 0) && (
         <Card icon="local_cafe" title="Substances" color={C.subst}>
@@ -337,6 +373,15 @@ export function OverviewBilanView({ data }: { data: Overview }) {
               <h3 className="text-lg font-bold text-zinc-50">{DETAIL_TITLE[sel]}</h3>
               <button onClick={() => setSel(null)} aria-label="Fermer" className="text-zinc-400 hover:text-zinc-100"><span className="material-symbols-outlined">close</span></button>
             </div>
+
+            {sel === 'weight' && weight && (
+              <>
+                <MiniLine values={weight.points.map((p) => p.kg)} color={C.weight} h={120} markEnds />
+                <p className="text-xs text-zinc-400 mt-3">Actuel <span className="text-zinc-100 font-semibold">{weight.current.toFixed(1)} kg</span> · {weight.delta_kg === 0 ? 'stable' : `${weight.delta_kg > 0 ? '+' : ''}${weight.delta_kg} kg`} sur 7j{weight.delta_pct != null && weight.delta_kg !== 0 ? ` (${weight.delta_pct > 0 ? '+' : ''}${weight.delta_pct}%)` : ''}</p>
+                <ul className="mt-3 space-y-1">{weight.points.slice(-10).reverse().map((p) => <li key={p.date} className="flex justify-between text-[13px]"><span className="text-zinc-400">{p.date}</span><span className="text-zinc-100">{p.kg} kg</span></li>)}</ul>
+                {onNavigate && <button onClick={() => { setSel(null); onNavigate('weight'); }} className="mt-4 inline-flex items-center gap-1 text-[12px] text-amber-400 hover:text-amber-300">Ouvrir l&apos;onglet Poids <span className="material-symbols-outlined" style={{ fontSize: 15 }}>arrow_forward</span></button>}
+              </>
+            )}
 
             {sel === 'hydration' && hydration && (
               <>
