@@ -16,6 +16,7 @@ import { getCravingsSnapshot } from '@/lib/features/cravings/store';
 import { getSubstancesSnapshot } from '@/lib/features/substances/store';
 import { getMeasurementsSnapshot } from '@/lib/features/measurements/store';
 import { getCycleSnapshot } from '@/lib/features/cycle/store';
+import { computeForme } from '@/lib/features/progress/forme';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,8 +69,18 @@ export async function GET(req: NextRequest) {
         isFemale ? safe(getCycleSnapshot(uid)) : Promise.resolve(null),
       ]);
 
+    // Score "Forme du jour" (readiness) — synthèse des signaux dispo.
+    const recentEnergy = (subjective ?? [])
+      .map((s) => s.energy)
+      .filter((e): e is number => typeof e === 'number')
+      .slice(-7);
+    const energyAvg = recentEnergy.length
+      ? recentEnergy.reduce((a, b) => a + b, 0) / recentEnergy.length
+      : null;
+    const forme = computeForme({ sleep, hrv, hydration, energyAvg });
+
     return NextResponse.json({
-      prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective,
+      forme, prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective,
     });
   });
 }

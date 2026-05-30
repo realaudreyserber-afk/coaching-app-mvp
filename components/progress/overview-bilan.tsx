@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/firebase/hooks';
 
 interface Overview {
+  forme: { score: number | null; label: string; drivers: Array<{ label: string; ok: boolean }> } | null;
   prs: { top_exercises: Array<{ exercise_name: string; current_1rm: number; delta_90day_pct: number | null }>; n_exercises_tracked: number } | null;
   sleep: { avg_hours_7day: number; avg_quality_7day: number; short_nights_7day: number; logs_count_7day: number } | null;
   hrv: { avg_hrv_7day: number | null; baseline_drift_pct: number | null; is_chronic_drift: boolean; logs_count_7day: number } | null;
@@ -109,7 +110,8 @@ export function OverviewBilan() {
 
 /** Vue présentationnelle (data en props) — réutilisable pour preview/test. */
 export function OverviewBilanView({ data }: { data: Overview }) {
-  const { prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective } = data;
+  const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective } = data;
+  const formeColor = forme?.score == null ? '#71717a' : forme.score >= 60 ? '#34d399' : forme.score >= 40 ? '#f59e0b' : '#fb7185';
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
   const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
@@ -119,8 +121,30 @@ export function OverviewBilanView({ data }: { data: Overview }) {
   const hydraPct = hydration ? (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100 : 0;
 
   return (
-    <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
-      {/* HYDRATATION — anneau */}
+    <div className="space-y-3">
+      {/* HERO — Forme du jour (readiness, à la Samsung Energy Score) */}
+      <div className="rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900 to-zinc-900/30 p-5 flex items-center gap-5">
+        <Ring pct={forme?.score ?? 0} color={formeColor} size={116} stroke={11} label={forme?.score != null ? String(forme.score) : '—'} sub="/100" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500 font-mono mb-1">Forme du jour</p>
+          <p className="text-xl font-bold" style={{ color: formeColor }}>{forme?.label ?? '—'}</p>
+          {forme && forme.drivers.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {forme.drivers.map((d, i) => (
+                <span key={i} className={`px-2 py-0.5 rounded-full text-[11px] ${d.ok ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                  {d.ok ? '✓' : '↓'} {d.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-zinc-500 mt-1.5">Logge ta récup (sommeil, HRV, hydratation) pour activer ton score.</p>
+          )}
+        </div>
+      </div>
+
+      {/* CARTES */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+        {/* HYDRATATION — anneau */}
       <Card icon="water_drop" title="Hydratation" color={C.hydra}>
         {hydration ? (
           <>
@@ -219,6 +243,7 @@ export function OverviewBilanView({ data }: { data: Overview }) {
       {cravings && cravings.days_with_cravings_7day > 0 && (
         <Card icon="cookie" title="Fringales" color={C.crave}><p className="text-[13px] text-zinc-300">{cravings.days_with_cravings_7day}j/7 · {cravings.avg_intensity_7day.toFixed(1)}/10</p></Card>
       )}
+      </div>
     </div>
   );
 }
