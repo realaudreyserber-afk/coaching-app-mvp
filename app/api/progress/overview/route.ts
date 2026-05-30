@@ -73,31 +73,54 @@ export async function GET(req: NextRequest) {
     const series = await safe(
       (async () => {
         const ucol = adminDb.collection('users').doc(uid);
-        const [hyd, slp, prsDocs] = await Promise.all([
+        const [hyd, slp, prsDocs, measDocs] = await Promise.all([
           ucol.collection('hydration_log').orderBy('date', 'desc').limit(14).get(),
           ucol.collection('sleep_log').orderBy('date', 'desc').limit(14).get(),
-          ucol.collection('prs').limit(20).get(),
+          ucol.collection('prs').limit(30).get(),
+          ucol.collection('measurements').orderBy('date', 'desc').limit(40).get(),
         ]);
         const hydration = hyd.docs.map((d) => ({ date: d.id, ml: typeof d.data().total_ml === 'number' ? d.data().total_ml : 0 })).reverse();
         const sleep = slp.docs
           .map((d) => ({ date: d.id, hours: typeof d.data().sleep_hours === 'number' ? d.data().sleep_hours : null }))
           .filter((x) => x.hours !== null)
           .reverse();
+
+        // Lift le plus lourd (mini-courbe carte) + les 3 gros (bench/squat/deadlift).
+        const prsData = prsDocs.docs.map((d) => d.data());
         let topLift: { name: string; points: Array<{ date: string; e1rm: number }> } | null = null;
         let best: { name: string; cur: number; pts: Array<{ date: string; e1rm: number }> } | null = null;
-        for (const d of prsDocs.docs) {
-          const x = d.data();
+        for (const x of prsData) {
           const entries = Array.isArray(x.prs) ? x.prs : [];
           if (entries.length && (!best || (x.current_1rm ?? 0) > best.cur)) {
-            best = {
-              name: x.exercise_name ?? x.exercise_id ?? 'Exercice',
-              cur: x.current_1rm ?? 0,
-              pts: entries.map((p: { date: string; estimated_1rm: number }) => ({ date: p.date, e1rm: p.estimated_1rm })).slice(-10),
-            };
+            best = { name: x.exercise_name ?? x.exercise_id ?? 'Exercice', cur: x.current_1rm ?? 0, pts: entries.map((p: { date: string; estimated_1rm: number }) => ({ date: p.date, e1rm: p.estimated_1rm })).slice(-12) };
           }
         }
         if (best) topLift = { name: best.name, points: best.pts };
-        return { hydration, sleep, topLift };
+
+        const LIFT_RE: Record<string, { inc: RegExp; exc: RegExp }> = {
+          squat: { inc: /squat/i, exc: /front|jump|split|pistol|hack|sissy|bulgar|goblet|overhead|saut/i },
+          bench: { inc: /bench|d[ée]velopp[ée] couch/i, exc: /incline|inclin|decline|d[ée]clin|close|floor|sol|haltere|haltère/i },
+          deadlift: { inc: /deadlift|soulev[ée] de terre/i, exc: /romanian|roumain|stiff|sumo|trap|deficit|d[ée]ficit|jambes tendues/i },
+        };
+        const lifts: Record<string, Array<{ date: string; e1rm: number }>> = {};
+        for (const [key, { inc, exc }] of Object.entries(LIFT_RE)) {
+          const cands = prsData.filter((x) => inc.test(x.exercise_name ?? '') && !exc.test(x.exercise_name ?? '') && Array.isArray(x.prs) && x.prs.length);
+          if (cands.length) {
+            const c = cands.sort((a, b) => b.prs.length - a.prs.length)[0];
+            lifts[key] = c.prs.map((p: { date: string; estimated_1rm: number }) => ({ date: p.date, e1rm: p.estimated_1rm })).slice(-12);
+          }
+        }
+
+        // Historique des mensurations par champ (chronologique).
+        const measRows = measDocs.docs.map((d) => d.data()).reverse();
+        const FIELDS = ['waist_cm', 'arm_cm', 'chest_cm', 'thigh_cm', 'hips_cm', 'neck_cm', 'shoulder_cm', 'calf_cm'];
+        const measure: Record<string, Array<{ date: string; cm: number }>> = {};
+        for (const f of FIELDS) {
+          const pts = measRows.filter((r) => typeof r[f] === 'number').map((r) => ({ date: r.date as string, cm: r[f] as number }));
+          if (pts.length >= 2) measure[f] = pts;
+        }
+
+        return { hydration, sleep, topLift, lifts, measure };
       })(),
     );
 

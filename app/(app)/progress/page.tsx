@@ -55,43 +55,6 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
-interface TacticalTabBtnProps {
-  active: boolean;
-  accent: 'gold' | 'tech' | 'pink';
-  onClick: () => void;
-  children: React.ReactNode;
-}
-
-function TacticalTabBtn({ active, accent, onClick, children }: TacticalTabBtnProps) {
-  const colorMap = {
-    gold: { bg: 'var(--gold-tint-15)', fg: 'var(--gold-400)', border: 'var(--gold-tint-35)', glow: 'var(--glow-gold-soft)' },
-    tech: { bg: 'var(--accent-tech-tint)', fg: 'var(--accent-tech)', border: 'var(--accent-tech)', glow: '0 0 12px var(--accent-tech-tint-strong)' },
-    pink: { bg: 'var(--pink-tint-10)', fg: 'var(--pink-500)', border: 'var(--pink-tint-35)', glow: '0 0 12px rgba(255, 42, 109, 0.3)' },
-  };
-  const c = colorMap[accent];
-  return (
-    <button
-      onClick={onClick}
-      role="tab"
-      aria-selected={active}
-      className="mono flex items-center justify-center gap-1.5 py-2 px-2 transition-all cursor-pointer"
-      style={{
-        fontSize: 10,
-        letterSpacing: '0.2em',
-        textTransform: 'uppercase',
-        fontWeight: 700,
-        background: active ? c.bg : 'transparent',
-        color: active ? c.fg : 'var(--fg-4)',
-        border: active ? `1px solid ${c.border}` : '1px solid transparent',
-        boxShadow: active ? c.glow : 'none',
-        clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function ProgressPage() {
   const { user, loading, getFreshToken } = useAuth();
   const [activeTab, setActiveTab] = useState<"bilan" | "weight" | "measurements" | "photos">("bilan");
@@ -465,29 +428,30 @@ export default function ProgressPage() {
         )}
       </HudCard>
 
-      {/* Tactical tabs (3) */}
-      <div
-        className="grid grid-cols-3 gap-1 max-w-md"
-        style={{
-          padding: 4,
-          background: 'var(--glass-bg-2)',
-          border: '1px solid var(--glass-border)',
-          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-        }}
-        role="tablist"
-      >
-        <TacticalTabBtn active={activeTab === "bilan"} accent="gold" onClick={() => setActiveTab("bilan")}>
-          <Activity className="h-3 w-3" aria-hidden="true" /> 01 Bilan
-        </TacticalTabBtn>
-        <TacticalTabBtn active={activeTab === "weight"} accent="gold" onClick={() => setActiveTab("weight")}>
-          <TrendingUp className="h-3 w-3" aria-hidden="true" /> 02 Poids
-        </TacticalTabBtn>
-        <TacticalTabBtn active={activeTab === "measurements"} accent="tech" onClick={() => setActiveTab("measurements")}>
-          <Ruler className="h-3 w-3" aria-hidden="true" /> 03 Mesures
-        </TacticalTabBtn>
-        <TacticalTabBtn active={activeTab === "photos"} accent="pink" onClick={() => setActiveTab("photos")}>
-          <Camera className="h-3 w-3" aria-hidden="true" /> 04 Photos
-        </TacticalTabBtn>
+      {/* Navigation en cartes (Bilan / Poids / Mesures / Photos) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist">
+        {([
+          { id: "bilan", label: "Bilan", Icon: Activity, color: "#f59e0b" },
+          { id: "weight", label: "Poids", Icon: TrendingUp, color: "#f59e0b" },
+          { id: "measurements", label: "Mesures", Icon: Ruler, color: "#22d3ee" },
+          { id: "photos", label: "Photos", Icon: Camera, color: "#f472b6" },
+        ] as const).map((t) => {
+          const active = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveTab(t.id)}
+              className={`rounded-2xl border p-3 flex flex-col items-center justify-center gap-2 transition-colors ${active ? "border-amber-500/60 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700"}`}
+            >
+              <span className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: `${t.color}${active ? "33" : "18"}` }}>
+                <t.Icon className="h-4 w-4" color={t.color} aria-hidden="true" />
+              </span>
+              <span className={`text-xs font-semibold ${active ? "text-zinc-50" : "text-zinc-400"}`}>{t.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* BILAN TAB */}

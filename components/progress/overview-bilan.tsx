@@ -26,6 +26,8 @@ interface Overview {
     hydration: Array<{ date: string; ml: number }>;
     sleep: Array<{ date: string; hours: number }>;
     topLift: { name: string; points: Array<{ date: string; e1rm: number }> } | null;
+    lifts?: Record<string, Array<{ date: string; e1rm: number }>>;
+    measure?: Record<string, Array<{ date: string; cm: number }>>;
   } | null;
 }
 
@@ -102,9 +104,39 @@ function MiniLine({ values, color, h = 30 }: { values: number[]; color: string; 
   );
 }
 
+/** Multi-courbe temporelle (séries partageant l'axe), + légende. Pour les 3 gros lifts. */
+function MultiLine({ series, h = 130, legend = true }: { series: Array<{ label: string; color: string; unit?: string; points: Array<{ date: string; value: number }> }>; h?: number; legend?: boolean }) {
+  const all = series.flatMap((s) => s.points);
+  if (all.length < 2) return <span className="text-zinc-600 text-[11px]">à venir…</span>;
+  const ts = all.map((p) => Date.parse(p.date));
+  const vs = all.map((p) => p.value);
+  const tmin = Math.min(...ts), tspan = Math.max(...ts) - tmin || 1;
+  const vmin = Math.min(...vs), vspan = Math.max(...vs) - vmin || 1;
+  const W = 100, pad = 6;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h }}>
+        {series.filter((s) => s.points.length >= 2).map((s) => (
+          <polyline key={s.label} points={s.points.map((p) => `${((Date.parse(p.date) - tmin) / tspan) * W},${h - ((p.value - vmin) / vspan) * (h - 2 * pad) - pad}`).join(' ')} fill="none" stroke={s.color} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+      </svg>
+      {legend && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+          {series.filter((s) => s.points.length).map((s) => (
+            <span key={s.label} className="flex items-center gap-1 text-[11px] text-zinc-400">
+              <span style={{ width: 8, height: 8, borderRadius: 9, background: s.color }} />{s.label} <span className="text-zinc-200">{s.points[s.points.length - 1].value}{s.unit ?? ''}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c' };
+const LIFT_META: Record<string, { label: string; color: string }> = { squat: { label: 'Squat', color: '#f59e0b' }, bench: { label: 'Développé couché', color: '#22d3ee' }, deadlift: { label: 'Soulevé de terre', color: '#a78bfa' } };
 const MEASURE_LABELS: Record<string, string> = { waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules', chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet' };
-const DETAIL_TITLE: Record<string, string> = { hydration: 'Hydratation', sleep: 'Récupération', force: 'Force · 1RM', ressenti: 'Ressenti' };
+const DETAIL_TITLE: Record<string, string> = { hydration: 'Hydratation', sleep: 'Récupération', force: 'Force · 1RM', ressenti: 'Ressenti', measure: 'Mensurations' };
 
 export function OverviewBilan() {
   const { getFreshToken } = useAuth();
@@ -137,7 +169,10 @@ export function OverviewBilan() {
 export function OverviewBilanView({ data }: { data: Overview }) {
   const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective, series } = data;
   const formeColor = forme?.score == null ? '#71717a' : forme.score >= 60 ? '#34d399' : forme.score >= 40 ? '#f59e0b' : '#fb7185';
-  const [sel, setSel] = useState<'hydration' | 'sleep' | 'force' | 'ressenti' | null>(null);
+  const [sel, setSel] = useState<'hydration' | 'sleep' | 'force' | 'ressenti' | 'measure' | null>(null);
+  const liftSeries = series?.lifts
+    ? Object.entries(series.lifts).map(([k, pts]) => ({ label: LIFT_META[k]?.label ?? k, color: LIFT_META[k]?.color ?? C.force, unit: 'kg', points: pts.map((p) => ({ date: p.date, value: p.e1rm })) }))
+    : [];
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
   const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
@@ -246,13 +281,15 @@ export function OverviewBilanView({ data }: { data: Overview }) {
             ))}
           </ul>
         ) : <Hint>« PR : 100 kg au développé couché »</Hint>}
-        {series?.topLift && series.topLift.points.length >= 2 && (
+        {liftSeries.some((s) => s.points.length >= 2) ? (
+          <div className="mt-3"><MultiLine series={liftSeries} h={48} legend={false} /></div>
+        ) : series?.topLift && series.topLift.points.length >= 2 ? (
           <div className="mt-3"><p className="text-[10px] text-zinc-500 mb-1">{series.topLift.name} · 1RM</p><MiniLine values={series.topLift.points.map((p) => p.e1rm)} color={C.force} /></div>
-        )}
+        ) : null}
       </Card>
 
       {/* MENSURATIONS — liste (large) */}
-      <Card icon="straighten" title="Mensurations" color={C.body} wide>
+      <Card icon="straighten" title="Mensurations" color={C.body} wide onClick={(measurements && Object.keys(measurements.latest).length > 0) || (series?.measure && Object.keys(series.measure).length > 0) ? () => setSel('measure') : undefined}>
         {measurements && Object.keys(measurements.latest).length > 0 ? (
           <ul className="space-y-1.5">
             {Object.entries(measurements.latest).slice(0, 5).map(([k, v]) => (
@@ -309,9 +346,28 @@ export function OverviewBilanView({ data }: { data: Overview }) {
 
             {sel === 'force' && prs && (
               <>
-                {series?.topLift && series.topLift.points.length >= 2 && (<><p className="text-xs text-zinc-500 mb-1">{series.topLift.name} · 1RM</p><MiniLine values={series.topLift.points.map((p) => p.e1rm)} color={C.force} h={80} /></>)}
-                <ul className="mt-3 space-y-2">{prs.top_exercises.map((e) => <li key={e.exercise_name} className="flex items-baseline justify-between"><span className="text-[13px] text-zinc-300">{e.exercise_name}</span><span className="flex gap-2 items-baseline"><span className="text-zinc-100 font-semibold">{e.current_1rm} kg</span><Delta pct={e.delta_90day_pct} /></span></li>)}</ul>
+                {liftSeries.some((s) => s.points.length >= 2) ? (
+                  <><p className="text-xs text-zinc-500 mb-2">Évolution 1RM</p><MultiLine series={liftSeries} h={150} /></>
+                ) : series?.topLift && series.topLift.points.length >= 2 ? (
+                  <><p className="text-xs text-zinc-500 mb-1">{series.topLift.name} · 1RM</p><MiniLine values={series.topLift.points.map((p) => p.e1rm)} color={C.force} h={80} /></>
+                ) : null}
+                <ul className="mt-4 space-y-2">{prs.top_exercises.map((e) => <li key={e.exercise_name} className="flex items-baseline justify-between"><span className="text-[13px] text-zinc-300">{e.exercise_name}</span><span className="flex gap-2 items-baseline"><span className="text-zinc-100 font-semibold">{e.current_1rm} kg</span><Delta pct={e.delta_90day_pct} /></span></li>)}</ul>
               </>
+            )}
+
+            {sel === 'measure' && (
+              series?.measure && Object.keys(series.measure).length > 0 ? (
+                <div className="space-y-3">
+                  {Object.entries(series.measure).map(([f, pts]) => (
+                    <div key={f}>
+                      <div className="flex justify-between text-[12px] mb-1"><span className="text-zinc-400">{MEASURE_LABELS[f] ?? f}</span><span className="text-zinc-100">{pts[pts.length - 1].cm} cm</span></div>
+                      <MiniLine values={pts.map((p) => p.cm)} color={C.body} h={42} />
+                    </div>
+                  ))}
+                </div>
+              ) : measurements ? (
+                <ul className="space-y-1.5">{Object.entries(measurements.latest).map(([k, v]) => <li key={k} className="flex justify-between text-[13px]"><span className="text-zinc-400">{MEASURE_LABELS[k] ?? k}</span><span className="text-zinc-100">{v} cm</span></li>)}</ul>
+              ) : <p className="text-zinc-500 text-sm">Pas encore de mensurations — dicte-les au coach.</p>
             )}
 
             {sel === 'ressenti' && subjective && (
