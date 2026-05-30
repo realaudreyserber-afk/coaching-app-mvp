@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Onglet "Bilan" de la page Suivi — donne à l'utilisateur le VISUEL de tout ce
- * que le coach suit (force/PRs, récup sommeil+HRV, hydratation, ressenti,
- * habitudes, substances, cravings, cycle). Alimenté par /api/progress/overview.
+ * Onglet "Bilan" de la page Suivi — tableau de bord visuel de tout ce que le coach
+ * suit. Design inspiré de Samsung Health (cartes arrondies, anneaux de progression,
+ * gros chiffres colorés par catégorie, sparklines), adapté au thème sombre de l'app.
+ * Alimenté par /api/progress/overview.
  */
 
 import { useEffect, useState } from 'react';
@@ -22,14 +23,37 @@ interface Overview {
   subjective: Array<{ date: string; energy: number | null; mood: number | null; hunger: number | null; sleep_hours: number | null }> | null;
 }
 
-function Card({ icon, title, accent, children }: { icon: string; title: string; accent?: string; children: React.ReactNode }) {
+/** Carte façon Samsung Health : coin arrondi, chip d'icône coloré, titre. */
+function Card({ icon, title, color, children, wide }: { icon: string; title: string; color: string; children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="material-symbols-outlined" style={{ fontSize: 18, color: accent ?? '#f59e0b' }}>{icon}</span>
-        <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-zinc-300 font-mono">{title}</h3>
+    <div className={`rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 p-4 ${wide ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
+      <div className="flex items-center gap-2.5 mb-3">
+        <span className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}22` }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color }}>{icon}</span>
+        </span>
+        <h3 className="text-[13px] font-semibold text-zinc-200">{title}</h3>
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Anneau de progression circulaire (SVG). */
+function Ring({ pct, color, size = 96, stroke = 9, label, sub }: { pct: number; color: string; size?: number; stroke?: number; label: string; sub?: string }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const clamped = Math.min(100, Math.max(0, pct));
+  const off = circ * (1 - clamped / 100);
+  return (
+    <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="#27272a" strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round" style={{ transition: 'stroke-dashoffset .6s ease' }} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-lg font-bold text-zinc-50 leading-none">{label}</span>
+        {sub && <span className="text-[10px] text-zinc-500 mt-0.5">{sub}</span>}
+      </div>
     </div>
   );
 }
@@ -37,40 +61,24 @@ function Card({ icon, title, accent, children }: { icon: string; title: string; 
 function Delta({ pct }: { pct: number | null }) {
   if (pct === null || pct === undefined) return null;
   const up = pct >= 0;
-  return (
-    <span className={up ? 'text-emerald-400' : 'text-red-400'} style={{ fontSize: 12 }}>
-      {up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
-    </span>
-  );
+  return <span className={up ? 'text-emerald-400' : 'text-rose-400'} style={{ fontSize: 11 }}>{up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%</span>;
 }
 
-/** Mini sparkline en barres (valeurs sur échelle [min,max]). */
-function Spark({ values, max = 10, color = '#f59e0b' }: { values: Array<number | null>; max?: number; color?: string }) {
+/** Sparkline en barres. */
+function Spark({ values, max = 10, color }: { values: Array<number | null>; max?: number; color: string }) {
   const pts = values.filter((v): v is number => v !== null);
-  if (pts.length < 2) return <span className="text-zinc-600 text-xs">pas assez de données</span>;
+  if (pts.length < 2) return <span className="text-zinc-600 text-[11px]">à venir…</span>;
   return (
-    <div className="flex items-end gap-0.5 h-8">
+    <div className="flex items-end gap-[3px] h-9">
       {values.slice(-14).map((v, i) => (
-        <div
-          key={i}
-          title={v === null ? '—' : String(v)}
-          style={{
-            width: 6,
-            height: v === null ? 2 : `${Math.max(8, (v / max) * 100)}%`,
-            background: v === null ? '#3f3f46' : color,
-            borderRadius: 1,
-            opacity: v === null ? 0.4 : 1,
-          }}
-        />
+        <div key={i} title={v === null ? '—' : String(v)} style={{ width: 6, height: v === null ? 3 : `${Math.max(10, (v / max) * 100)}%`, background: v === null ? '#3f3f46' : color, borderRadius: 2, opacity: v === null ? 0.4 : 1 }} />
       ))}
     </div>
   );
 }
 
-const MEASURE_LABELS: Record<string, string> = {
-  waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules',
-  chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet',
-};
+const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c' };
+const MEASURE_LABELS: Record<string, string> = { waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules', chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet' };
 
 export function OverviewBilan() {
   const { getFreshToken } = useAuth();
@@ -94,153 +102,122 @@ export function OverviewBilan() {
     return () => { cancelled = true; };
   }, [getFreshToken]);
 
-  if (loading) return <p className="text-zinc-500 text-sm py-8 text-center">Chargement du bilan…</p>;
-  if (!data) return <p className="text-zinc-500 text-sm py-8 text-center">Impossible de charger le bilan.</p>;
+  if (loading) return <p className="text-zinc-500 text-sm py-10 text-center">Chargement du bilan…</p>;
+  if (!data) return <p className="text-zinc-500 text-sm py-10 text-center">Impossible de charger le bilan.</p>;
+  return <OverviewBilanView data={data} />;
+}
 
+/** Vue présentationnelle (data en props) — réutilisable pour preview/test. */
+export function OverviewBilanView({ data }: { data: Overview }) {
   const { prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective } = data;
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
   const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
   const Hint = ({ children }: { children: React.ReactNode }) => (
-    <p className="text-sm text-zinc-500 leading-snug">
-      Aucune donnée — <span className="text-amber-400">{children}</span>
-    </p>
+    <p className="text-[13px] text-zinc-500 leading-snug">Vide — <span className="text-amber-400/90">{children}</span></p>
   );
+  const hydraPct = hydration ? (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100 : 0;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {/* FORCE — toujours visible */}
-      <Card icon="exercise" title="Force — 1RM">
-        {prs && prs.top_exercises.length > 0 ? (
-          <ul className="space-y-2">
-            {prs.top_exercises.slice(0, 5).map((e) => (
-              <li key={e.exercise_name} className="flex items-baseline justify-between gap-2">
-                <span className="text-sm text-zinc-300 truncate">{e.exercise_name}</span>
-                <span className="flex items-baseline gap-2 shrink-0">
-                  <span className="text-zinc-100 font-semibold">{e.current_1rm} kg</span>
-                  <Delta pct={e.delta_90day_pct} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Hint>dis « PR : 100 kg au développé couché » au coach</Hint>
-        )}
+    <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+      {/* HYDRATATION — anneau */}
+      <Card icon="water_drop" title="Hydratation" color={C.hydra}>
+        {hydration ? (
+          <>
+            <Ring pct={hydraPct} color={C.hydra} label={`${(hydration.today_effective_ml / 1000).toFixed(1)}L`} sub={`/ ${(hydration.today_target_ml / 1000).toFixed(1)}L`} />
+            <p className="text-[11px] text-zinc-400 mt-2 text-center">Moy 7j {(hydration.avg_7day_ml / 1000).toFixed(1)}L · cible {hydration.days_target_hit_7day}/7</p>
+          </>
+        ) : <Hint>« j&apos;ai bu 1,5 L »</Hint>}
       </Card>
 
-      {/* RÉCUPÉRATION — toujours visible */}
-      <Card icon="bedtime" title="Récupération" accent="#a78bfa">
+      {/* HABITUDES — anneau */}
+      <Card icon="task_alt" title="Habitudes" color={C.habit}>
+        {habits && habits.habits_summary.length > 0 ? (
+          <>
+            <Ring pct={habits.adherence_7day_pct} color={C.habit} label={`${habits.adherence_7day_pct}%`} sub="7 jours" />
+            <ul className="mt-2 space-y-0.5">
+              {habits.habits_summary.slice(0, 3).map((h) => (
+                <li key={h.name} className="flex items-center justify-between text-[11px]"><span className="text-zinc-400 truncate">{h.name}</span><span className="text-amber-400 shrink-0">🔥{h.current_streak}</span></li>
+              ))}
+            </ul>
+          </>
+        ) : <Hint>crée une habitude à suivre</Hint>}
+      </Card>
+
+      {/* RÉCUPÉRATION — gros chiffre */}
+      <Card icon="bedtime" title="Récupération" color={C.sleep}>
         {sleep || hrv ? (
           <>
             {sleep && (
-              <div className="mb-2">
-                <p className="text-2xl font-bold text-zinc-100">{sleep.avg_hours_7day.toFixed(1)} h<span className="text-sm text-zinc-500 font-normal"> /nuit (7j)</span></p>
-                <p className="text-xs text-zinc-400">Qualité {sleep.avg_quality_7day.toFixed(0)}/10 · {sleep.short_nights_7day} nuit(s) courte(s)</p>
-              </div>
+              <>
+                <p className="text-3xl font-bold text-zinc-50 leading-none">{sleep.avg_hours_7day.toFixed(1)}<span className="text-base text-zinc-500 font-normal"> h</span></p>
+                <p className="text-[11px] text-zinc-400 mt-1">moy/nuit · qualité {sleep.avg_quality_7day.toFixed(0)}/10 · {sleep.short_nights_7day} courte(s)</p>
+              </>
             )}
             {hrv && hrv.avg_hrv_7day !== null && (
-              <p className="text-xs">
-                HRV {hrv.avg_hrv_7day} ms ·{' '}
-                <span className={hrv.is_chronic_drift ? 'text-red-400' : 'text-emerald-400'}>
-                  {hrv.is_chronic_drift ? 'fatigue cumulée' : 'stable'}
-                </span>
-              </p>
+              <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-[11px] ${hrv.is_chronic_drift ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                HRV {hrv.avg_hrv_7day}ms · {hrv.is_chronic_drift ? 'fatigue' : 'stable'}
+              </span>
             )}
           </>
-        ) : (
-          <Hint>dis « mal dormi, 6 h » au coach (ou fais ton check-in du jour)</Hint>
-        )}
+        ) : <Hint>« mal dormi, 6 h »</Hint>}
       </Card>
 
-      {/* HYDRATATION — toujours visible */}
-      <Card icon="water_drop" title="Hydratation" accent="#38bdf8">
-        {hydration ? (
-          <>
-            <p className="text-2xl font-bold text-zinc-100">
-              {(hydration.today_effective_ml / 1000).toFixed(1)} L
-              <span className="text-sm text-zinc-500 font-normal"> / {(hydration.today_target_ml / 1000).toFixed(1)} L</span>
-            </p>
-            <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-sky-400" style={{ width: `${Math.min(100, (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100)}%` }} />
-            </div>
-            <p className="text-xs text-zinc-400 mt-1.5">Moy. 7j : {(hydration.avg_7day_ml / 1000).toFixed(1)} L · cible atteinte {hydration.days_target_hit_7day}/7</p>
-          </>
-        ) : (
-          <Hint>dis « j&apos;ai bu 1,5 L » au coach</Hint>
-        )}
-      </Card>
-
-      {/* RESSENTI — toujours visible */}
-      <Card icon="mood" title="Ressenti" accent="#34d399">
+      {/* RESSENTI — sparklines (large) */}
+      <Card icon="mood" title="Ressenti" color={C.mood} wide>
         {latestSubj ? (
-          <div className="space-y-2">
-            <p className="text-xs text-zinc-400">
-              Dernier : énergie {latestSubj.energy ?? '—'}/10 · humeur {latestSubj.mood ?? '—'}/10 · faim {latestSubj.hunger ?? '—'}/10
-            </p>
-            <div><p className="text-xs text-zinc-500 mb-1">Énergie (14j)</p><Spark values={energy} max={10} color="#34d399" /></div>
-            <div><p className="text-xs text-zinc-500 mb-1">Humeur (14j)</p><Spark values={mood} max={10} color="#f59e0b" /></div>
+          <div className="space-y-2.5">
+            <div className="flex gap-1.5 flex-wrap">
+              {latestSubj.energy != null && <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[11px]">énergie {latestSubj.energy}/10</span>}
+              {latestSubj.mood != null && <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[11px]">humeur {latestSubj.mood}/10</span>}
+              {latestSubj.hunger != null && <span className="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-300 text-[11px]">faim {latestSubj.hunger}/10</span>}
+            </div>
+            <div><p className="text-[11px] text-zinc-500 mb-1">Énergie · 14j</p><Spark values={energy} color={C.mood} /></div>
+            <div><p className="text-[11px] text-zinc-500 mb-1">Humeur · 14j</p><Spark values={mood} color={C.force} /></div>
           </div>
-        ) : (
-          <Hint>dis « crevé, mal dormi » au coach</Hint>
-        )}
+        ) : <Hint>« crevé, mal dormi »</Hint>}
       </Card>
 
-      {/* MENSURATIONS — toujours visible */}
-      <Card icon="straighten" title="Mensurations" accent="#22d3ee">
+      {/* FORCE — liste (large) */}
+      <Card icon="exercise" title="Force · 1RM" color={C.force} wide>
+        {prs && prs.top_exercises.length > 0 ? (
+          <ul className="space-y-1.5">
+            {prs.top_exercises.slice(0, 5).map((e) => (
+              <li key={e.exercise_name} className="flex items-baseline justify-between gap-2">
+                <span className="text-[13px] text-zinc-300 truncate">{e.exercise_name}</span>
+                <span className="flex items-baseline gap-2 shrink-0"><span className="text-zinc-50 font-semibold">{e.current_1rm} kg</span><Delta pct={e.delta_90day_pct} /></span>
+              </li>
+            ))}
+          </ul>
+        ) : <Hint>« PR : 100 kg au développé couché »</Hint>}
+      </Card>
+
+      {/* MENSURATIONS — liste (large) */}
+      <Card icon="straighten" title="Mensurations" color={C.body} wide>
         {measurements && Object.keys(measurements.latest).length > 0 ? (
           <ul className="space-y-1.5">
             {Object.entries(measurements.latest).slice(0, 5).map(([k, v]) => (
               <li key={k} className="flex items-baseline justify-between gap-2">
-                <span className="text-sm text-zinc-300">{MEASURE_LABELS[k] ?? k}</span>
-                <span className="flex items-baseline gap-2">
-                  <span className="text-zinc-100 font-semibold">{v} cm</span>
-                  {measurements.delta_30day[k] && <Delta pct={measurements.delta_30day[k].pct} />}
-                </span>
+                <span className="text-[13px] text-zinc-300">{MEASURE_LABELS[k] ?? k}</span>
+                <span className="flex items-baseline gap-2"><span className="text-zinc-50 font-semibold">{v} cm</span>{measurements.delta_30day[k] && <Delta pct={measurements.delta_30day[k].pct} />}</span>
               </li>
             ))}
           </ul>
-        ) : (
-          <Hint>dis « tour de taille 96, bras 38 » au coach</Hint>
-        )}
+        ) : <Hint>« tour de taille 96, bras 38 »</Hint>}
       </Card>
 
-      {/* HABITUDES */}
-      {habits && habits.habits_summary.length > 0 && (
-        <Card icon="task_alt" title="Habitudes" accent="#fbbf24">
-          <p className="text-2xl font-bold text-zinc-100">{habits.adherence_7day_pct}%<span className="text-sm text-zinc-500 font-normal"> assiduité 7j</span></p>
-          <ul className="mt-2 space-y-1">
-            {habits.habits_summary.slice(0, 4).map((h) => (
-              <li key={h.name} className="flex items-center justify-between text-sm">
-                <span className="text-zinc-300 truncate">{h.name}</span>
-                <span className="text-amber-400 shrink-0">🔥 {h.current_streak}j</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {/* SUBSTANCES */}
+      {/* Conditionnels */}
       {substances && (substances.avg_7day_caffeine_mg > 0 || substances.total_alcohol_7day > 0) && (
-        <Card icon="local_cafe" title="Substances" accent="#d4d4d8">
-          <p className="text-sm text-zinc-300">Caféine : <span className="text-zinc-100 font-semibold">{Math.round(substances.today_caffeine_mg)} mg</span> auj. (moy {Math.round(substances.avg_7day_caffeine_mg)} mg)</p>
-          {substances.total_alcohol_7day > 0 && (
-            <p className="text-sm text-zinc-300 mt-1">Alcool : {substances.total_alcohol_7day} u. sur 7j ({substances.drinking_days_7day} j)</p>
-          )}
+        <Card icon="local_cafe" title="Substances" color={C.subst}>
+          <p className="text-[13px] text-zinc-300">Caféine <span className="text-zinc-50 font-semibold">{Math.round(substances.today_caffeine_mg)}mg</span></p>
+          {substances.total_alcohol_7day > 0 && <p className="text-[11px] text-zinc-400 mt-1">Alcool {substances.total_alcohol_7day}u/7j</p>}
         </Card>
       )}
-
-      {/* CYCLE */}
       {cycle?.current_phase && (
-        <Card icon="cycle" title="Cycle" accent="#f472b6">
-          <p className="text-lg font-semibold text-zinc-100 capitalize">{cycle.current_phase}</p>
-        </Card>
+        <Card icon="cycle" title="Cycle" color={C.cycle}><p className="text-base font-semibold text-zinc-50 capitalize">{cycle.current_phase}</p></Card>
       )}
-
-      {/* CRAVINGS */}
       {cravings && cravings.days_with_cravings_7day > 0 && (
-        <Card icon="cookie" title="Fringales" accent="#fb923c">
-          <p className="text-sm text-zinc-300">{cravings.days_with_cravings_7day} jour(s)/7 · intensité moy. {cravings.avg_intensity_7day.toFixed(1)}/10</p>
-        </Card>
+        <Card icon="cookie" title="Fringales" color={C.crave}><p className="text-[13px] text-zinc-300">{cravings.days_with_cravings_7day}j/7 · {cravings.avg_intensity_7day.toFixed(1)}/10</p></Card>
       )}
     </div>
   );
