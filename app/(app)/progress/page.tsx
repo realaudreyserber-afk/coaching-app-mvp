@@ -126,10 +126,14 @@ export default function ProgressPage() {
   const [photoType, setPhotoType] = useState<"face" | "profile" | "back">("face");
 
   // Saisie rapide de poids directement depuis la page Suivi (la courbe lit
-  // checkins_daily ; on upsert le même doc du jour en merge pour rester
+  // checkins_daily ; on upsert le doc de la date choisie en merge pour rester
   // cohérent avec le check-in quotidien). refreshTick relance le chargement.
+  // Date par défaut = aujourd'hui ; l'user peut reculer pour logger une pesée
+  // passée (cf. incident 2026-05 où il fallait passer par le coach pour ça).
+  const todayStr = new Date().toISOString().split("T")[0];
   const [refreshTick, setRefreshTick] = useState(0);
   const [weighInput, setWeighInput] = useState("");
+  const [weighDate, setWeighDate] = useState(todayStr);
   const [weighSaving, setWeighSaving] = useState(false);
   const [weighMsg, setWeighMsg] = useState<string | null>(null);
 
@@ -141,28 +145,39 @@ export default function ProgressPage() {
       setWeighMsg("Poids invalide (20–400 kg).");
       return;
     }
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(weighDate) ? weighDate : todayStr;
+    if (date > todayStr) {
+      setWeighMsg("Date dans le futur impossible.");
+      return;
+    }
     setWeighSaving(true);
     setWeighMsg(null);
     try {
-      // Même format de doc-id que /checkin/daily pour viser le MÊME document du
-      // jour (pas de doublon). On écrit aussi `date` (cf. fix audit #7).
-      const todayStr = new Date().toISOString().split("T")[0];
+      // Pesée du jour → horodatage now (ordering naturel). Pesée passée →
+      // horodatage déterministe T12:00:00Z (même convention que log_weight
+      // côté coach-actions, cf. lib/features/coach-actions/index.ts), ce qui
+      // place la pesée à midi du jour ciblé dans l'orderBy created_at.
+      const createdAt = date === todayStr
+        ? new Date().toISOString()
+        : new Date(`${date}T12:00:00.000Z`).toISOString();
       await setDoc(
-        doc(db, "users", user.uid, "checkins_daily", todayStr),
+        doc(db, "users", user.uid, "checkins_daily", date),
         {
           weight: w,
-          date: todayStr,
-          // Audit QA #6 : l'« Historique quotidien » et la courbe trient par
-          // `created_at` (orderBy) → un doc sans ce champ est EXCLU de la query
-          // (la pesée n'apparaissait pas). On l'écrit donc aussi. Si un check-in
-          // complet existe déjà ce jour, le merge ne fait que rafraîchir l'horodatage.
-          created_at: new Date().toISOString(),
+          date,
+          // Audit QA #6 : la courbe et l'historique trient par `created_at`
+          // (orderBy) → un doc sans ce champ est EXCLU des queries.
+          created_at: createdAt,
           updated_at: serverTimestamp(),
         },
         { merge: true },
       );
       setWeighInput("");
-      setWeighMsg("Pesée enregistrée ✓");
+      // On garde la date après save : permet saisie batch (re-loguer plusieurs
+      // pesées historiques d'affilée pour le même jour ou la même période).
+      const datePretty = date === todayStr
+        ? "" : ` du ${date.split('-').reverse().join('/')}`;
+      setWeighMsg(`Pesée${datePretty} enregistrée ✓`);
       setRefreshTick((t) => t + 1);
     } catch (err) {
       setWeighMsg(err instanceof Error ? err.message : "Échec de l'enregistrement");
@@ -456,8 +471,14 @@ export default function ProgressPage() {
           <StatNum value={currentKg != null ? currentKg.toFixed(1) : '—'} unit="kg" accent="gold" label="Poids actuel" delta={weightDeltaText} />
           <form onSubmit={handleQuickWeighIn} className="flex items-end gap-2">
             <div style={{ width: 120 }}>
-              <label htmlFor="quick-weigh" style={labelStyle}>Pesée du jour</label>
+              <label htmlFor="quick-weigh" style={labelStyle}>
+                {weighDate === todayStr ? 'Pesée du jour' : 'Pesée'}
+              </label>
               <input id="quick-weigh" type="number" inputMode="decimal" step="0.1" min={20} max={400} value={weighInput} onChange={(e) => setWeighInput(e.target.value)} placeholder="ex. 82.4" style={inputBase} disabled={weighSaving} />
+            </div>
+            <div style={{ width: 140 }}>
+              <label htmlFor="quick-weigh-date" style={labelStyle}>Date</label>
+              <input id="quick-weigh-date" type="date" max={todayStr} value={weighDate} onChange={(e) => setWeighDate(e.target.value || todayStr)} style={inputBase} disabled={weighSaving} aria-label="Date de la pesée (défaut : aujourd'hui)" />
             </div>
             <button type="submit" disabled={weighSaving} className="btn btn-primary mono" style={{ height: 36, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
               {weighSaving ? "…" : "Logger"}
