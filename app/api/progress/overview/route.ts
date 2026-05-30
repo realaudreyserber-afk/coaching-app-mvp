@@ -69,6 +69,38 @@ export async function GET(req: NextRequest) {
         isFemale ? safe(getCycleSnapshot(uid)) : Promise.resolve(null),
       ]);
 
+    // Séries historiques (pour les mini-graphiques sur les cartes).
+    const series = await safe(
+      (async () => {
+        const ucol = adminDb.collection('users').doc(uid);
+        const [hyd, slp, prsDocs] = await Promise.all([
+          ucol.collection('hydration_log').orderBy('date', 'desc').limit(14).get(),
+          ucol.collection('sleep_log').orderBy('date', 'desc').limit(14).get(),
+          ucol.collection('prs').limit(20).get(),
+        ]);
+        const hydration = hyd.docs.map((d) => ({ date: d.id, ml: typeof d.data().total_ml === 'number' ? d.data().total_ml : 0 })).reverse();
+        const sleep = slp.docs
+          .map((d) => ({ date: d.id, hours: typeof d.data().sleep_hours === 'number' ? d.data().sleep_hours : null }))
+          .filter((x) => x.hours !== null)
+          .reverse();
+        let topLift: { name: string; points: Array<{ date: string; e1rm: number }> } | null = null;
+        let best: { name: string; cur: number; pts: Array<{ date: string; e1rm: number }> } | null = null;
+        for (const d of prsDocs.docs) {
+          const x = d.data();
+          const entries = Array.isArray(x.prs) ? x.prs : [];
+          if (entries.length && (!best || (x.current_1rm ?? 0) > best.cur)) {
+            best = {
+              name: x.exercise_name ?? x.exercise_id ?? 'Exercice',
+              cur: x.current_1rm ?? 0,
+              pts: entries.map((p: { date: string; estimated_1rm: number }) => ({ date: p.date, e1rm: p.estimated_1rm })).slice(-10),
+            };
+          }
+        }
+        if (best) topLift = { name: best.name, points: best.pts };
+        return { hydration, sleep, topLift };
+      })(),
+    );
+
     // Score "Forme du jour" (readiness) — synthèse des signaux dispo.
     const recentEnergy = (subjective ?? [])
       .map((s) => s.energy)
@@ -80,7 +112,7 @@ export async function GET(req: NextRequest) {
     const forme = computeForme({ sleep, hrv, hydration, energyAvg });
 
     return NextResponse.json({
-      forme, prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective,
+      forme, prs, sleep, hrv, hydration, habits, cravings, substances, measurements, cycle, subjective, series,
     });
   });
 }

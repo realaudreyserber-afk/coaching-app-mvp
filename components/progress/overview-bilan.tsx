@@ -22,6 +22,11 @@ interface Overview {
   measurements: { latest: Record<string, number>; delta_30day: Record<string, { abs_cm: number; pct: number }> } | null;
   cycle: { current_phase?: string } | null;
   subjective: Array<{ date: string; energy: number | null; mood: number | null; hunger: number | null; sleep_hours: number | null }> | null;
+  series: {
+    hydration: Array<{ date: string; ml: number }>;
+    sleep: Array<{ date: string; hours: number }>;
+    topLift: { name: string; points: Array<{ date: string; e1rm: number }> } | null;
+  } | null;
 }
 
 /** Carte façon Samsung Health : coin arrondi, chip d'icône coloré, titre. */
@@ -78,6 +83,21 @@ function Spark({ values, max = 10, color }: { values: Array<number | null>; max?
   );
 }
 
+/** Mini courbe (SVG) normalisée min-max — pour les tendances à baseline non nulle (force…). */
+function MiniLine({ values, color, h = 30 }: { values: number[]; color: string; h?: number }) {
+  if (values.length < 2) return <span className="text-zinc-600 text-[11px]">à venir…</span>;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const w = 100;
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c' };
 const MEASURE_LABELS: Record<string, string> = { waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules', chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet' };
 
@@ -110,7 +130,7 @@ export function OverviewBilan() {
 
 /** Vue présentationnelle (data en props) — réutilisable pour preview/test. */
 export function OverviewBilanView({ data }: { data: Overview }) {
-  const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective } = data;
+  const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective, series } = data;
   const formeColor = forme?.score == null ? '#71717a' : forme.score >= 60 ? '#34d399' : forme.score >= 40 ? '#f59e0b' : '#fb7185';
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
@@ -150,6 +170,9 @@ export function OverviewBilanView({ data }: { data: Overview }) {
           <>
             <Ring pct={hydraPct} color={C.hydra} label={`${(hydration.today_effective_ml / 1000).toFixed(1)}L`} sub={`/ ${(hydration.today_target_ml / 1000).toFixed(1)}L`} />
             <p className="text-[11px] text-zinc-400 mt-2 text-center">Moy 7j {(hydration.avg_7day_ml / 1000).toFixed(1)}L · cible {hydration.days_target_hit_7day}/7</p>
+            {series?.hydration && series.hydration.length >= 2 && (
+              <div className="mt-2"><Spark values={series.hydration.map((d) => d.ml)} max={Math.max(hydration.today_target_ml, ...series.hydration.map((d) => d.ml))} color={C.hydra} /></div>
+            )}
           </>
         ) : <Hint>« j&apos;ai bu 1,5 L »</Hint>}
       </Card>
@@ -183,6 +206,9 @@ export function OverviewBilanView({ data }: { data: Overview }) {
                 HRV {hrv.avg_hrv_7day}ms · {hrv.is_chronic_drift ? 'fatigue' : 'stable'}
               </span>
             )}
+            {series?.sleep && series.sleep.length >= 2 && (
+              <div className="mt-2"><p className="text-[10px] text-zinc-500 mb-1">Sommeil · {series.sleep.length}j</p><Spark values={series.sleep.map((d) => d.hours)} max={9} color={C.sleep} /></div>
+            )}
           </>
         ) : <Hint>« mal dormi, 6 h »</Hint>}
       </Card>
@@ -214,6 +240,9 @@ export function OverviewBilanView({ data }: { data: Overview }) {
             ))}
           </ul>
         ) : <Hint>« PR : 100 kg au développé couché »</Hint>}
+        {series?.topLift && series.topLift.points.length >= 2 && (
+          <div className="mt-3"><p className="text-[10px] text-zinc-500 mb-1">{series.topLift.name} · 1RM</p><MiniLine values={series.topLift.points.map((p) => p.e1rm)} color={C.force} /></div>
+        )}
       </Card>
 
       {/* MENSURATIONS — liste (large) */}
