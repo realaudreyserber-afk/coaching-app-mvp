@@ -26,9 +26,19 @@ export default async function ExerciseDetailPage({
       </Link>
 
       <header>
-        <p className="text-xs uppercase tracking-[0.2em] text-amber-500 font-semibold mb-2">
-          {ex.category}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <span className="text-xs uppercase tracking-[0.2em] text-amber-500 font-semibold">
+            {ex.category}
+          </span>
+          {ex.home && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold">
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                cottage
+              </span>
+              À la maison
+            </span>
+          )}
+        </div>
         <h1 className="text-2xl lg:text-4xl font-bold font-serif text-zinc-50">{ex.name}</h1>
         {ex.meta_description && (
           <p className="mt-3 text-base text-zinc-400">{ex.meta_description}</p>

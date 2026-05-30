@@ -8,6 +8,7 @@ import {
   getExerciseFrBySlug,
   exerciseFrCategories,
   exerciseFrCount,
+  exerciseFrHomeCount,
 } from './index';
 
 describe('exercises-fr (docteur-fitness)', () => {
@@ -57,5 +58,15 @@ describe('exercises-fr (docteur-fitness)', () => {
     for (const e of withGif.slice(0, 20)) {
       expect(e.gif).toMatch(/^\/exercices\/.*\.webp$/);
     }
+  });
+
+  it('flag "à la maison" : sous-ensemble cohérent', () => {
+    const all = getAllExercisesFr();
+    const home = all.filter((e) => e.home);
+    expect(home.length).toBeGreaterThan(200);
+    expect(home.length).toBeLessThan(all.length); // pas tous
+    expect(exerciseFrHomeCount()).toBe(home.length);
+    expect(getExerciseFrBySlug('air-squat')!.home).toBe(true); // poids du corps
+    expect(getExercisesFrLite()[0]).toHaveProperty('home');
   });
 });

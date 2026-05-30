@@ -12,13 +12,19 @@ interface Props {
 export function ExercisesBrowser({ exercises, categories }: Props) {
   const [cat, setCat] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [homeOnly, setHomeOnly] = useState(false);
+
+  const homeCount = useMemo(() => exercises.filter((e) => e.home).length, [exercises]);
 
   const filtered = useMemo(() => {
     const nq = q.trim().toLowerCase();
     return exercises.filter(
-      (e) => (!cat || e.category === cat) && (!nq || e.name.toLowerCase().includes(nq)),
+      (e) =>
+        (!cat || e.category === cat) &&
+        (!homeOnly || e.home) &&
+        (!nq || e.name.toLowerCase().includes(nq)),
     );
-  }, [exercises, cat, q]);
+  }, [exercises, cat, q, homeOnly]);
 
   const chip = (active: boolean) =>
     `px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
@@ -37,6 +43,23 @@ export function ExercisesBrowser({ exercises, categories }: Props) {
         placeholder="Rechercher un exercice…"
         className="w-full sm:max-w-md rounded-lg bg-zinc-900/60 border border-zinc-700 px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-amber-500"
       />
+
+      {/* Toggle À la maison (filtre transversal, combinable avec le muscle) */}
+      <button
+        type="button"
+        onClick={() => setHomeOnly((v) => !v)}
+        aria-pressed={homeOnly}
+        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+          homeOnly
+            ? 'bg-emerald-500 text-zinc-950 border-emerald-500'
+            : 'bg-zinc-900/60 text-zinc-200 border-zinc-700 hover:border-emerald-500/60'
+        }`}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+          cottage
+        </span>
+        À la maison ({homeCount})
+      </button>
 
       {/* Filtres catégorie */}
       <div className="flex flex-wrap gap-2">

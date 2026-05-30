@@ -19,6 +19,9 @@ export interface ExerciseFr {
   image: string | null;
   /** GIF animé de démonstration du mouvement — servi depuis public/exercices/. */
   gif: string | null;
+  /** Réalisable à la maison : aucun équipement de salle requis (poids du corps,
+   *  haltères, élastiques, banc, kettlebell… OK ; barre/machine/poulie = non). */
+  home: boolean;
   meta_description: string;
   how_to: string;
 }
@@ -31,6 +34,8 @@ export interface ExerciseFrLite {
   category: string;
   slug: string;
   image: string | null;
+  /** Réalisable à la maison (sans équipement de salle). */
+  home: boolean;
 }
 
 // Muscu d'abord, puis cardio / mobilité / yoga.
@@ -50,8 +55,13 @@ export function getAllExercisesFr(): ExerciseFr[] {
 
 export function getExercisesFrLite(): ExerciseFrLite[] {
   return ALL
-    .map((e) => ({ name: e.name, category: e.category, slug: e.slug, image: e.image }))
+    .map((e) => ({ name: e.name, category: e.category, slug: e.slug, image: e.image, home: e.home }))
     .sort((a, b) => catRank(a.category) - catRank(b.category) || a.name.localeCompare(b.name));
+}
+
+/** Nombre d'exercices réalisables à la maison (sans équipement de salle). */
+export function exerciseFrHomeCount(): number {
+  return ALL.filter((e) => e.home).length;
 }
 
 export function getExerciseFrBySlug(slug: string): ExerciseFr | null {
