@@ -89,18 +89,29 @@ function Spark({ values, max = 10, color, h = 36 }: { values: Array<number | nul
   );
 }
 
-/** Mini courbe (SVG) normalisée min-max — pour les tendances à baseline non nulle (force…). */
-function MiniLine({ values, color, h = 30 }: { values: number[]; color: string; h?: number }) {
+/** Mini courbe (SVG) normalisée min-max — pour les tendances à baseline non nulle (force…).
+ *  markEnds : marque le 1er point (départ) et le dernier (actuel) d'une pastille. */
+function MiniLine({ values, color, h = 30, markEnds = false }: { values: number[]; color: string; h?: number; markEnds?: boolean }) {
   if (values.length < 2) return <span className="text-zinc-600 text-[11px]">à venir…</span>;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const w = 100;
-  const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(' ');
-  return (
+  const coords = values.map((v, i) => ({ x: (i / (values.length - 1)) * w, y: h - ((v - min) / range) * (h - 4) - 2 }));
+  const svg = (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h }}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <polyline points={coords.map((c) => `${c.x},${c.y}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+  if (!markEnds) return svg;
+  // Pastilles positionnées en HTML (left en %, top en % de h) — pas de distorsion liée au preserveAspectRatio.
+  const dot = (c: { x: number; y: number }): React.CSSProperties => ({ position: 'absolute', left: `${c.x}%`, top: `${(c.y / h) * 100}%`, width: 8, height: 8, marginLeft: -4, marginTop: -4, borderRadius: 9, background: color, boxShadow: '0 0 0 2px #09090b' });
+  return (
+    <div className="relative" style={{ height: h }}>
+      {svg}
+      <span style={dot(coords[0])} />
+      <span style={dot(coords[coords.length - 1])} />
+    </div>
   );
 }
 
@@ -358,12 +369,25 @@ export function OverviewBilanView({ data }: { data: Overview }) {
             {sel === 'measure' && (
               series?.measure && Object.keys(series.measure).length > 0 ? (
                 <div className="space-y-3">
-                  {Object.entries(series.measure).map(([f, pts]) => (
-                    <div key={f}>
-                      <div className="flex justify-between text-[12px] mb-1"><span className="text-zinc-400">{MEASURE_LABELS[f] ?? f}</span><span className="text-zinc-100">{pts[pts.length - 1].cm} cm</span></div>
-                      <MiniLine values={pts.map((p) => p.cm)} color={C.body} h={42} />
-                    </div>
-                  ))}
+                  {Object.entries(series.measure).map(([f, pts]) => {
+                    const a = pts[0], b = pts[pts.length - 1];
+                    const delta = Math.round((b.cm - a.cm) * 10) / 10;
+                    return (
+                      <div key={f} className="rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-3">
+                        <div className="flex items-baseline justify-between mb-1.5">
+                          <span className="text-[13px] text-zinc-300">{MEASURE_LABELS[f] ?? f}</span>
+                          {delta !== 0
+                            ? <span className={`text-[12px] font-semibold ${delta < 0 ? 'text-sky-400' : 'text-amber-400'}`}>{delta > 0 ? '+' : ''}{delta} cm</span>
+                            : <span className="text-[12px] text-zinc-500">inchangé</span>}
+                        </div>
+                        <MiniLine values={pts.map((p) => p.cm)} color={C.body} h={48} markEnds />
+                        <div className="flex items-baseline justify-between mt-2 text-[11px]">
+                          <span className="text-zinc-500">{a.date} · <span className="text-zinc-300 font-medium">{a.cm} cm</span></span>
+                          <span className="text-zinc-500"><span className="text-zinc-100 font-semibold">{b.cm} cm</span> · {b.date}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : measurements ? (
                 <ul className="space-y-1.5">{Object.entries(measurements.latest).map(([k, v]) => <li key={k} className="flex justify-between text-[13px]"><span className="text-zinc-400">{MEASURE_LABELS[k] ?? k}</span><span className="text-zinc-100">{v} cm</span></li>)}</ul>
