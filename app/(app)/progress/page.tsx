@@ -9,10 +9,10 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/lib/firebase/hooks";
 import Link from "next/link";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
-import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus, Activity, Sparkles } from "lucide-react";
-import { OverviewBilan } from "@/components/progress/overview-bilan";
+import { Activity, Sparkles, TrendingUp, Camera, Ruler, Dumbbell, Moon, Droplets, Smile, Flame, Coffee, Cookie, CircleDot } from "lucide-react";
+import { HudCard, PanelHeader, StatNum, Tag } from "@/components/nodream";
 import { WeightHistoryRow } from "@/components/progress/weight-history-row";
-import { HudCard, PanelHeader, Tag } from "@/components/nodream";
+import { Overview, Ring, Spark, MiniLine, MultiLine, Delta, Hint, Section, HUD, LIFT_META, MEASURE_LABELS } from "@/components/progress/viz";
 
 interface WeeklyRecord {
   id: string; // ISO week, e.g. 2026-W21 or "baseline"
@@ -33,7 +33,7 @@ interface WeeklyRecord {
   };
 }
 
-// Tactical input + label helpers
+// Saisie rapide (tactical input + label helpers)
 const inputBase: React.CSSProperties = {
   background: 'var(--glass-bg-2)',
   border: '1px solid var(--glass-border)',
@@ -55,9 +55,32 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+// Petit panneau interne (bordure chamfrée) pour grouper dans une Section.
+const tile: React.CSSProperties = {
+  background: 'var(--glass-bg-2)',
+  border: '1px solid var(--glass-border)',
+  padding: '12px 14px',
+  clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
+};
+
+const ANCHORS = [
+  { id: "forme", label: "Forme" },
+  { id: "poids", label: "Poids" },
+  { id: "mesures", label: "Mesures" },
+  { id: "photos", label: "Photos" },
+  { id: "force", label: "Force" },
+  { id: "recup", label: "Récup" },
+  { id: "ressenti", label: "Ressenti" },
+  { id: "habitudes", label: "Habitudes" },
+];
+
 export default function ProgressPage() {
   const { user, loading, getFreshToken } = useAuth();
-  const [activeTab, setActiveTab] = useState<"bilan" | "weight" | "measurements" | "photos">("bilan");
+
+  // Données agrégées (lecture seule) — mêmes snapshots que les agents (DRY).
+  const [overview, setOverview] = useState<Overview | null>(null);
+
+  // Analyse ORACLE.IA (opt-in, cache 6 h côté serveur).
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
@@ -86,12 +109,13 @@ export default function ProgressPage() {
       setAiLoading(false);
     }
   };
+
   const [fetching, setFetching] = useState(true);
   const [chartData, setChartData] = useState<WeightDataPoint[]>([]);
   const [dailyWeights, setDailyWeights] = useState<any[]>([]);
   const [weeklyRecords, setWeeklyRecords] = useState<WeeklyRecord[]>([]);
 
-  // Photo comparison states
+  // Comparateur photos
   const [compareWeekA, setCompareWeekA] = useState<string>("");
   const [compareWeekB, setCompareWeekB] = useState<string>("");
   const [photoType, setPhotoType] = useState<"face" | "profile" | "back">("face");
@@ -141,6 +165,23 @@ export default function ProgressPage() {
       setWeighSaving(false);
     }
   };
+
+  // Charge l'agrégat /api/progress/overview (relancé après une pesée).
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getFreshToken();
+        if (!token) return;
+        const res = await fetch("/api/progress/overview", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled) setOverview(json);
+      } catch { /* dégradation gracieuse */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user, loading, getFreshToken, refreshTick]);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -215,9 +256,7 @@ export default function ProgressPage() {
           setChartData(formattedData);
         }
 
-        // Wave 11E — Cap to the last 104 weekly check-ins (~2 years). Even
-        // if the user keeps going past 2y the chart already shows enough
-        // signal; if needed we'll add pagination later.
+        // Wave 11E — Cap to the last 104 weekly check-ins (~2 years).
         const weeklyRef = collection(db, "users", user.uid, "checkins_weekly");
         const weeklyQuery = query(weeklyRef, orderBy("created_at", "asc"), limit(104));
         const weeklySnap = await getDocs(weeklyQuery);
@@ -279,753 +318,411 @@ export default function ProgressPage() {
   const recordA = weeklyRecords.find((r) => r.id === compareWeekA);
   const recordB = weeklyRecords.find((r) => r.id === compareWeekB);
 
-  const renderDelta = (valA: number, valB: number) => {
-    if (!valA || !valB) return <span style={{ color: 'var(--fg-5)' }} className="mono">—</span>;
-    const diff = valB - valA;
-    if (diff === 0) {
-      return (
-        <span className="mono inline-flex items-center gap-0.5" style={{ color: 'var(--fg-4)', fontSize: 10 }}>
-          <Minus className="h-3 w-3" aria-hidden="true" /> 0 cm
-        </span>
-      );
-    }
-    const isLoss = diff < 0;
-    const color = isLoss ? 'var(--accent-tech)' : 'var(--gold-400)';
-    return (
-      <span
-        className="mono inline-flex items-center gap-0.5"
-        style={{ color, fontSize: 10, fontWeight: 700, letterSpacing: '0.05em' }}
-      >
-        {isLoss
-          ? <ArrowDownRight className="h-3 w-3" aria-hidden="true" />
-          : <ArrowUpRight className="h-3 w-3" aria-hidden="true" />}
-        {isLoss ? "" : "+"}{diff.toFixed(1)} cm
-      </span>
-    );
-  };
+  // ---- Dérivés des données agrégées ----
+  const forme = overview?.forme ?? null;
+  const formeColor = forme?.score == null ? 'var(--fg-4)' : forme.score >= 60 ? HUD.gold : forme.score >= 40 ? HUD.tech : HUD.alert;
+  const weight = overview?.weight ?? null;
+  const currentKg = weight?.current ?? (dailyWeights.length ? dailyWeights[0].weight : null);
+  const weightDeltaText = weight
+    ? (weight.delta_kg === 0 ? 'stable sur 7 j' : `${weight.delta_kg > 0 ? '+' : ''}${weight.delta_kg} kg sur 7 j`)
+    : undefined;
+  const prs = overview?.prs ?? null;
+  const sleep = overview?.sleep ?? null;
+  const hrv = overview?.hrv ?? null;
+  const hydration = overview?.hydration ?? null;
+  const habits = overview?.habits ?? null;
+  const substances = overview?.substances ?? null;
+  const cravings = overview?.cravings ?? null;
+  const cycle = overview?.cycle ?? null;
+  const subjective = overview?.subjective ?? null;
+  const series = overview?.series ?? null;
+  const photos = overview?.photos ?? null;
+
+  const liftSeries = series?.lifts
+    ? Object.entries(series.lifts).map(([k, pts]) => ({ label: LIFT_META[k]?.label ?? k, color: LIFT_META[k]?.color ?? HUD.gold, unit: 'kg', points: pts.map((p) => ({ date: p.date, value: p.e1rm })) }))
+    : [];
+  const energy = subjective?.map((s) => s.energy) ?? [];
+  const mood = subjective?.map((s) => s.mood) ?? [];
+  const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
+  const hydraPct = hydration ? (hydration.today_effective_ml / Math.max(1, hydration.today_target_ml)) * 100 : 0;
+
+  // Lignes du comparateur de mensurations (source : checkins_weekly G/D).
+  const measureRows = recordA && recordB ? [
+    { label: 'Cou', a: recordA.measurements.neck, b: recordB.measurements.neck },
+    { label: 'Taille (nombril)', a: recordA.measurements.waist, b: recordB.measurements.waist },
+    { label: 'Hanches', a: recordA.measurements.hips, b: recordB.measurements.hips },
+    { label: 'Bras (G/D moy)', a: (recordA.measurements.arm_l + recordA.measurements.arm_r) / 2, b: (recordB.measurements.arm_l + recordB.measurements.arm_r) / 2 },
+    { label: 'Cuisses (G/D moy)', a: (recordA.measurements.thigh_l + recordA.measurements.thigh_r) / 2, b: (recordB.measurements.thigh_l + recordB.measurements.thigh_r) / 2 },
+  ] : [];
+
+  const iconTitle = (Icon: React.ElementType, label: string, color: string) => (
+    <span className="flex items-center gap-2"><Icon className="h-4 w-4" style={{ color }} aria-hidden="true" /> {label}</span>
+  );
 
   return (
-    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6 lg:space-y-8">
-      {/* Tactical header */}
+    <div className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 space-y-4">
+      {/* En-tête (titres adoucis, marque dans l'eyebrow codé) */}
       <div className="space-y-2">
-        <span
-          className="mono"
-          style={{
-            fontSize: 10,
-            letterSpacing: '0.3em',
-            color: 'var(--accent-tech)',
-            opacity: 0.85,
-          }}
-        >
-          [PROG-TRACK · v1]
+        <span className="mono" style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--accent-tech)', opacity: 0.85 }}>
+          [PROG-TRACK · v2]
         </span>
-        <h2
-          style={{
-            fontFamily: 'var(--font-sans)',
-            fontWeight: 900,
-            fontSize: 'var(--type-h1)',
-            letterSpacing: 'var(--tracking-display)',
-            lineHeight: 1.05,
-            color: 'var(--fg-1)',
-            marginTop: 4,
-          }}
-        >
-          Suivi <span style={{ color: 'var(--gold-400)' }}>tactique</span>
+        <h2 style={{ fontFamily: 'var(--font-sans)', fontWeight: 900, fontSize: 'var(--type-h1)', letterSpacing: 'var(--tracking-display)', lineHeight: 1.05, color: 'var(--fg-1)', marginTop: 4 }}>
+          Tes <span style={{ color: 'var(--gold-400)' }}>progrès</span>
         </h2>
-        <p
-          className="mono"
-          style={{
-            marginTop: 6,
-            fontSize: 'var(--type-meta)',
-            letterSpacing: '0.18em',
-            color: 'var(--fg-4)',
-            textTransform: 'uppercase',
-          }}
-        >
+        <p className="mono" style={{ marginTop: 6, fontSize: 'var(--type-meta)', letterSpacing: '0.18em', color: 'var(--fg-4)', textTransform: 'uppercase' }}>
           Évolution objective · sans illusion
         </p>
       </div>
 
-      {/* AI Analysis panel (Wave 5D) */}
-      <HudCard accent="tech" chamfer="sm" style={{ padding: "0.85rem 1.25rem" }}>
-        <PanelHeader
-          code="ORACLE.IA · ANALYSE"
-          title={
-            <span className="flex items-center gap-2">
-              <Activity className="h-4 w-4" style={{ color: "var(--accent-tech)" }} aria-hidden="true" />
-              Analyse de ta progression (4 sem.)
-            </span>
-          }
-          accent="tech"
-          right={
-            !aiAnalysis && !aiLoading ? (
-              <button
-                onClick={handleRequestAnalysis}
-                className="btn btn-tech mono"
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  height: 36,
-                  padding: "0 14px",
-                }}
-              >
-                <Sparkles className="h-3 w-3" aria-hidden="true" /> Demander l'analyse
-              </button>
-            ) : aiLoading ? (
-              <Tag accent="tech">ANALYSE...</Tag>
-            ) : (
-              <Tag accent="tech">CACHED 6H</Tag>
-            )
-          }
-        />
-        {aiErr && (
-          <p className="mono" style={{ fontSize: 11, color: "var(--alert-500)", letterSpacing: "0.05em" }}>
-            [ERR-ANALYSE] {aiErr}
-          </p>
-        )}
-        {aiLoading && !aiAnalysis && (
-          <p
-            className="mono"
-            style={{
-              fontSize: 11,
-              color: "var(--accent-tech)",
-              letterSpacing: "0.1em",
-              fontStyle: "italic",
-              margin: 0,
-            }}
-          >
-            ORACLE.IA · synthèse en cours...
-          </p>
-        )}
-        {aiAnalysis && (
-          <p
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontStyle: "italic",
-              fontSize: "var(--type-body)",
-              lineHeight: 1.7,
-              color: "var(--fg-1)",
-              margin: 0,
-            }}
-          >
-            « {aiAnalysis} »
-          </p>
-        )}
-        {!aiAnalysis && !aiLoading && !aiErr && (
-          <p
-            className="mono"
-            style={{
-              fontSize: 11,
-              color: "var(--fg-5)",
-              letterSpacing: "0.05em",
-              fontStyle: "italic",
-              margin: 0,
-            }}
-          >
-            Demande à ORACLE.IA un débrief : tendance poids, mesures, sessions, plateau éventuel.
-          </p>
-        )}
-      </HudCard>
+      {/* Barre d'ancres (saut de section, non-sticky pour ne pas chevaucher le header) */}
+      <nav aria-label="Sections" className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        {ANCHORS.map((a) => (
+          <a key={a.id} href={`#${a.id}`} className="mono shrink-0" style={{ padding: '6px 12px', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--fg-3)', background: 'var(--glass-bg-2)', border: '1px solid var(--glass-border)', clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)' }}>
+            {a.label}
+          </a>
+        ))}
+      </nav>
 
-      {/* Navigation en cartes (Bilan / Poids / Mesures / Photos) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="tablist">
-        {([
-          { id: "bilan", label: "Bilan", Icon: Activity, color: "#f59e0b" },
-          { id: "weight", label: "Poids", Icon: TrendingUp, color: "#f59e0b" },
-          { id: "measurements", label: "Mesures", Icon: Ruler, color: "#22d3ee" },
-          { id: "photos", label: "Photos", Icon: Camera, color: "#f472b6" },
-        ] as const).map((t) => {
-          const active = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={active}
-              onClick={() => setActiveTab(t.id)}
-              className={`rounded-2xl border p-3 flex flex-col items-center justify-center gap-2 transition-colors ${active ? "border-amber-500/60 bg-amber-500/10" : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700"}`}
-            >
-              <span className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: `${t.color}${active ? "33" : "18"}` }}>
-                <t.Icon className="h-4 w-4" color={t.color} aria-hidden="true" />
-              </span>
-              <span className={`text-xs font-semibold ${active ? "text-zinc-50" : "text-zinc-400"}`}>{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* BILAN TAB */}
-      {activeTab === "bilan" && <OverviewBilan onNavigate={(t) => setActiveTab(t)} />}
-
-      {/* WEIGHT TAB */}
-      {activeTab === "weight" && (
-        <div className="space-y-6">
-          {/* Saisie rapide de poids (audit Suivi : la page était en lecture seule) */}
-          <HudCard accent="gold" chamfer="sm" style={{ padding: '0.9rem 1.25rem' }}>
-            <form onSubmit={handleQuickWeighIn} className="flex flex-wrap items-end gap-3">
-              <div style={{ flex: '1 1 160px', minWidth: 140 }}>
-                <label htmlFor="quick-weigh" style={labelStyle}>Pesée du jour (kg)</label>
-                <input
-                  id="quick-weigh"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  min={20}
-                  max={400}
-                  value={weighInput}
-                  onChange={(e) => setWeighInput(e.target.value)}
-                  placeholder="ex. 82.4"
-                  style={inputBase}
-                  disabled={weighSaving}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={weighSaving}
-                className="btn btn-primary mono"
-                style={{ height: 36, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}
-              >
-                {weighSaving ? "…" : "Logger"}
-              </button>
-              {weighMsg && (
-                <span
-                  className="mono"
-                  role="status"
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: '0.1em',
-                    color: weighMsg.includes('✓') ? 'var(--accent-tech)' : 'var(--alert-500)',
-                    alignSelf: 'center',
-                  }}
-                >
-                  {weighMsg}
-                </span>
+      {/* FORME DU JOUR — hero readiness */}
+      <section id="forme" style={{ scrollMarginTop: 72 }}>
+        <HudCard accent="tech" chamfer="sm" corners style={{ padding: '1.1rem 1.25rem' }}>
+          <div className="flex items-center gap-5">
+            <Ring pct={forme?.score ?? 0} color={formeColor} size={116} stroke={11} label={forme?.score != null ? String(forme.score) : '—'} sub="/100" />
+            <div className="min-w-0 flex-1">
+              <span className="mono" style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--accent-tech)', opacity: 0.7 }}>[FORME-DU-JOUR]</span>
+              <p style={{ fontSize: '1.35rem', fontWeight: 900, color: formeColor, margin: '2px 0 0', letterSpacing: '-0.01em' }}>{forme?.label ?? '—'}</p>
+              {forme && forme.drivers.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {forme.drivers.map((d, i) => (
+                    <Tag key={i} accent={d.ok ? 'tech' : 'gold'}>{d.ok ? '✓' : '↓'} {d.label}</Tag>
+                  ))}
+                </div>
+              ) : (
+                <p className="mono" style={{ fontSize: 12, color: 'var(--fg-4)', marginTop: 8, lineHeight: 1.5 }}>Logge ta récup (sommeil, HRV, hydratation) pour activer ton score.</p>
               )}
-            </form>
-          </HudCard>
-
-          <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
-          <div className="space-y-3 lg:col-span-2">
-            <div className="px-1 space-y-1">
-              <span className="mono" style={{ fontSize: 10, letterSpacing: '0.3em', color: 'var(--gold-500)', opacity: 0.85 }}>
-                [GRAPH-POIDS · 7J-MA]
-              </span>
-              <h3 style={{ fontFamily: 'var(--font-sans)', fontWeight: 900, fontSize: '1.25rem', letterSpacing: '-0.01em', color: 'var(--fg-1)', margin: 0 }}>
-                Courbe glissante
-              </h3>
             </div>
-            <WeightChart data={chartData} />
           </div>
+        </HudCard>
+      </section>
 
-          <HudCard accent="tech" chamfer="sm" className="lg:col-span-1" style={{ padding: '1rem 1.25rem' }}>
-            <PanelHeader
-              code="HIST-QUOTI"
-              title="Historique quotidien"
-              accent="tech"
-              right={<Tag accent="tech">{dailyWeights.length}</Tag>}
-            />
-            {dailyWeights.length === 0 ? (
-              <div
-                className="mono text-center"
-                style={{
-                  padding: '24px 12px',
-                  fontSize: 10,
-                  letterSpacing: '0.2em',
-                  color: 'var(--fg-5)',
-                  textTransform: 'uppercase',
-                  background: 'var(--glass-bg-2)',
-                  border: '1px dashed var(--glass-border)',
-                  clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-                }}
-              >
-                Aucune pesée · démarre le check-in
-              </div>
-            ) : (
-              <ul
-                className="max-h-60 overflow-y-auto"
-                style={{ margin: 0, padding: 0, listStyle: 'none' }}
-              >
-                {dailyWeights.map((w, idx) => {
-                  const next = dailyWeights[idx + 1];
-                  const delta = next ? w.weight - next.weight : undefined;
-                  return (
-                    <WeightHistoryRow
-                      key={w.date}
-                      createdAt={w.created_at}
-                      weight={w.weight}
-                      delta={delta}
-                    />
-                  );
-                })}
-              </ul>
-            )}
-          </HudCard>
-          </div>
+      {/* POIDS — chiffre + saisie inline + courbe + historique */}
+      <Section id="poids" code="POIDS · 7J-MA" title={iconTitle(TrendingUp, 'Poids', 'var(--gold-400)')} accent="gold" right={weight ? <Delta value={weight.delta_pct} /> : null}>
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+          <StatNum value={currentKg != null ? currentKg.toFixed(1) : '—'} unit="kg" accent="gold" label="Poids actuel" delta={weightDeltaText} />
+          <form onSubmit={handleQuickWeighIn} className="flex items-end gap-2">
+            <div style={{ width: 120 }}>
+              <label htmlFor="quick-weigh" style={labelStyle}>Pesée du jour</label>
+              <input id="quick-weigh" type="number" inputMode="decimal" step="0.1" min={20} max={400} value={weighInput} onChange={(e) => setWeighInput(e.target.value)} placeholder="ex. 82.4" style={inputBase} disabled={weighSaving} />
+            </div>
+            <button type="submit" disabled={weighSaving} className="btn btn-primary mono" style={{ height: 36, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+              {weighSaving ? "…" : "Logger"}
+            </button>
+          </form>
         </div>
-      )}
-
-      {/* MEASUREMENTS TAB */}
-      {activeTab === "measurements" && (
-        <div className="grid gap-6 lg:grid-cols-3 lg:gap-8">
-          <div className="lg:col-span-3 flex justify-end">
-            <Link
-              href="/progress/measurements"
-              className="mono inline-flex items-center gap-2"
-              style={{
-                height: 38,
-                padding: '0 16px',
-                background: 'var(--accent-tech-tint)',
-                border: '1px solid var(--accent-tech)',
-                color: 'var(--accent-tech)',
-                fontSize: 11,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                fontWeight: 700,
-                clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-              }}
-            >
-              <Ruler className="h-3.5 w-3.5" aria-hidden="true" /> Saisir mes mensurations
-            </Link>
+        {weighMsg && (
+          <p className="mono" role="status" style={{ fontSize: 10, letterSpacing: '0.1em', color: weighMsg.includes('✓') ? 'var(--accent-tech)' : 'var(--alert-500)', marginBottom: 12 }}>{weighMsg}</p>
+        )}
+        {chartData.length > 0 ? (
+          <WeightChart data={chartData} />
+        ) : (
+          <Hint>« je pèse 82,4 kg » — dicte-le au coach ou logge ci-dessus</Hint>
+        )}
+        {dailyWeights.length > 0 && (
+          <div className="mt-3">
+            <PanelHeader code="HIST-QUOTI" title="Historique quotidien" accent="tech" right={<Tag accent="tech">{dailyWeights.length}</Tag>} />
+            <ul className="max-h-56 overflow-y-auto" style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {dailyWeights.map((w, idx) => {
+                const next = dailyWeights[idx + 1];
+                const delta = next ? w.weight - next.weight : undefined;
+                return <WeightHistoryRow key={w.date} createdAt={w.created_at} weight={w.weight} delta={delta} />;
+              })}
+            </ul>
           </div>
-          {weeklyRecords.length < 1 ? (
-            <HudCard accent="tech" chamfer="sm" className="lg:col-span-3" style={{ padding: '1.25rem' }}>
-              <p className="mono text-center" style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.1em' }}>
-                Complète l&apos;onboarding pour activer le module mensurations.
-              </p>
-            </HudCard>
-          ) : (
-            <>
-              <HudCard accent="tech" chamfer="sm" className="lg:col-span-2 lg:sticky lg:top-6 lg:self-start" style={{ padding: '1rem 1.25rem' }}>
-                <PanelHeader
-                  code="COMPARATEUR-MENS"
-                  title={
-                    <span className="flex items-center gap-2">
-                      <Ruler className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" />
-                      Comparateur mensurations
-                    </span>
-                  }
-                  accent="tech"
-                />
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label style={labelStyle}>Point A · Départ</label>
-                      <select
-                        value={compareWeekA}
-                        onChange={(e) => setCompareWeekA(e.target.value)}
-                        className="mono"
-                        style={inputBase}
-                      >
-                        {weeklyRecords.map((r) => (
-                          <option key={r.id} value={r.id}>{r.date}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Point B · Arrivée</label>
-                      <select
-                        value={compareWeekB}
-                        onChange={(e) => setCompareWeekB(e.target.value)}
-                        className="mono"
-                        style={inputBase}
-                      >
-                        {[...weeklyRecords].reverse().map((r) => (
-                          <option key={r.id} value={r.id}>{r.date}</option>
-                        ))}
-                      </select>
-                    </div>
+        )}
+      </Section>
+
+      {/* MENSURATIONS — comparateur point A → point B (cm, source checkins_weekly) */}
+      <Section id="mesures" code="COMPARATEUR-MENS" title={iconTitle(Ruler, 'Mensurations', 'var(--gold-400)')} accent="gold"
+        right={<Link href="/progress/measurements" className="mono inline-flex items-center gap-1.5" style={{ height: 30, padding: '0 10px', background: 'var(--accent-tech-tint)', border: '1px solid var(--accent-tech)', color: 'var(--accent-tech)', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)' }}><Ruler className="h-3 w-3" aria-hidden="true" /> Saisir</Link>}>
+        {weeklyRecords.length < 1 ? (
+          <Hint>« tour de taille 96, bras 38 » — ou complète l'onboarding</Hint>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label style={labelStyle}>Point A · Départ</label>
+                <select value={compareWeekA} onChange={(e) => setCompareWeekA(e.target.value)} className="mono" style={inputBase}>
+                  {weeklyRecords.map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Point B · Arrivée</label>
+                <select value={compareWeekB} onChange={(e) => setCompareWeekB(e.target.value)} className="mono" style={inputBase}>
+                  {[...weeklyRecords].reverse().map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
+                </select>
+              </div>
+            </div>
+            {measureRows.length > 0 && (
+              <div style={tile}>
+                {measureRows.map((row, idx, arr) => (
+                  <div key={row.label} className="flex justify-between items-center" style={{ padding: '10px 0', borderBottom: idx < arr.length - 1 ? '1px solid var(--glass-border)' : 'none' }}>
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)', letterSpacing: '0.04em' }}>{row.label}</span>
+                    {(!row.a || !row.b) ? (
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>—</span>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>{row.a.toFixed(1)}</span>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--gold-400)', fontWeight: 700 }}>→ {row.b.toFixed(1)}</span>
+                        <Delta value={row.b - row.a} unit=" cm" />
+                      </div>
+                    )}
                   </div>
-
-                  {recordA && recordB && (
-                    <div
-                      style={{
-                        background: 'var(--glass-bg-2)',
-                        border: '1px solid var(--glass-border)',
-                        clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-                      }}
-                    >
-                      {[
-                        { label: 'Cou', a: recordA.measurements.neck, b: recordB.measurements.neck },
-                        { label: 'Taille (nombril)', a: recordA.measurements.waist, b: recordB.measurements.waist },
-                        { label: 'Hanches', a: recordA.measurements.hips, b: recordB.measurements.hips },
-                        {
-                          label: 'Bras (G/D moy)',
-                          a: (recordA.measurements.arm_l + recordA.measurements.arm_r) / 2,
-                          b: (recordB.measurements.arm_l + recordB.measurements.arm_r) / 2,
-                        },
-                        {
-                          label: 'Cuisses (G/D moy)',
-                          a: (recordA.measurements.thigh_l + recordA.measurements.thigh_r) / 2,
-                          b: (recordB.measurements.thigh_l + recordB.measurements.thigh_r) / 2,
-                        },
-                      ].map((row, idx, arr) => (
-                        <div
-                          key={row.label}
-                          className="flex justify-between items-center"
-                          style={{
-                            padding: '10px 14px',
-                            borderBottom: idx < arr.length - 1 ? '1px solid var(--glass-border)' : 'none',
-                          }}
-                        >
-                          <span className="mono" style={{ fontSize: 11, color: 'var(--fg-2)', letterSpacing: '0.04em' }}>
-                            {row.label}
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-5)' }}>{row.a.toFixed(1)}</span>
-                            <span className="mono" style={{ fontSize: 11, color: 'var(--gold-400)', fontWeight: 700 }}>
-                              → {row.b.toFixed(1)}
-                            </span>
-                            {renderDelta(row.a, row.b)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </HudCard>
-
-              {/* Historique vertical */}
-              <div className="space-y-3 lg:col-span-1">
-                <div className="px-1 space-y-1">
-                  <span className="mono" style={{ fontSize: 9, letterSpacing: '0.3em', color: 'var(--gold-500)', opacity: 0.75 }}>
-                    [HIST-HEBDO]
-                  </span>
-                  <h3 style={{ fontFamily: 'var(--font-sans)', fontWeight: 900, fontSize: 14, letterSpacing: '-0.01em', color: 'var(--fg-1)', margin: 0 }}>
-                    Historique complet
-                  </h3>
-                </div>
-                <div className="space-y-3 lg:max-h-[600px] lg:overflow-y-auto lg:pr-2">
+                ))}
+              </div>
+            )}
+            {weeklyRecords.length > 1 && (
+              <div>
+                <PanelHeader code="HIST-HEBDO" title="Historique complet" accent="gold" right={<Tag accent="gold">{weeklyRecords.length}</Tag>} />
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {[...weeklyRecords].reverse().map((rec) => (
-                    <HudCard
-                      key={rec.id}
-                      accent={rec.id === "baseline" ? "gold" : "tech"}
-                      chamfer="sm"
-                      corners={false}
-                      style={{ padding: '0.65rem 0.85rem' }}
-                    >
+                    <div key={rec.id} style={tile}>
                       <div className="flex justify-between items-center" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: 6, marginBottom: 6 }}>
-                        <span
-                          className="mono"
-                          style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)', letterSpacing: '0.05em' }}
-                        >
-                          {rec.date}
-                        </span>
-                        <Tag accent={rec.id === "baseline" ? "gold" : "tech"}>
-                          {rec.id !== "baseline" ? rec.id : "INIT"}
-                        </Tag>
+                        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>{rec.date}</span>
+                        <Tag accent={rec.id === 'baseline' ? 'gold' : 'tech'}>{rec.id !== 'baseline' ? rec.id : 'INIT'}</Tag>
                       </div>
                       <div className="grid grid-cols-3 gap-1.5 text-center">
-                        {[
-                          { lbl: 'Taille', val: rec.measurements.waist },
-                          { lbl: 'Cou', val: rec.measurements.neck },
-                          { lbl: 'Hanches', val: rec.measurements.hips },
-                        ].map((m) => (
-                          <div
-                            key={m.lbl}
-                            style={{
-                              padding: 4,
-                              background: 'var(--ink-900)',
-                              border: '1px solid var(--glass-border)',
-                              clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
-                            }}
-                          >
-                            <span className="eyebrow" style={{ color: 'var(--fg-5)', fontSize: 8 }}>{m.lbl}</span>
-                            <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>
-                              {m.val}<span style={{ fontSize: 8, color: 'var(--fg-5)', marginLeft: 1 }}>cm</span>
-                            </div>
+                        {[{ lbl: 'Taille', val: rec.measurements.waist }, { lbl: 'Cou', val: rec.measurements.neck }, { lbl: 'Hanches', val: rec.measurements.hips }].map((m) => (
+                          <div key={m.lbl} style={{ padding: 4, background: 'var(--ink-900)', border: '1px solid var(--glass-border)' }}>
+                            <span className="mono" style={{ color: 'var(--fg-5)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m.lbl}</span>
+                            <div className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>{m.val}<span style={{ fontSize: 8, color: 'var(--fg-5)', marginLeft: 1 }}>cm</span></div>
                           </div>
                         ))}
                       </div>
-                    </HudCard>
+                    </div>
                   ))}
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* PHOTOS TAB */}
-      {activeTab === "photos" && (
-        <div className="space-y-6">
-          <div className="flex justify-end">
-            <Link
-              href="/checkin/weekly"
-              className="mono inline-flex items-center gap-2"
-              style={{
-                height: 38,
-                padding: '0 16px',
-                background: 'var(--pink-tint-10)',
-                border: '1px solid var(--pink-tint-35)',
-                color: 'var(--pink-500)',
-                fontSize: 11,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                fontWeight: 700,
-                clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-              }}
-            >
-              <Camera className="h-3.5 w-3.5" aria-hidden="true" /> Ajouter une photo
-            </Link>
+            )}
           </div>
-          {weeklyRecords.length < 1 ? (
-            <HudCard accent="tech" chamfer="sm" style={{ padding: '1.25rem' }}>
-              <p className="mono text-center" style={{ fontSize: 11, color: 'var(--fg-4)', letterSpacing: '0.1em' }}>
-                Aucune galerie · upload tes photos hebdo pour activer le module.
-              </p>
-            </HudCard>
-          ) : (
-            <>
-              {/* Comparator */}
-              <HudCard accent="gold" chamfer="sm" style={{ padding: '1rem 1.25rem' }}>
-                <PanelHeader
-                  code="VIS-RECOMPO"
-                  title={
-                    <span className="flex items-center gap-2">
-                      <Camera className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" />
-                      Visualiseur recomposition
-                    </span>
-                  }
-                  accent="gold"
-                />
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label style={labelStyle}>Avant · Point A</label>
-                      <select
-                        value={compareWeekA}
-                        onChange={(e) => setCompareWeekA(e.target.value)}
-                        className="mono"
-                        style={inputBase}
-                      >
-                        {weeklyRecords.map((r) => (
-                          <option key={r.id} value={r.id}>{r.date}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Après · Point B</label>
-                      <select
-                        value={compareWeekB}
-                        onChange={(e) => setCompareWeekB(e.target.value)}
-                        className="mono"
-                        style={inputBase}
-                      >
-                        {[...weeklyRecords].reverse().map((r) => (
-                          <option key={r.id} value={r.id}>{r.date}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+        )}
+      </Section>
 
-                  <div
-                    className="grid grid-cols-3 gap-1"
-                    style={{
-                      padding: 3,
-                      background: 'var(--glass-bg-2)',
-                      border: '1px solid var(--glass-border)',
-                      clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-                    }}
-                  >
-                    {(["face", "profile", "back"] as const).map((type) => {
-                      const active = photoType === type;
-                      return (
-                        <button
-                          key={type}
-                          onClick={() => setPhotoType(type)}
-                          className="mono cursor-pointer transition-all"
-                          style={{
-                            padding: '5px 6px',
-                            fontSize: 9,
-                            letterSpacing: '0.25em',
-                            textTransform: 'uppercase',
-                            fontWeight: 700,
-                            background: active ? 'var(--gold-tint-15)' : 'transparent',
-                            color: active ? 'var(--gold-400)' : 'var(--fg-5)',
-                            border: active ? '1px solid var(--gold-tint-35)' : '1px solid transparent',
-                            clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
-                          }}
-                        >
-                          {type === "face" ? "Face" : type === "profile" ? "Profil" : "Dos"}
-                        </button>
-                      );
-                    })}
-                  </div>
+      {/* PHOTOS — visualiseur recomposition (source checkins_weekly, fallback expiré conservé) */}
+      <Section id="photos" code="VIS-RECOMPO" title={iconTitle(Camera, 'Photos', 'var(--gold-400)')} accent="gold"
+        right={<Link href="/checkin/weekly" className="mono inline-flex items-center gap-1.5" style={{ height: 30, padding: '0 10px', background: 'var(--pink-tint-10)', border: '1px solid var(--pink-tint-35)', color: 'var(--pink-500)', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)' }}><Camera className="h-3 w-3" aria-hidden="true" /> Ajouter</Link>}>
+        {weeklyRecords.length < 1 ? (
+          <Hint>upload tes photos hebdo (face / profil / dos) pour activer le visualiseur</Hint>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label style={labelStyle}>Avant · Point A</label>
+                <select value={compareWeekA} onChange={(e) => setCompareWeekA(e.target.value)} className="mono" style={inputBase}>
+                  {weeklyRecords.map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Après · Point B</label>
+                <select value={compareWeekB} onChange={(e) => setCompareWeekB(e.target.value)} className="mono" style={inputBase}>
+                  {[...weeklyRecords].reverse().map((r) => <option key={r.id} value={r.id}>{r.date}</option>)}
+                </select>
+              </div>
+            </div>
 
-                  <div className="grid grid-cols-2 gap-3 mt-2">
-                    {/* Before */}
-                    <div className="space-y-1">
-                      <span className="mono block text-center" style={{ fontSize: 9, letterSpacing: '0.25em', color: 'var(--fg-4)', textTransform: 'uppercase', fontWeight: 700 }}>
-                        {recordA ? recordA.date : "Départ"}
-                      </span>
-                      <div
-                        className="aspect-[3/4] relative overflow-hidden flex items-center justify-center"
-                        style={{
-                          background: 'var(--ink-900)',
-                          border: '1px solid var(--glass-border)',
-                          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-                        }}
-                      >
-                        {recordA?.photos?.[photoType] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={recordA.photos[photoType]}
-                            alt={`Photo ${photoType} - ${recordA.date}`}
-                            className="object-cover w-full h-full"
-                            style={{ filter: 'grayscale(0.5) contrast(1.05)' }}
-                            referrerPolicy="no-referrer"
-                            // Wave 11E — graceful fallback when Storage signed
-                            // URL expires (1h-7d) or the file was purged. Shows
-                            // "Photo expirée" instead of a broken icon.
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <span
-                          data-photo-fallback
-                          className="mono items-center justify-center w-full h-full"
-                          style={{
-                            display: recordA?.photos?.[photoType] ? 'none' : 'flex',
-                            fontSize: 9,
-                            letterSpacing: '0.15em',
-                            color: 'var(--fg-5)',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          {recordA?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
-                        </span>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-3 gap-1" style={{ padding: 3, background: 'var(--glass-bg-2)', border: '1px solid var(--glass-border)', clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)' }}>
+              {(["face", "profile", "back"] as const).map((type) => {
+                const active = photoType === type;
+                return (
+                  <button key={type} onClick={() => setPhotoType(type)} className="mono cursor-pointer transition-all" style={{ padding: '5px 6px', fontSize: 9, letterSpacing: '0.25em', textTransform: 'uppercase', fontWeight: 700, background: active ? 'var(--gold-tint-15)' : 'transparent', color: active ? 'var(--gold-400)' : 'var(--fg-5)', border: active ? '1px solid var(--gold-tint-35)' : '1px solid transparent', clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)' }}>
+                    {type === "face" ? "Face" : type === "profile" ? "Profil" : "Dos"}
+                  </button>
+                );
+              })}
+            </div>
 
-                    {/* After */}
-                    <div className="space-y-1">
-                      <span className="mono block text-center" style={{ fontSize: 9, letterSpacing: '0.25em', color: 'var(--gold-400)', textTransform: 'uppercase', fontWeight: 700 }}>
-                        {recordB ? recordB.date : "Actuel"}
-                      </span>
-                      <div
-                        className="aspect-[3/4] relative overflow-hidden flex items-center justify-center"
-                        style={{
-                          background: 'var(--ink-900)',
-                          border: '1px solid var(--gold-tint-25)',
-                          boxShadow: 'var(--glow-gold-soft)',
-                          clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
-                        }}
-                      >
-                        {recordB?.photos?.[photoType] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={recordB.photos[photoType]}
-                            alt={`Photo ${photoType} - ${recordB.date}`}
-                            className="object-cover w-full h-full"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <span
-                          data-photo-fallback
-                          className="mono items-center justify-center w-full h-full"
-                          style={{
-                            display: recordB?.photos?.[photoType] ? 'none' : 'flex',
-                            fontSize: 9,
-                            letterSpacing: '0.15em',
-                            color: 'var(--fg-5)',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          {recordB?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </HudCard>
-
-              {/* Feed galleries */}
-              <div className="space-y-4">
-                <div className="px-1 space-y-1">
-                  <span className="mono" style={{ fontSize: 9, letterSpacing: '0.3em', color: 'var(--gold-500)', opacity: 0.75 }}>
-                    [GAL-FEED]
+            <div className="grid grid-cols-2 gap-3">
+              {/* Avant */}
+              <div className="space-y-1">
+                <span className="mono block text-center" style={{ fontSize: 9, letterSpacing: '0.25em', color: 'var(--fg-4)', textTransform: 'uppercase', fontWeight: 700 }}>{recordA ? recordA.date : "Départ"}</span>
+                <div className="aspect-[3/4] relative overflow-hidden flex items-center justify-center" style={{ background: 'var(--ink-900)', border: '1px solid var(--glass-border)', clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)' }}>
+                  {recordA?.photos?.[photoType] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={recordA.photos[photoType]} alt={`Photo ${photoType} - ${recordA.date}`} className="object-cover w-full h-full" style={{ filter: 'grayscale(0.5) contrast(1.05)' }} referrerPolicy="no-referrer"
+                      onError={(e) => { const target = e.currentTarget; target.style.display = 'none'; const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null; if (fallback) fallback.style.display = 'flex'; }} />
+                  ) : null}
+                  <span data-photo-fallback className="mono items-center justify-center w-full h-full" style={{ display: recordA?.photos?.[photoType] ? 'none' : 'flex', fontSize: 9, letterSpacing: '0.15em', color: 'var(--fg-5)', textTransform: 'uppercase' }}>
+                    {recordA?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
                   </span>
-                  <h3 style={{ fontFamily: 'var(--font-sans)', fontWeight: 900, fontSize: 14, letterSpacing: '-0.01em', color: 'var(--fg-1)', margin: 0 }}>
-                    Galeries complètes
-                  </h3>
                 </div>
-                <div className="space-y-4">
+              </div>
+              {/* Après */}
+              <div className="space-y-1">
+                <span className="mono block text-center" style={{ fontSize: 9, letterSpacing: '0.25em', color: 'var(--gold-400)', textTransform: 'uppercase', fontWeight: 700 }}>{recordB ? recordB.date : "Actuel"}</span>
+                <div className="aspect-[3/4] relative overflow-hidden flex items-center justify-center" style={{ background: 'var(--ink-900)', border: '1px solid var(--gold-tint-25)', boxShadow: 'var(--glow-gold-soft)', clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)' }}>
+                  {recordB?.photos?.[photoType] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={recordB.photos[photoType]} alt={`Photo ${photoType} - ${recordB.date}`} className="object-cover w-full h-full" referrerPolicy="no-referrer"
+                      onError={(e) => { const target = e.currentTarget; target.style.display = 'none'; const fallback = target.parentElement?.querySelector('[data-photo-fallback]') as HTMLElement | null; if (fallback) fallback.style.display = 'flex'; }} />
+                  ) : null}
+                  <span data-photo-fallback className="mono items-center justify-center w-full h-full" style={{ display: recordB?.photos?.[photoType] ? 'none' : 'flex', fontSize: 9, letterSpacing: '0.15em', color: 'var(--fg-5)', textTransform: 'uppercase' }}>
+                    {recordB?.photos?.[photoType] ? 'Photo expirée' : 'Aucune photo'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {weeklyRecords.length > 0 && (
+              <div>
+                <PanelHeader code="GAL-FEED" title="Galeries complètes" accent="gold" />
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                   {[...weeklyRecords].reverse().map((rec) => (
-                    <HudCard
-                      key={rec.id}
-                      accent={rec.id === "baseline" ? "gold" : "tech"}
-                      chamfer="sm"
-                      corners={false}
-                      style={{ padding: '0.75rem 1rem' }}
-                    >
+                    <div key={rec.id} style={tile}>
                       <div className="flex justify-between items-center" style={{ marginBottom: 8 }}>
-                        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)', letterSpacing: '0.05em' }}>
-                          {rec.date}
-                        </span>
-                        <Tag accent={rec.id === "baseline" ? "gold" : "tech"}>
-                          {rec.id !== "baseline" ? rec.id : "INIT"}
-                        </Tag>
+                        <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-1)' }}>{rec.date}</span>
+                        <Tag accent={rec.id === 'baseline' ? 'gold' : 'tech'}>{rec.id !== 'baseline' ? rec.id : 'INIT'}</Tag>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         {(['face', 'profile', 'back'] as const).map((slot) => (
-                          <div
-                            key={slot}
-                            className="aspect-[3/4] relative overflow-hidden flex items-center justify-center"
-                            style={{
-                              background: 'var(--ink-900)',
-                              border: '1px solid var(--glass-border)',
-                              clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)',
-                            }}
-                          >
+                          <div key={slot} className="aspect-[3/4] relative overflow-hidden flex items-center justify-center" style={{ background: 'var(--ink-900)', border: '1px solid var(--glass-border)', clipPath: 'polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)' }}>
                             {rec.photos?.[slot] ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={rec.photos[slot]}
-                                alt={slot}
-                                className="object-cover w-full h-full"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              <span className="mono" style={{ fontSize: 8, color: 'var(--fg-5)', letterSpacing: '0.1em' }}>
-                                —
-                              </span>
-                            )}
-                            <span
-                              className="mono absolute bottom-1 left-1"
-                              style={{
-                                background: 'rgba(6, 3, 15, 0.85)',
-                                color: 'var(--fg-2)',
-                                fontSize: 8,
-                                padding: '1px 5px',
-                                letterSpacing: '0.2em',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                border: '1px solid var(--glass-border)',
-                              }}
-                            >
-                              {slot === 'face' ? 'Face' : slot === 'profile' ? 'Profil' : 'Dos'}
-                            </span>
+                              <img src={rec.photos[slot]} alt={slot} className="object-cover w-full h-full" referrerPolicy="no-referrer" />
+                            ) : <span className="mono" style={{ fontSize: 8, color: 'var(--fg-5)' }}>—</span>}
+                            <span className="mono absolute bottom-1 left-1" style={{ background: 'rgba(6, 3, 15, 0.85)', color: 'var(--fg-2)', fontSize: 8, padding: '1px 5px', letterSpacing: '0.2em', fontWeight: 700, textTransform: 'uppercase', border: '1px solid var(--glass-border)' }}>{slot === 'face' ? 'Face' : slot === 'profile' ? 'Profil' : 'Dos'}</span>
                           </div>
                         ))}
                       </div>
-                    </HudCard>
+                    </div>
                   ))}
                 </div>
               </div>
-            </>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* FORCE — 1RM + évolution 3 lifts */}
+      <Section id="force" code="FORCE · 1RM" title={iconTitle(Dumbbell, 'Force', 'var(--gold-400)')} accent="gold" right={prs ? <Tag accent="gold">{prs.n_exercises_tracked} exos</Tag> : null}>
+        {prs && prs.top_exercises.length > 0 ? (
+          <>
+            <ul className="space-y-1.5">
+              {prs.top_exercises.slice(0, 6).map((e) => (
+                <li key={e.exercise_name} className="flex items-baseline justify-between gap-2">
+                  <span className="mono" style={{ fontSize: 13, color: 'var(--fg-2)' }}>{e.exercise_name}</span>
+                  <span className="flex items-baseline gap-2 shrink-0"><span className="mono" style={{ color: 'var(--fg-1)', fontWeight: 700 }}>{e.current_1rm} kg</span><Delta value={e.delta_90day_pct} /></span>
+                </li>
+              ))}
+            </ul>
+            {liftSeries.some((s) => s.points.length >= 2) && (
+              <div className="mt-4"><span className="mono" style={{ fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-4)', textTransform: 'uppercase' }}>Évolution 1RM</span><div className="mt-1"><MultiLine series={liftSeries} h={140} /></div></div>
+            )}
+          </>
+        ) : <Hint>« PR : 100 kg au développé couché »</Hint>}
+      </Section>
+
+      {/* RÉCUPÉRATION — sommeil/HRV + hydratation */}
+      <Section id="recup" code="RECUP · 7J" title={iconTitle(Moon, 'Récupération', 'var(--accent-tech)')} accent="tech">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div style={tile}>
+            {sleep ? (
+              <>
+                <StatNum value={sleep.avg_hours_7day.toFixed(1)} unit="h / nuit" accent="tech" label="Sommeil 7j" delta={`qualité ${sleep.avg_quality_7day.toFixed(0)}/10 · ${sleep.short_nights_7day} courte(s)`} />
+                {hrv && hrv.avg_hrv_7day !== null && (
+                  <div className="mt-2"><Tag accent={hrv.is_chronic_drift ? 'red' : 'tech'}>HRV {hrv.avg_hrv_7day}ms · {hrv.is_chronic_drift ? 'fatigue' : 'stable'}</Tag></div>
+                )}
+                {series?.sleep && series.sleep.length >= 2 && (
+                  <div className="mt-3"><span className="mono" style={{ fontSize: 10, color: 'var(--fg-5)' }}>Sommeil · {series.sleep.length}j</span><div className="mt-1"><Spark values={series.sleep.map((d) => d.hours)} max={9} color={HUD.tech} /></div></div>
+                )}
+              </>
+            ) : <Hint>« mal dormi, 6 h »</Hint>}
+          </div>
+          <div style={tile}>
+            <div className="flex items-center gap-2 mb-2"><Droplets className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" /><span className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--fg-3)', textTransform: 'uppercase', fontWeight: 700 }}>Hydratation</span></div>
+            {hydration ? (
+              <>
+                <Ring pct={hydraPct} color={HUD.tech} label={`${(hydration.today_effective_ml / 1000).toFixed(1)}L`} sub={`/ ${(hydration.today_target_ml / 1000).toFixed(1)}L`} />
+                <p className="mono" style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 8, textAlign: 'center' }}>Moy 7j {(hydration.avg_7day_ml / 1000).toFixed(1)}L · cible {hydration.days_target_hit_7day}/7</p>
+                {series?.hydration && series.hydration.length >= 2 && (
+                  <div className="mt-2"><Spark values={series.hydration.map((d) => d.ml)} max={Math.max(hydration.today_target_ml, ...series.hydration.map((d) => d.ml))} color={HUD.tech} /></div>
+                )}
+              </>
+            ) : <Hint>« j'ai bu 1,5 L »</Hint>}
+          </div>
+        </div>
+      </Section>
+
+      {/* RESSENTI — énergie / humeur / faim */}
+      <Section id="ressenti" code="RESSENTI · 14J" title={iconTitle(Smile, 'Ressenti', 'var(--accent-tech)')} accent="tech">
+        {latestSubj ? (
+          <div className="space-y-3">
+            <div className="flex gap-1.5 flex-wrap">
+              {latestSubj.energy != null && <Tag accent="tech">énergie {latestSubj.energy}/10</Tag>}
+              {latestSubj.mood != null && <Tag accent="gold">humeur {latestSubj.mood}/10</Tag>}
+              {latestSubj.hunger != null && <Tag accent="dim">faim {latestSubj.hunger}/10</Tag>}
+            </div>
+            <div><span className="mono" style={{ fontSize: 10, color: 'var(--fg-5)' }}>Énergie · 14j</span><div className="mt-1"><Spark values={energy} color={HUD.tech} h={48} /></div></div>
+            <div><span className="mono" style={{ fontSize: 10, color: 'var(--fg-5)' }}>Humeur · 14j</span><div className="mt-1"><Spark values={mood} color={HUD.gold} h={48} /></div></div>
+          </div>
+        ) : <Hint>« crevé, mal dormi »</Hint>}
+      </Section>
+
+      {/* HABITUDES */}
+      <Section id="habitudes" code="HABITUDES · 7J" title={iconTitle(Flame, 'Habitudes', 'var(--gold-400)')} accent="gold">
+        {habits && habits.habits_summary.length > 0 ? (
+          <div className="flex items-center gap-5">
+            <Ring pct={habits.adherence_7day_pct} color={HUD.gold} label={`${habits.adherence_7day_pct}%`} sub="7 jours" />
+            <ul className="flex-1 space-y-1">
+              {habits.habits_summary.slice(0, 5).map((h) => (
+                <li key={h.name} className="flex items-center justify-between" style={{ fontSize: 12 }}><span className="mono" style={{ color: 'var(--fg-3)' }}>{h.name}</span><span className="mono" style={{ color: 'var(--gold-400)' }}>🔥{h.current_streak}</span></li>
+              ))}
+            </ul>
+          </div>
+        ) : <Hint>crée une habitude à suivre dans l'app</Hint>}
+      </Section>
+
+      {/* ORACLE.IA — analyse (descendue sous les chiffres, opt-in explicite) */}
+      <HudCard accent="tech" chamfer="sm" style={{ padding: "0.85rem 1.25rem" }}>
+        <PanelHeader
+          code="ORACLE.IA · ANALYSE"
+          title={iconTitle(Activity, 'Analyse de ta progression (4 sem.)', 'var(--accent-tech)')}
+          accent="tech"
+          right={
+            !aiAnalysis && !aiLoading ? (
+              <button onClick={handleRequestAnalysis} className="btn btn-tech mono" style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", height: 36, padding: "0 14px" }}>
+                <Sparkles className="h-3 w-3" aria-hidden="true" /> Demander l'analyse
+              </button>
+            ) : aiLoading ? <Tag accent="tech">ANALYSE...</Tag> : <Tag accent="tech">CACHED 6H</Tag>
+          }
+        />
+        {aiErr && <p className="mono" style={{ fontSize: 11, color: "var(--alert-500)", letterSpacing: "0.05em" }}>[ERR-ANALYSE] {aiErr}</p>}
+        {aiLoading && !aiAnalysis && <p className="mono" style={{ fontSize: 11, color: "var(--accent-tech)", letterSpacing: "0.1em", fontStyle: "italic", margin: 0 }}>ORACLE.IA · synthèse en cours...</p>}
+        {aiAnalysis && <p style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", fontSize: "var(--type-body)", lineHeight: 1.7, color: "var(--fg-1)", margin: 0 }}>« {aiAnalysis} »</p>}
+        {!aiAnalysis && !aiLoading && !aiErr && <p className="mono" style={{ fontSize: 11, color: "var(--fg-5)", letterSpacing: "0.05em", fontStyle: "italic", margin: 0 }}>Débrief optionnel : tendance poids, mesures, sessions, plateau éventuel. Cache 6 h.</p>}
+      </HudCard>
+
+      {/* CONDITIONNELS — substances / cycle / fringales */}
+      {(substances && (substances.avg_7day_caffeine_mg > 0 || substances.total_alcohol_7day > 0)) || cycle?.current_phase || (cravings && cravings.days_with_cravings_7day > 0) ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {substances && (substances.avg_7day_caffeine_mg > 0 || substances.total_alcohol_7day > 0) && (
+            <HudCard accent="gold" chamfer="sm" corners={false} style={{ padding: '0.85rem 1rem' }}>
+              <div className="flex items-center gap-2 mb-1"><Coffee className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" /><span className="mono" style={{ fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-4)', textTransform: 'uppercase', fontWeight: 700 }}>Substances</span></div>
+              <p className="mono" style={{ fontSize: 13, color: 'var(--fg-2)' }}>Caféine <span style={{ color: 'var(--fg-1)', fontWeight: 700 }}>{Math.round(substances.today_caffeine_mg)}mg</span></p>
+              {substances.total_alcohol_7day > 0 && <p className="mono" style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 2 }}>Alcool {substances.total_alcohol_7day}u/7j</p>}
+            </HudCard>
+          )}
+          {cycle?.current_phase && (
+            <HudCard accent="tech" chamfer="sm" corners={false} style={{ padding: '0.85rem 1rem' }}>
+              <div className="flex items-center gap-2 mb-1"><CircleDot className="h-4 w-4" style={{ color: 'var(--accent-tech)' }} aria-hidden="true" /><span className="mono" style={{ fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-4)', textTransform: 'uppercase', fontWeight: 700 }}>Cycle</span></div>
+              <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg-1)', textTransform: 'capitalize' }}>{cycle.current_phase}</p>
+            </HudCard>
+          )}
+          {cravings && cravings.days_with_cravings_7day > 0 && (
+            <HudCard accent="gold" chamfer="sm" corners={false} style={{ padding: '0.85rem 1rem' }}>
+              <div className="flex items-center gap-2 mb-1"><Cookie className="h-4 w-4" style={{ color: 'var(--gold-400)' }} aria-hidden="true" /><span className="mono" style={{ fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-4)', textTransform: 'uppercase', fontWeight: 700 }}>Fringales</span></div>
+              <p className="mono" style={{ fontSize: 13, color: 'var(--fg-2)' }}>{cravings.days_with_cravings_7day}j/7 · {cravings.avg_intensity_7day.toFixed(1)}/10</p>
+            </HudCard>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
