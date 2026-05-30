@@ -31,6 +31,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { DocumentReference } from 'firebase-admin/firestore';
 import { runAgentSession } from './supervisor';
 import { buildRecentChat } from './recent-chat';
+import { parseCoachActions, applyCoachAction } from '@/lib/features/coach-actions';
+
+/**
+ * Exécute les <COACH_ACTION> (log_weight, log_measurement, log_hydration, log_pr)
+ * côté serveur et renvoie le texte NETTOYÉ (sans les blocs). Verrou safety : si
+ * l'agent safety a flaggé critical/warning, aucune écriture (les blocs sont quand
+ * même retirés). Note d'échec honnête ajoutée si une action est invalide.
+ */
+async function applyActionsAndClean(
+  uid: string,
+  finalResponse: string,
+  safetySeverity?: string,
+): Promise<string> {
+  try {
+    const { actions, cleaned } = parseCoachActions(finalResponse);
+    if (actions.length === 0) return finalResponse;
+    if (safetySeverity === 'critical' || safetySeverity === 'warning') return cleaned;
+    const today = new Date().toISOString().slice(0, 10);
+    const results = await Promise.all(actions.map((a) => applyCoachAction(uid, a, today)));
+    const failed = results.filter((r) => !r.ok);
+    return failed.length > 0 ? `${cleaned}\n\n⚠️ ${failed.map((f) => f.message).join(' ')}` : cleaned;
+  } catch (e) {
+    console.warn('[coach-multi-adapter] coach actions failed:', e);
+    return finalResponse;
+  }
+}
 
 export interface RunMultiAgentCoachInput {
   req: NextRequest;
@@ -60,18 +86,21 @@ export async function runMultiAgentCoach(
         recent_chat: recentChat,
       });
 
-      // Persister la réponse dans coach_messages (même collection que l'ancien
-      // coach, pour que l'historique chat soit cohérent peu importe le backend).
-      // On strip les balises avant persistance pour ne pas polluer l'historique.
+      // Exécute les <COACH_ACTION> serveur + nettoie. Puis persiste (sans balises).
+      const responseText = await applyActionsAndClean(
+        uid,
+        result.finalResponse,
+        result.sessionRecord.sub_agent_outputs?.safety?.severity,
+      );
       void persistAssistantMessage(
         userRef,
-        stripCoachTags(result.finalResponse),
+        stripCoachTags(responseText),
         result.sessionRecord.session_id,
       ).catch((e) => console.warn('[coach-multi-adapter] persist failed:', e));
 
       return NextResponse.json(
         {
-          response: result.finalResponse, // balises gardées pour le client
+          response: responseText, // COACH_SAVE / COACH_PLAN_PATCH gardées pour le client
           sources: [],
           session_id: result.sessionRecord.session_id,
           cost_estimate_usd: result.sessionRecord.cost_estimate_usd,
@@ -143,10 +172,14 @@ export async function runMultiAgentCoach(
           // ("Analyse en cours...") via onPhase.
         });
 
-        const finalText = result.finalResponse;
-        // On émet le texte BRUT (avec balises COACH_SAVE / COACH_PLAN_PATCH si
-        // présentes) — le frontend coach/page.tsx parse + strip pour l'affichage,
-        // et POST les balises vers /api/profile/update-fields et /api/coach/apply-patch.
+        // Exécute d'abord les <COACH_ACTION> serveur (pesée, mensuration, hydratation,
+        // PR) + retire leurs blocs. Les balises COACH_SAVE / COACH_PLAN_PATCH restent
+        // (le frontend coach/page.tsx les parse + POST vers update-fields / apply-patch).
+        const finalText = await applyActionsAndClean(
+          uid,
+          result.finalResponse,
+          result.sessionRecord.sub_agent_outputs?.safety?.severity,
+        );
         controller.enqueue(
           encoder.encode(
             `event: chunk\ndata: ${JSON.stringify({ text: finalText })}\n\n`,
@@ -231,14 +264,18 @@ async function persistAssistantMessage(
 export function stripCoachTags(text: string): string {
   let out = text.replace(/<COACH_SAVE>[\s\S]*?<\/COACH_SAVE>/g, '');
   out = out.replace(/<COACH_PLAN_PATCH>[\s\S]*?<\/COACH_PLAN_PATCH>/g, '');
+  out = out.replace(/<COACH_ACTION>[\s\S]*?<\/COACH_ACTION>/g, '');
   // Cas où une balise ouvrante n'a pas de fermante (génération coupée) — strip jusqu'à la fin
-  for (const tag of ['<COACH_SAVE>', '<COACH_PLAN_PATCH>']) {
+  for (const tag of ['<COACH_SAVE>', '<COACH_PLAN_PATCH>', '<COACH_ACTION>']) {
     const openIdx = out.indexOf(tag);
     if (openIdx !== -1) out = out.slice(0, openIdx);
   }
   // Cas symétrique : balise FERMANTE orpheline (sans ouvrante, ex. output LLM
   // malformé "texte </COACH_SAVE> suite") — elle ne doit pas rester visible
   // dans l'historique chat. On retire toute fermante résiduelle.
-  out = out.replace(/<\/COACH_SAVE>/g, '').replace(/<\/COACH_PLAN_PATCH>/g, '');
+  out = out
+    .replace(/<\/COACH_SAVE>/g, '')
+    .replace(/<\/COACH_PLAN_PATCH>/g, '')
+    .replace(/<\/COACH_ACTION>/g, '');
   return out.trimEnd();
 }
