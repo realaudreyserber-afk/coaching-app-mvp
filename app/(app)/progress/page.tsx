@@ -220,9 +220,13 @@ export default function ProgressPage() {
 
         const weightsList: any[] = [];
         dailySnap.forEach((docSnap) => {
+          // Ignore les docs check-in SANS pesée (ressenti seul logué par le coach,
+          // ou check-in sans poids) : sinon weight=undefined casse la moyenne mobile.
+          const w = docSnap.data().weight;
+          if (typeof w !== "number") return;
           weightsList.push({
             date: docSnap.id,
-            weight: docSnap.data().weight,
+            weight: w,
             created_at: docSnap.data().created_at,
           });
         });

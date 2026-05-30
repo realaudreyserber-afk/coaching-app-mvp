@@ -140,6 +140,34 @@ async function logPr(uid: string, a: CoachAction, today: string): Promise<Action
     : { ok: false, type: 'log_pr', message: "Échec de l'enregistrement du PR." };
 }
 
+async function logSubjective(uid: string, a: CoachAction, today: string): Promise<ActionResult> {
+  const date = safeDate(a.date, today);
+  const fields: Record<string, number> = {};
+  const bounded = (v: unknown, min: number, max: number, round = false): number | undefined => {
+    const n = num(v);
+    if (!Number.isFinite(n) || n < min || n > max) return undefined;
+    return round ? Math.round(n) : Math.round(n * 10) / 10;
+  };
+  const sh = bounded(a.sleep_hours, 0, 16); if (sh !== undefined) fields.sleep_hours = sh;
+  const sq = bounded(a.sleep_quality, 1, 10, true); if (sq !== undefined) fields.sleep_quality = sq;
+  const en = bounded(a.energy, 1, 10, true); if (en !== undefined) fields.energy = en;
+  const hu = bounded(a.hunger, 1, 10, true); if (hu !== undefined) fields.hunger = hu;
+  const mo = bounded(a.mood, 1, 10, true); if (mo !== undefined) fields.mood = mo;
+  if (Object.keys(fields).length === 0) {
+    return { ok: false, type: 'log_subjective_daily', message: 'Aucun ressenti reconnu.' };
+  }
+  await adminDb.collection('users').doc(uid).collection('checkins_daily').doc(date).set(
+    {
+      ...fields, date,
+      created_at: new Date(`${date}T12:00:00.000Z`).toISOString(),
+      updated_at: FieldValue.serverTimestamp(),
+      source: 'coach',
+    },
+    { merge: true },
+  );
+  return { ok: true, type: 'log_subjective_daily', message: `Ressenti du ${date} enregistré (${Object.keys(fields).join(', ')}).` };
+}
+
 /** Dispatcher unique. `today` = YYYY-MM-DD (injecté). Whitelist fermée. */
 export async function applyCoachAction(
   uid: string,
@@ -152,6 +180,7 @@ export async function applyCoachAction(
     case 'log_measurement': return logMeasurement(uid, action, today);
     case 'log_hydration': return logHydration(uid, action, today);
     case 'log_pr': return logPr(uid, action, today);
+    case 'log_subjective_daily': return logSubjective(uid, action, today);
     default: return { ok: false, type, message: `Action non supportée: ${type}.` };
   }
 }

@@ -121,4 +121,18 @@ describe('coach-actions / applyCoachAction', () => {
     expect(r.ok).toBe(false);
     expect(h.state.lastSet).toBeNull();
   });
+
+  it('log_subjective_daily : merge des ressentis bornés', async () => {
+    const r = await applyCoachAction('uid1', { type: 'log_subjective_daily', sleep_hours: 5, energy: 4, mood: 6 }, TODAY);
+    expect(r.ok).toBe(true);
+    expect(h.state.lastDoc).toBe(TODAY);
+    expect(h.state.lastSet).toMatchObject({ sleep_hours: 5, energy: 4, mood: 6, source: 'coach' });
+    expect(h.state.lastSet.weight).toBeUndefined(); // ressenti seul, pas de poids
+  });
+
+  it('log_subjective_daily : valeurs hors borne ignorées, aucun champ -> échec', async () => {
+    const r = await applyCoachAction('uid1', { type: 'log_subjective_daily', energy: 99 }, TODAY);
+    expect(r.ok).toBe(false);
+    expect(h.state.lastSet).toBeNull();
+  });
 });
