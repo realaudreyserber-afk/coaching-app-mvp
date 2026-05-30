@@ -30,14 +30,18 @@ interface Overview {
 }
 
 /** Carte façon Samsung Health : coin arrondi, chip d'icône coloré, titre. */
-function Card({ icon, title, color, children, wide }: { icon: string; title: string; color: string; children: React.ReactNode; wide?: boolean }) {
+function Card({ icon, title, color, children, wide, onClick }: { icon: string; title: string; color: string; children: React.ReactNode; wide?: boolean; onClick?: () => void }) {
   return (
-    <div className={`rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 p-4 ${wide ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
+    <div
+      onClick={onClick}
+      className={`rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 p-4 ${wide ? 'sm:col-span-2 lg:col-span-1' : ''} ${onClick ? 'cursor-pointer hover:border-zinc-600 transition-colors' : ''}`}
+    >
       <div className="flex items-center gap-2.5 mb-3">
         <span className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${color}22` }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18, color }}>{icon}</span>
         </span>
-        <h3 className="text-[13px] font-semibold text-zinc-200">{title}</h3>
+        <h3 className="text-[13px] font-semibold text-zinc-200 flex-1">{title}</h3>
+        {onClick && <span className="material-symbols-outlined text-zinc-600" style={{ fontSize: 18 }}>chevron_right</span>}
       </div>
       {children}
     </div>
@@ -71,13 +75,13 @@ function Delta({ pct }: { pct: number | null }) {
 }
 
 /** Sparkline en barres. */
-function Spark({ values, max = 10, color }: { values: Array<number | null>; max?: number; color: string }) {
+function Spark({ values, max = 10, color, h = 36 }: { values: Array<number | null>; max?: number; color: string; h?: number }) {
   const pts = values.filter((v): v is number => v !== null);
   if (pts.length < 2) return <span className="text-zinc-600 text-[11px]">à venir…</span>;
   return (
-    <div className="flex items-end gap-[3px] h-9">
+    <div className="flex items-end gap-[3px]" style={{ height: h }}>
       {values.slice(-14).map((v, i) => (
-        <div key={i} title={v === null ? '—' : String(v)} style={{ width: 6, height: v === null ? 3 : `${Math.max(10, (v / max) * 100)}%`, background: v === null ? '#3f3f46' : color, borderRadius: 2, opacity: v === null ? 0.4 : 1 }} />
+        <div key={i} title={v === null ? '—' : String(v)} style={{ flex: 1, minWidth: 4, height: v === null ? 3 : `${Math.max(10, (v / max) * 100)}%`, background: v === null ? '#3f3f46' : color, borderRadius: 2, opacity: v === null ? 0.4 : 1 }} />
       ))}
     </div>
   );
@@ -100,6 +104,7 @@ function MiniLine({ values, color, h = 30 }: { values: number[]; color: string; 
 
 const C = { force: '#f59e0b', sleep: '#818cf8', hydra: '#22d3ee', mood: '#34d399', body: '#2dd4bf', habit: '#fbbf24', subst: '#a1a1aa', cycle: '#f472b6', crave: '#fb923c' };
 const MEASURE_LABELS: Record<string, string> = { waist_cm: 'Taille', neck_cm: 'Cou', hips_cm: 'Hanches', shoulder_cm: 'Épaules', chest_cm: 'Poitrine', arm_cm: 'Bras', thigh_cm: 'Cuisse', calf_cm: 'Mollet' };
+const DETAIL_TITLE: Record<string, string> = { hydration: 'Hydratation', sleep: 'Récupération', force: 'Force · 1RM', ressenti: 'Ressenti' };
 
 export function OverviewBilan() {
   const { getFreshToken } = useAuth();
@@ -132,6 +137,7 @@ export function OverviewBilan() {
 export function OverviewBilanView({ data }: { data: Overview }) {
   const { forme, prs, sleep, hrv, hydration, habits, substances, cravings, measurements, cycle, subjective, series } = data;
   const formeColor = forme?.score == null ? '#71717a' : forme.score >= 60 ? '#34d399' : forme.score >= 40 ? '#f59e0b' : '#fb7185';
+  const [sel, setSel] = useState<'hydration' | 'sleep' | 'force' | 'ressenti' | null>(null);
   const energy = subjective?.map((s) => s.energy) ?? [];
   const mood = subjective?.map((s) => s.mood) ?? [];
   const latestSubj = subjective && subjective.length ? subjective[subjective.length - 1] : null;
@@ -165,7 +171,7 @@ export function OverviewBilanView({ data }: { data: Overview }) {
       {/* CARTES */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
         {/* HYDRATATION — anneau */}
-      <Card icon="water_drop" title="Hydratation" color={C.hydra}>
+      <Card icon="water_drop" title="Hydratation" color={C.hydra} onClick={hydration ? () => setSel('hydration') : undefined}>
         {hydration ? (
           <>
             <Ring pct={hydraPct} color={C.hydra} label={`${(hydration.today_effective_ml / 1000).toFixed(1)}L`} sub={`/ ${(hydration.today_target_ml / 1000).toFixed(1)}L`} />
@@ -192,7 +198,7 @@ export function OverviewBilanView({ data }: { data: Overview }) {
       </Card>
 
       {/* RÉCUPÉRATION — gros chiffre */}
-      <Card icon="bedtime" title="Récupération" color={C.sleep}>
+      <Card icon="bedtime" title="Récupération" color={C.sleep} onClick={sleep || hrv ? () => setSel('sleep') : undefined}>
         {sleep || hrv ? (
           <>
             {sleep && (
@@ -214,7 +220,7 @@ export function OverviewBilanView({ data }: { data: Overview }) {
       </Card>
 
       {/* RESSENTI — sparklines (large) */}
-      <Card icon="mood" title="Ressenti" color={C.mood} wide>
+      <Card icon="mood" title="Ressenti" color={C.mood} wide onClick={latestSubj ? () => setSel('ressenti') : undefined}>
         {latestSubj ? (
           <div className="space-y-2.5">
             <div className="flex gap-1.5 flex-wrap">
@@ -229,7 +235,7 @@ export function OverviewBilanView({ data }: { data: Overview }) {
       </Card>
 
       {/* FORCE — liste (large) */}
-      <Card icon="exercise" title="Force · 1RM" color={C.force} wide>
+      <Card icon="exercise" title="Force · 1RM" color={C.force} wide onClick={prs && prs.top_exercises.length > 0 ? () => setSel('force') : undefined}>
         {prs && prs.top_exercises.length > 0 ? (
           <ul className="space-y-1.5">
             {prs.top_exercises.slice(0, 5).map((e) => (
@@ -273,6 +279,52 @@ export function OverviewBilanView({ data }: { data: Overview }) {
         <Card icon="cookie" title="Fringales" color={C.crave}><p className="text-[13px] text-zinc-300">{cravings.days_with_cravings_7day}j/7 · {cravings.avg_intensity_7day.toFixed(1)}/10</p></Card>
       )}
       </div>
+
+      {/* Feuille de détail (tap to drill-down, façon Samsung Health) */}
+      {sel && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setSel(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full sm:max-w-md bg-zinc-950 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 max-h-[82vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-zinc-50">{DETAIL_TITLE[sel]}</h3>
+              <button onClick={() => setSel(null)} aria-label="Fermer" className="text-zinc-400 hover:text-zinc-100"><span className="material-symbols-outlined">close</span></button>
+            </div>
+
+            {sel === 'hydration' && hydration && (
+              <>
+                <Spark values={series?.hydration?.map((d) => d.ml) ?? []} max={Math.max(hydration.today_target_ml, ...(series?.hydration?.map((d) => d.ml) ?? [0]))} color={C.hydra} h={120} />
+                <p className="text-xs text-zinc-400 mt-3">Auj. {(hydration.today_effective_ml / 1000).toFixed(1)}L / {(hydration.today_target_ml / 1000).toFixed(1)}L · moy 7j {(hydration.avg_7day_ml / 1000).toFixed(1)}L · cible {hydration.days_target_hit_7day}/7</p>
+                <ul className="mt-3 space-y-1">{(series?.hydration ?? []).slice(-7).reverse().map((d) => <li key={d.date} className="flex justify-between text-[13px]"><span className="text-zinc-400">{d.date}</span><span className="text-zinc-100">{(d.ml / 1000).toFixed(1)} L</span></li>)}</ul>
+              </>
+            )}
+
+            {sel === 'sleep' && (
+              <>
+                <Spark values={series?.sleep?.map((d) => d.hours) ?? []} max={9} color={C.sleep} h={120} />
+                {sleep && <p className="text-xs text-zinc-400 mt-3">Moy {sleep.avg_hours_7day.toFixed(1)}h · qualité {sleep.avg_quality_7day.toFixed(0)}/10 · {sleep.short_nights_7day} courte(s)</p>}
+                {hrv && hrv.avg_hrv_7day !== null && <p className="text-xs text-zinc-400 mt-1">HRV {hrv.avg_hrv_7day}ms · {hrv.is_chronic_drift ? 'fatigue cumulée' : 'stable'}</p>}
+                <ul className="mt-3 space-y-1">{(series?.sleep ?? []).slice(-7).reverse().map((d) => <li key={d.date} className="flex justify-between text-[13px]"><span className="text-zinc-400">{d.date}</span><span className="text-zinc-100">{d.hours} h</span></li>)}</ul>
+              </>
+            )}
+
+            {sel === 'force' && prs && (
+              <>
+                {series?.topLift && series.topLift.points.length >= 2 && (<><p className="text-xs text-zinc-500 mb-1">{series.topLift.name} · 1RM</p><MiniLine values={series.topLift.points.map((p) => p.e1rm)} color={C.force} h={80} /></>)}
+                <ul className="mt-3 space-y-2">{prs.top_exercises.map((e) => <li key={e.exercise_name} className="flex items-baseline justify-between"><span className="text-[13px] text-zinc-300">{e.exercise_name}</span><span className="flex gap-2 items-baseline"><span className="text-zinc-100 font-semibold">{e.current_1rm} kg</span><Delta pct={e.delta_90day_pct} /></span></li>)}</ul>
+              </>
+            )}
+
+            {sel === 'ressenti' && subjective && (
+              <>
+                <p className="text-xs text-zinc-500 mb-1">Énergie · 14j</p><Spark values={energy} max={10} color={C.mood} h={64} />
+                <p className="text-xs text-zinc-500 mb-1 mt-3">Humeur · 14j</p><Spark values={mood} max={10} color={C.force} h={64} />
+                <p className="text-xs text-zinc-500 mb-1 mt-3">Faim · 14j</p><Spark values={subjective.map((s) => s.hunger)} max={10} color={C.crave} h={64} />
+                <ul className="mt-3 space-y-1">{subjective.slice(-7).reverse().map((s) => <li key={s.date} className="flex justify-between text-[13px]"><span className="text-zinc-400">{s.date}</span><span className="text-zinc-300">é {s.energy ?? '—'} · h {s.mood ?? '—'} · f {s.hunger ?? '—'}</span></li>)}</ul>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
