@@ -27,6 +27,7 @@ import {
   arbitrateOutputs,
   mentionsPregnancy,
   enforcePregnancySafety,
+  buildAggregatePrompt,
 } from './supervisor';
 import type { AgentOutput, RoutingDecision, SubAgentName } from './types';
 
@@ -223,5 +224,36 @@ describe('supervisor — garde-fou grossesse/allaitement', () => {
     const d = decision(['training']);
     const out = enforcePregnancySafety(d, 'plan de sèche');
     expect(out).toBe(d);
+  });
+});
+
+describe('supervisor — buildAggregatePrompt (format réponse log factuel)', () => {
+  const baseInput = { uid: 'u1', user_message: 'pr 130kg bench' };
+
+  it('injecte la règle "log factuel = réponse courte" dans le prompt agrégateur', () => {
+    const p = buildAggregatePrompt(baseInput, {}, undefined, null);
+    expect(p).toContain('[FORMAT QUAND TU ÉMETS UNE COACH_ACTION POUR UN LOG FACTUEL]');
+    expect(p).toContain('réponse doit être COURTE');
+    expect(p).toContain('Au plus 1 phrase tactique');
+  });
+
+  it('interdit explicitement la liste de conseils et les mentions non sollicitées du profil', () => {
+    const p = buildAggregatePrompt(baseInput, {}, undefined, null);
+    expect(p).toContain('INTERDIT');
+    expect(p).toContain('liste numérotée de conseils');
+    // Le rappel doit nommer TRT comme exemple de mention de profil non sollicitée
+    // (c'est l'incident qui a déclenché la règle).
+    expect(p).toContain('TRT');
+  });
+
+  it("autorise une réponse normale si l'user POSE AUSSI une vraie question", () => {
+    const p = buildAggregatePrompt(baseInput, {}, undefined, null);
+    expect(p).toContain('Si l\'user POSE ÉGALEMENT une vraie question');
+  });
+
+  it('garde le contrat « honnêteté absolue » (régression : la concision ne le remplace pas)', () => {
+    const p = buildAggregatePrompt(baseInput, {}, undefined, null);
+    expect(p).toContain('HONNÊTETÉ ABSOLUE');
+    expect(p).toContain('Ne prétends JAMAIS avoir fait ce que tu n\'as pas émis');
   });
 });

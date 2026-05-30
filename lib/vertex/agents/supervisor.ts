@@ -381,7 +381,7 @@ function buildRoutePrompt(input: RunAgentSessionInput): string {
 /**
  * Build le userPrompt pour l'étape AGGREGATE.
  */
-function buildAggregatePrompt(
+export function buildAggregatePrompt(
   input: RunAgentSessionInput,
   outputs: Partial<Record<SubAgentName, AgentOutput>>,
   arbitration: SessionRecord['arbitration'],
@@ -432,7 +432,13 @@ function buildAggregatePrompt(
     `• Hydratation : <COACH_ACTION>{"type":"log_hydration","ml":500,"drink_type":"water"}</COACH_ACTION> — drink_type : water|tea|coffee|sparkling|electrolyte ; max 2000 ml/prise.\n` +
     `• Record de force (PR) : <COACH_ACTION>{"type":"log_pr","exercise":"développé couché","weight_kg":100,"reps":1}</COACH_ACTION> — le 1RM est calculé par le système ; le poids/reps viennent de l'user, ne les invente JAMAIS.\n` +
     `• Ressenti du jour : <COACH_ACTION>{"type":"log_subjective_daily","sleep_hours":5,"energy":4,"mood":6,"hunger":7}</COACH_ACTION> — champs (1-10, sauf sleep_hours en heures) : sleep_hours, sleep_quality, energy, hunger, mood. Pour « mal dormi 5 h, crevé » -> sleep_hours:5, energy bas.\n` +
-    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté / mis à jour » QUE si tu émets RÉELLEMENT la balise qui le fait — COACH_ACTION pour les logs ci-dessus, COACH_SAVE pour le profil/l'objectif, COACH_PLAN_PATCH pour le plan (cf. ton prompt système §PERSISTANCE). Tout ce que tu ne peux pas écrire (repas, séances, photos) → tu CONSEILLES et renvoies vers la page concernée. Ne prétends JAMAIS avoir fait ce que tu n'as pas émis. N'émets une action QUE sur une vraie valeur donnée par l'user (jamais une estimation/déduction).\n`;
+    `🔒 HONNÊTETÉ ABSOLUE : tu ne dis « c'est enregistré / noté / ajouté / mis à jour » QUE si tu émets RÉELLEMENT la balise qui le fait — COACH_ACTION pour les logs ci-dessus, COACH_SAVE pour le profil/l'objectif, COACH_PLAN_PATCH pour le plan (cf. ton prompt système §PERSISTANCE). Tout ce que tu ne peux pas écrire (repas, séances, photos) → tu CONSEILLES et renvoies vers la page concernée. Ne prétends JAMAIS avoir fait ce que tu n'as pas émis. N'émets une action QUE sur une vraie valeur donnée par l'user (jamais une estimation/déduction).\n` +
+    `\n[FORMAT QUAND TU ÉMETS UNE COACH_ACTION POUR UN LOG FACTUEL]\n` +
+    `Si le message de l'user est principalement un log court (≤ 10 mots, pas de vraie question, ex. « pr 130kg bench », « j'ai bu 1,5 L », « tour de taille 84 », « mal dormi 5 h ») → ta réponse doit être COURTE :\n` +
+    `• 1 phrase de confirmation reformulant la donnée (« PR enregistré : 130 kg au développé couché. »).\n` +
+    `• Au plus 1 phrase tactique CIBLÉE sur la donnée logguée, et seulement si elle apporte une vraie info actionnable.\n` +
+    `• INTERDIT : liste numérotée de conseils, plan d'entraînement non sollicité, mention non sollicitée du profil (TRT, sexe, antécédents médicaux, poids de corps, phase…). On reste sur le geste fait.\n` +
+    `Si l'user POSE ÉGALEMENT une vraie question dans le même message (« j'ai pesé 88 kg, dois-je passer en cut ? ») → réponse normale en plus de la confirmation, mais sans repartir dans un cours magistral.\n`;
 
   return (
     `[ÉTAPE: aggregate]\n\n` +
