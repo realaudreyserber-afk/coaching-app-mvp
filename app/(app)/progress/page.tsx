@@ -85,6 +85,11 @@ export default function ProgressPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
 
+  // Commentaire coach sur le score Forme du jour (auto-load, cache 4 h serveur,
+  // silencieux sur erreur — c'est cosmétique, ça ne doit pas casser la page).
+  const [formeComment, setFormeComment] = useState<string | null>(null);
+  const [formeCommentLoading, setFormeCommentLoading] = useState(false);
+
   const handleRequestAnalysis = async () => {
     if (aiLoading) return;
     setAiLoading(true);
@@ -182,6 +187,35 @@ export default function ProgressPage() {
     })();
     return () => { cancelled = true; };
   }, [user, loading, getFreshToken, refreshTick]);
+
+  // Commentaire coach sur la Forme du jour. Auto-load une fois que le score est
+  // dispo. Silencieux sur erreur — la page reste utilisable sans ce commentaire.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (overview?.forme?.score == null) return;
+    let cancelled = false;
+    (async () => {
+      setFormeCommentLoading(true);
+      try {
+        const token = await getFreshToken();
+        if (!token) return;
+        const res = await fetch("/api/ai/coach-forme-comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data?.comment === "string" && data.comment) {
+          setFormeComment(data.comment);
+        }
+      } catch { /* silencieux : commentaire optionnel */ }
+      finally {
+        if (!cancelled) setFormeCommentLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, loading, getFreshToken, overview?.forme?.score, refreshTick]);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -393,6 +427,26 @@ export default function ProgressPage() {
               )}
             </div>
           </div>
+          {forme?.score != null && (formeComment || formeCommentLoading) && (
+            <p
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                fontSize: 'var(--type-body)',
+                lineHeight: 1.6,
+                color: formeComment ? 'var(--fg-1)' : 'var(--fg-5)',
+                margin: '14px 0 0',
+                paddingTop: 12,
+                borderTop: '1px dashed var(--glass-border)',
+              }}
+            >
+              {formeComment ? `« ${formeComment} »` : (
+                <span className="mono" style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--accent-tech)', fontStyle: 'normal' }}>
+                  ORACLE.IA · lecture en cours…
+                </span>
+              )}
+            </p>
+          )}
         </HudCard>
       </section>
 
