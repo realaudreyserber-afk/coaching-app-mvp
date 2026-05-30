@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/firebase/hooks";
 import Link from "next/link";
 import WeightChart, { WeightDataPoint } from "@/components/dashboard/weight-chart";
 import { TrendingUp, Camera, Ruler, ArrowUpRight, ArrowDownRight, Minus, Activity, Sparkles } from "lucide-react";
+import { OverviewBilan } from "@/components/progress/overview-bilan";
 import { WeightHistoryRow } from "@/components/progress/weight-history-row";
 import { HudCard, PanelHeader, Tag } from "@/components/nodream";
 
@@ -93,7 +94,7 @@ function TacticalTabBtn({ active, accent, onClick, children }: TacticalTabBtnPro
 
 export default function ProgressPage() {
   const { user, loading, getFreshToken } = useAuth();
-  const [activeTab, setActiveTab] = useState<"weight" | "measurements" | "photos">("weight");
+  const [activeTab, setActiveTab] = useState<"bilan" | "weight" | "measurements" | "photos">("bilan");
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
@@ -475,16 +476,22 @@ export default function ProgressPage() {
         }}
         role="tablist"
       >
+        <TacticalTabBtn active={activeTab === "bilan"} accent="gold" onClick={() => setActiveTab("bilan")}>
+          <Activity className="h-3 w-3" aria-hidden="true" /> 01 Bilan
+        </TacticalTabBtn>
         <TacticalTabBtn active={activeTab === "weight"} accent="gold" onClick={() => setActiveTab("weight")}>
-          <TrendingUp className="h-3 w-3" aria-hidden="true" /> 01 Poids
+          <TrendingUp className="h-3 w-3" aria-hidden="true" /> 02 Poids
         </TacticalTabBtn>
         <TacticalTabBtn active={activeTab === "measurements"} accent="tech" onClick={() => setActiveTab("measurements")}>
-          <Ruler className="h-3 w-3" aria-hidden="true" /> 02 Mesures
+          <Ruler className="h-3 w-3" aria-hidden="true" /> 03 Mesures
         </TacticalTabBtn>
         <TacticalTabBtn active={activeTab === "photos"} accent="pink" onClick={() => setActiveTab("photos")}>
-          <Camera className="h-3 w-3" aria-hidden="true" /> 03 Photos
+          <Camera className="h-3 w-3" aria-hidden="true" /> 04 Photos
         </TacticalTabBtn>
       </div>
+
+      {/* BILAN TAB */}
+      {activeTab === "bilan" && <OverviewBilan />}
 
       {/* WEIGHT TAB */}
       {activeTab === "weight" && (
