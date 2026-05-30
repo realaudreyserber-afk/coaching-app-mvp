@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       const forme = computeForme({ sleep, hrv, hydration, energyAvg });
 
       if (forme.score === null) {
-        return NextResponse.json({ ok: true, comment: null, reason: "no_data" });
+        return NextResponse.json({ ok: true, comment: null, reason: "no_data", forme });
       }
 
       // Cache : ré-utilisé si frais (4h) ET même jour ET score proche.
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
             cached: true,
             comment: data?.text,
             generated_at: data?.generated_at,
+            forme,
           });
         }
       }
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
         date_used: today,
       });
 
-      return NextResponse.json({ ok: true, cached: false, comment: text });
+      return NextResponse.json({ ok: true, cached: false, comment: text, forme });
     } catch (err) {
       console.error("[coach-forme-comment] failed:", err);
       return NextResponse.json(
