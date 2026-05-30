@@ -10,6 +10,8 @@ export default async function ExerciseDetailPage({
   const { slug } = await params;
   const ex = getExerciseFrBySlug(slug);
   if (!ex) notFound();
+  // Démo animée (WebP) en priorité ; sinon la photo statique.
+  const demo = ex.gif ?? ex.image;
 
   return (
     <div className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 lg:py-10 space-y-6">
@@ -33,11 +35,20 @@ export default async function ExerciseDetailPage({
         )}
       </header>
 
-      {ex.image && (
-        <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/40">
+      {demo && (
+        <figure className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/40">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={ex.image} alt={ex.name} className="w-full object-cover" />
-        </div>
+          <img
+            src={demo}
+            alt={`Démonstration : ${ex.name}`}
+            className="w-full object-cover"
+          />
+          {ex.gif && (
+            <figcaption className="px-3 py-2 text-[11px] text-zinc-500 font-mono uppercase tracking-wider border-t border-zinc-800">
+              Démonstration animée
+            </figcaption>
+          )}
+        </figure>
       )}
 
       <section className="space-y-3">

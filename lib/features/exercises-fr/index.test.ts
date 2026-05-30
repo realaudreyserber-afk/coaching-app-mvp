@@ -50,4 +50,12 @@ describe('exercises-fr (docteur-fitness)', () => {
     expect(withImg.length).toBeGreaterThan(400);
     expect(withImg[0].image).toMatch(/^\/exercices\//);
   });
+
+  it('démos animées WebP présentes (> 450)', () => {
+    const withGif = getAllExercisesFr().filter((e) => e.gif);
+    expect(withGif.length).toBeGreaterThan(450);
+    for (const e of withGif.slice(0, 20)) {
+      expect(e.gif).toMatch(/^\/exercices\/.*\.webp$/);
+    }
+  });
 });

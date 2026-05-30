@@ -15,8 +15,10 @@ export interface ExerciseFr {
   category: string;
   slug: string;
   url: string;
-  /** Chemin web de l'image (servie depuis public/exercices/). */
+  /** Photo statique (poster) — servie depuis public/exercices/. Utilisée en grille. */
   image: string | null;
+  /** GIF animé de démonstration du mouvement — servi depuis public/exercices/. */
+  gif: string | null;
   meta_description: string;
   how_to: string;
 }
